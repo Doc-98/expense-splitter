@@ -1,0 +1,136 @@
+# Spesa — Expense Splitter (PWA)
+
+A phone-installable rebuild of the old JavaFX receipt splitter. Snap a photo of
+a receipt (or type items in by hand), assign who's buying what, and see a
+live, real-time settle-up with everyone in your group — no app store required.
+
+## How it's built
+
+- **Frontend**: React + Vite, packaged as an installable PWA (`vite-plugin-pwa`)
+- **Backend**: [Supabase](https://supabase.com) — Postgres database, auth,
+  realtime sync, all on the free tier to start
+- **Receipt scanning**: a Supabase Edge Function sends the photo straight to
+  the Claude API (vision) and gets back structured items — no OCR step, no
+  per-store parsing code
+- **Settlement**: `src/lib/settlement.js` computes net balances per person and
+  simplifies them into the minimum number of payments needed to settle up
+
+Nothing here is deployed for you — this is real, runnable source code that
+you deploy to your own free Supabase + Vercel/Netlify accounts, so *you* own
+the data and the (tiny) hosting bill. Setup takes about 20 minutes the first
+time.
+
+## 1. Create your Supabase project
+
+1. Go to [supabase.com](https://supabase.com) → New project (free tier is fine).
+2. Once it's created, open **SQL Editor** → New query, paste in the entire
+   contents of [`supabase/schema.sql`](supabase/schema.sql), and run it. This
+   creates every table, security policy, and the profile-creation trigger.
+3. Go to **Database → Replication → supabase_realtime** and toggle *on*
+   realtime for these four tables: `bills`, `items`, `item_shares`,
+   `group_members`. This is what makes edits show up live on every phone in
+   the group without refreshing.
+4. Go to **Authentication → Sign In / Providers** and make sure **Email** is
+   enabled (it is by default). If you want magic-link sign-in to redirect
+   back to your deployed app instead of `localhost`, add your deployed URL
+   under **Authentication → URL Configuration → Site URL** once you've
+   deployed the frontend (step 4 below).
+
+## 2. Get your API credentials
+
+In **Settings → API**, copy:
+
+- **Project URL**
+- **anon / public key** (safe to expose in frontend code — it's designed for
+  this; every table is locked down by the row-level security policies in
+  `schema.sql`, not by hiding this key)
+
+Copy `.env.example` to `.env` in the project root and fill both in:
+
+```
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-public-key
+```
+
+## 3. Deploy the receipt-scanning function
+
+This step needs the [Supabase CLI](https://supabase.com/docs/guides/cli).
+
+```bash
+npm install -g supabase
+supabase login
+supabase link --project-ref your-project-ref
+
+# Get a key at https://console.anthropic.com — this stays server-side,
+# it is never sent to the browser.
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-your-key-here
+
+supabase functions deploy parse-receipt
+```
+
+## 4. Run it locally / deploy it
+
+Local dev:
+
+```bash
+npm install
+npm run dev
+```
+
+Deploy the frontend anywhere that serves a static site — [Vercel](https://vercel.com)
+or [Netlify](https://netlify.com) both have generous free tiers:
+
+1. Push this folder to a GitHub repo.
+2. Import it in Vercel/Netlify, build command `npm run build`, output dir `dist`.
+3. Add the two `VITE_SUPABASE_*` environment variables from step 2 in the
+   host's dashboard.
+4. Deploy. Copy the resulting URL back into Supabase's **Site URL** setting
+   from step 1.4 so magic links redirect correctly.
+
+## 5. Install it on a phone
+
+Once deployed, open the URL on a phone:
+
+- **iOS Safari**: Share button → *Add to Home Screen*
+- **Android Chrome**: menu (⋮) → *Install app* (or it'll prompt automatically)
+
+It now behaves like a native app icon — full screen, no browser bar.
+
+## How the data model works
+
+| Table          | What it's for                                                   |
+|----------------|-------------------------------------------------------------------|
+| `profiles`     | Display name per user, auto-created on signup                    |
+| `groups`       | A household / trip / friend circle, with a shareable invite code |
+| `group_members`| Who's in which group                                             |
+| `bills`        | One receipt/expense event, with a single `paid_by` (who fronted it) |
+| `items`        | One line item on a bill                                           |
+| `item_shares`  | Who's responsible for how much of each item (`shares` = weight, so someone taking 2 of 3 units owes double) |
+
+Settlement math lives entirely in `src/lib/settlement.js` — it's plain,
+readable JS with no dependencies, worth a read.
+
+## What's intentionally left simple (v1)
+
+- One payer per bill (no split front-money between multiple payers yet)
+- Equal shares by default when adding an item — you can uncheck people, but
+  there's no UI yet for "I only had half a portion" style partial weights
+  (the `shares` column already supports it — just needs a stepper in `ItemRow`)
+- No push notifications when a group-mate adds a bill (realtime *within* the
+  open app works today; background notifications would need a service worker
+  + web push setup)
+- No receipt photo is kept after scanning — only the extracted items are
+  saved. Add a Supabase Storage upload in `ScanReceiptButton.jsx` if you'd
+  like to keep the originals.
+- Deleting a group or removing a member isn't wired up in the UI yet, only
+  creating/joining.
+
+## Security notes
+
+- Every table has row-level security scoped to "members of the same group" —
+  see the policies at the bottom of `schema.sql`.
+- The Anthropic API key only ever lives in the Supabase Edge Function's
+  secrets — it's never bundled into the frontend.
+- Group names and invite codes are only visible to members; joining a new
+  group goes through the `join_group_by_code()` Postgres function so the
+  `groups` table itself doesn't need to be publicly readable.
