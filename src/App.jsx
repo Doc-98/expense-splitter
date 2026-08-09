@@ -1,6 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Analytics } from '@vercel/analytics/react'
-import { SpeedInsights } from '@vercel/speed-insights/react'
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/Login'
 import Groups from './pages/Groups'
@@ -23,6 +22,22 @@ function RequireAuth({ children }) {
 }
 
 function Shell() {
+  const { session } = useAuth()
+  const navigate = useNavigate()
+
+  // Whenever a session appears — whether from a password sign-in, clicking a
+  // magic-link email, or confirming a new account by email — check if we
+  // owe the person a trip back to wherever they originally tried to go
+  // (e.g. an invite link) and finish that journey automatically.
+  useEffect(() => {
+    if (!session) return
+    const next = sessionStorage.getItem('redirectAfterLogin')
+    if (next) {
+      sessionStorage.removeItem('redirectAfterLogin')
+      navigate(next, { replace: true })
+    }
+  }, [session, navigate])
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -40,8 +55,6 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Shell />
-        <Analytics />
-        <SpeedInsights />
       </BrowserRouter>
     </AuthProvider>
   )
