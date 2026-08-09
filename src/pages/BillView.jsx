@@ -126,6 +126,19 @@ export default function BillView() {
     loadItems()
   }
 
+  // Lets you try the whole scan → review → assign-buyers flow without a
+  // working Anthropic API key or any cost — useful while deciding if the
+  // scanning feature is worth setting up billing for.
+  function trySampleReceipt() {
+    handleScanned([
+      { name: 'Whole milk 1L', unit_price: 1.29, quantity: 2 },
+      { name: 'Sourdough bread', unit_price: 3.5, quantity: 1 },
+      { name: 'Free-range eggs (6)', unit_price: 2.8, quantity: 1 },
+      { name: 'Cherry tomatoes', unit_price: 2.1, quantity: 1 },
+      { name: 'Parmesan 200g', unit_price: 4.6, quantity: 1 },
+    ])
+  }
+
   return (
     <div className="page receipt-page">
       <header className="page-header">
@@ -192,6 +205,9 @@ export default function BillView() {
         onScanned={handleScanned}
         onError={setScanError}
       />
+      <button type="button" className="btn-link sample-link" onClick={trySampleReceipt}>
+        Try sample items instead (no API key needed)
+      </button>
       {scanError && <p className="status-error">{scanError}</p>}
     </div>
   )

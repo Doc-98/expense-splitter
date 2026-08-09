@@ -341,3 +341,5 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 
 .scan-row { display: flex; justify-content: center; margin-top: var(--space-sm); }
 .scan-row .btn-secondary { width: 100%; }
+
+.sample-link { display: block; text-align: center; margin: var(--space-xs) auto 0; }
