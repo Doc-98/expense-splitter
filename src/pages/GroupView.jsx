@@ -128,6 +128,18 @@ export default function GroupView() {
     loadSettlement()
   }
 
+  async function deletePayment(paymentId) {
+    if (!window.confirm('Delete this payment record?')) return
+    await supabase.from('payments').delete().eq('id', paymentId)
+    loadSettlement()
+  }
+
+  async function deleteBill(bill) {
+    if (!window.confirm(`Delete "${bill.title}"? This removes all its items too.`)) return
+    await supabase.from('bills').delete().eq('id', bill.id)
+    reloadAll()
+  }
+
   return (
     <div className="page">
       <header className="page-header">
@@ -161,11 +173,19 @@ export default function GroupView() {
 
       <ul className="card-list">
         {bills?.map((bill) => (
-          <li key={bill.id}>
+          <li key={bill.id} className="bill-list-item">
             <Link to={`/groups/${groupId}/bills/${bill.id}`} className="card-list-item">
               <span>{bill.title}</span>
               <span className="chevron">→</span>
             </Link>
+            <button
+              type="button"
+              className="btn-icon"
+              onClick={() => deleteBill(bill)}
+              aria-label={`Delete ${bill.title}`}
+            >
+              ×
+            </button>
           </li>
         ))}
       </ul>
@@ -175,6 +195,7 @@ export default function GroupView() {
         members={members}
         payments={payments}
         onRecordPayment={recordPayment}
+        onDeletePayment={deletePayment}
       />
     </div>
   )

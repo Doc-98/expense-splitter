@@ -122,8 +122,8 @@ readable JS with no dependencies, worth a read.
 - No receipt photo is kept after scanning — only the extracted items are
   saved. Add a Supabase Storage upload in `ScanReceiptButton.jsx` if you'd
   like to keep the originals.
-- Deleting a group or removing a member isn't wired up in the UI yet, only
-  creating/joining.
+- Deleting a group or removing a member isn't wired up in the UI yet — bills
+  and payment records can be deleted, groups themselves can't yet.
 
 ## Security notes
 

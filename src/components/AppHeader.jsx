@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext'
 
 export default function AppHeader() {
   const { user } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const [displayName, setDisplayName] = useState('')
   const [open, setOpen] = useState(false)
 
@@ -42,7 +44,13 @@ export default function AppHeader() {
         {open && (
           <div className="account-dropdown">
             <p className="account-email">{user?.email}</p>
-            <button type="button" className="btn-link" onClick={signOut}>
+            <button type="button" className="dropdown-item" onClick={toggleTheme}>
+              {theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            </button>
+            <Link to="/about" className="dropdown-item" onClick={() => setOpen(false)}>
+              About
+            </Link>
+            <button type="button" className="dropdown-item dropdown-item-warn" onClick={signOut}>
               Sign out
             </button>
           </div>

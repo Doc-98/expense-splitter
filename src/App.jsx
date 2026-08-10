@@ -1,12 +1,14 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { ThemeProvider } from './context/ThemeContext'
 import AppHeader from './components/AppHeader'
 import Login from './pages/Login'
 import Groups from './pages/Groups'
 import GroupView from './pages/GroupView'
 import BillView from './pages/BillView'
 import JoinGroup from './pages/JoinGroup'
+import About from './pages/About'
 
 function RequireAuth({ children }) {
   const { session } = useAuth()
@@ -48,6 +50,7 @@ function Shell() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/join/:code" element={<RequireAuth><JoinGroup /></RequireAuth>} />
+      <Route path="/about" element={<RequireAuth><About /></RequireAuth>} />
       <Route path="/" element={<RequireAuth><Groups /></RequireAuth>} />
       <Route path="/groups/:groupId" element={<RequireAuth><GroupView /></RequireAuth>} />
       <Route path="/groups/:groupId/bills/:billId" element={<RequireAuth><BillView /></RequireAuth>} />
@@ -58,10 +61,12 @@ function Shell() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Shell />
-      </BrowserRouter>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Shell />
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

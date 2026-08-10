@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { parseNumber } from '../lib/parseNumber'
 
 function RecordPaymentForm({ members, onRecordPayment }) {
   const [from, setFrom] = useState('')
@@ -7,7 +8,7 @@ function RecordPaymentForm({ members, onRecordPayment }) {
 
   function submit(e) {
     e.preventDefault()
-    const amt = Number(amount)
+    const amt = parseNumber(amount)
     if (!from || !to || from === to || !amt) return
     onRecordPayment(from, to, amt)
     setAmount('')
@@ -44,7 +45,7 @@ function RecordPaymentForm({ members, onRecordPayment }) {
   )
 }
 
-export default function SettlementSummary({ transactions, members, payments, onRecordPayment }) {
+export default function SettlementSummary({ transactions, members, payments, onRecordPayment, onDeletePayment }) {
   const nameOf = (id) => members?.find((m) => m.id === id)?.name || 'Someone'
 
   if (!transactions) return null
@@ -87,6 +88,14 @@ export default function SettlementSummary({ transactions, members, payments, onR
                 <span className="settlement-verb">paid</span>
                 <span className="creditor">{nameOf(p.to_user)}</span>
                 <span className="mono amount">€{Number(p.amount).toFixed(2)}</span>
+                <button
+                  type="button"
+                  className="btn-icon"
+                  onClick={() => onDeletePayment(p.id)}
+                  aria-label="Undo this payment"
+                >
+                  ×
+                </button>
               </li>
             ))}
           </ul>

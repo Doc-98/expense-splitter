@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { fetchGroupMembers } from '../lib/members'
+import { parseNumber } from '../lib/parseNumber'
 import ItemRow from '../components/ItemRow'
 import ScanReceiptButton from '../components/ScanReceiptButton'
 
@@ -51,8 +52,8 @@ export default function BillView() {
   async function addItem(e) {
     e.preventDefault()
     if (!newItem.name.trim()) return
-    const quantity = Number(newItem.quantity) || 1
-    const unitPrice = Number(newItem.price) || 0
+    const quantity = parseNumber(newItem.quantity) || 1
+    const unitPrice = parseNumber(newItem.price) || 0
     const totalPrice = Math.round(unitPrice * quantity * 100) / 100
 
     const { data: inserted } = await supabase
