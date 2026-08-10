@@ -47,6 +47,58 @@ input, select { font-family: inherit; font-size: 16px; } /* 16px prevents iOS zo
   padding: var(--space-lg) var(--space-md) 64px;
 }
 
+.page-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 var(--space-lg);
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--space-md) var(--space-md) 0;
+}
+.app-header-brand {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent-dark);
+  text-decoration: none;
+}
+.account-menu { position: relative; }
+.account-chip {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+}
+.account-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: var(--space-sm) var(--space-md);
+  min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  z-index: 10;
+}
+.account-email {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin: 0 0 6px;
+  word-break: break-all;
+}
+
 .page-loading {
   display: flex;
   align-items: center;
@@ -245,6 +297,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .settlement-list li {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-xs);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -256,6 +309,24 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .creditor { font-weight: 600; color: var(--accent-dark); }
 .settlement-verb { color: var(--ink-soft); }
 .amount { margin-left: auto; font-weight: 600; }
+.mark-paid-btn { padding: 6px 12px; font-size: 13px; }
+
+.payment-form-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  margin: var(--space-lg) 0 var(--space-sm);
+}
+.payment-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.payment-form select { flex: 1; min-width: 110px; }
+.payment-form input { flex: 1; min-width: 90px; }
+
+.payment-history { margin-top: var(--space-md); font-size: 14px; }
+.payment-history summary { cursor: pointer; color: var(--ink-soft); }
+.payment-history .settlement-list { margin-top: var(--space-sm); }
 
 /* ---------- Receipt / bill view ---------- */
 .paid-by-row {
@@ -305,8 +376,14 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .item-buyers {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
   margin-top: 8px;
+}
+.item-buyers-label {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-right: 2px;
 }
 .buyer-chip {
   display: flex;
@@ -321,6 +398,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .buyer-chip.active { background: var(--accent-light); border-color: var(--accent); color: var(--accent-dark); }
 .buyer-chip input { display: none; }
+
+.item-warning {
+  font-size: 12px;
+  color: var(--warn);
+  margin: 6px 0 0;
+}
 
 .receipt-total-row {
   display: flex;

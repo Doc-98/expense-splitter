@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { fetchGroupMembers } from '../lib/members'
 import ItemRow from '../components/ItemRow'
 import ScanReceiptButton from '../components/ScanReceiptButton'
 
@@ -13,6 +14,10 @@ export default function BillView() {
   const [newItem, setNewItem] = useState({ name: '', price: '', quantity: '1' })
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState(null)
+
+  const nameRef = useRef(null)
+  const priceRef = useRef(null)
+  const qtyRef = useRef(null)
 
   const loadItems = useCallback(async () => {
     const { data } = await supabase
@@ -27,14 +32,7 @@ export default function BillView() {
     async function loadBillAndMembers() {
       const { data: billData } = await supabase.from('bills').select('*').eq('id', billId).single()
       setBill(billData)
-
-      const { data: memberRows } = await supabase
-        .from('group_members')
-        .select('user_id, profiles(display_name)')
-        .eq('group_id', groupId)
-      setMembers(
-        (memberRows || []).map((row) => ({ id: row.user_id, name: row.profiles?.display_name || 'Someone' }))
-      )
+      setMembers(await fetchGroupMembers(groupId))
     }
     loadBillAndMembers()
     loadItems()
@@ -78,6 +76,23 @@ export default function BillView() {
 
     setNewItem({ name: '', price: '', quantity: '1' })
     loadItems()
+    // Ready for the next item without reaching for the mouse.
+    nameRef.current?.focus()
+  }
+
+  // Keeps Tab cycling only through name -> price -> qty -> name, instead of
+  // continuing on to the Add button and beyond, for fast by-hand entry.
+  function handleQtyKeyDown(e) {
+    if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault()
+      nameRef.current?.focus()
+    }
+  }
+  function handleNameKeyDown(e) {
+    if (e.key === 'Tab' && e.shiftKey) {
+      e.preventDefault()
+      qtyRef.current?.focus()
+    }
   }
 
   async function toggleBuyer(item, memberId) {
@@ -178,21 +193,26 @@ export default function BillView() {
 
       <form onSubmit={addItem} className="add-item-form">
         <input
+          ref={nameRef}
           placeholder="Item"
           value={newItem.name}
           onChange={(e) => setNewItem((v) => ({ ...v, name: e.target.value }))}
+          onKeyDown={handleNameKeyDown}
         />
         <input
+          ref={priceRef}
           placeholder="Price"
           inputMode="decimal"
           value={newItem.price}
           onChange={(e) => setNewItem((v) => ({ ...v, price: e.target.value }))}
         />
         <input
+          ref={qtyRef}
           placeholder="Qty"
           inputMode="decimal"
           value={newItem.quantity}
           onChange={(e) => setNewItem((v) => ({ ...v, quantity: e.target.value }))}
+          onKeyDown={handleQtyKeyDown}
         />
         <button type="submit" className="btn-primary">
           Add

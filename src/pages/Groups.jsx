@@ -64,18 +64,9 @@ export default function Groups() {
     setCreating(false)
   }
 
-  async function signOut() {
-    await supabase.auth.signOut()
-  }
-
   return (
     <div className="page">
-      <header className="page-header">
-        <h1 className="brand">Spesa</h1>
-        <button className="btn-link" onClick={signOut}>
-          Sign out
-        </button>
-      </header>
+      <h1 className="page-title">Your groups</h1>
 
       <form onSubmit={createGroup} className="inline-form">
         <input

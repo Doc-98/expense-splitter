@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import AppHeader from './components/AppHeader'
 import Login from './pages/Login'
 import Groups from './pages/Groups'
 import GroupView from './pages/GroupView'
@@ -18,7 +19,12 @@ function RequireAuth({ children }) {
     return <Navigate to="/login" replace />
   }
 
-  return children
+  return (
+    <>
+      <AppHeader />
+      {children}
+    </>
+  )
 }
 
 function Shell() {

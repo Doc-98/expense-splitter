@@ -20,7 +20,7 @@ function groupBy(list, key) {
   }, {})
 }
 
-export function computeBalances({ bills, items, itemShares }) {
+export function computeBalances({ bills, items, itemShares, payments = [] }) {
   const balances = {}
   const add = (userId, amount) => {
     if (!userId) return
@@ -43,6 +43,13 @@ export function computeBalances({ bills, items, itemShares }) {
       const portion = (Number(item.total_price) * Number(share.shares)) / totalShares
       add(share.user_id, -portion)
     }
+  }
+
+  // A recorded payment from X to Y reduces what X owes (or increases what
+  // they're owed) by that amount, and does the opposite for Y.
+  for (const payment of payments) {
+    add(payment.from_user, Number(payment.amount))
+    add(payment.to_user, -Number(payment.amount))
   }
 
   return balances

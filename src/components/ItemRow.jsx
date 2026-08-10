@@ -12,6 +12,7 @@ export default function ItemRow({ item, members, onToggleBuyer, onDelete }) {
         </button>
       </div>
       <div className="item-buyers">
+        <span className="item-buyers-label">Split with:</span>
         {members.map((m) => (
           <label key={m.id} className={buyerIds.has(m.id) ? 'buyer-chip active' : 'buyer-chip'}>
             <input type="checkbox" checked={buyerIds.has(m.id)} onChange={() => onToggleBuyer(m.id)} />
@@ -19,6 +20,9 @@ export default function ItemRow({ item, members, onToggleBuyer, onDelete }) {
           </label>
         ))}
       </div>
+      {buyerIds.size === 0 && (
+        <p className="item-warning">No one's assigned yet — this item won't be counted in the settle-up.</p>
+      )}
     </div>
   )
 }

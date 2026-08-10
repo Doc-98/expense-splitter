@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
+import { fetchGroupMembers } from '../lib/members'
 import { computeBalances, simplifyDebts } from '../lib/settlement'
 import SettlementSummary from '../components/SettlementSummary'
 
@@ -15,6 +16,7 @@ export default function GroupView() {
   const [newBillTitle, setNewBillTitle] = useState('')
   const [copied, setCopied] = useState(false)
   const [settlement, setSettlement] = useState(null)
+  const [payments, setPayments] = useState([])
 
   const loadGroup = useCallback(async () => {
     const { data } = await supabase.from('groups').select('*').eq('id', groupId).single()
@@ -22,11 +24,7 @@ export default function GroupView() {
   }, [groupId])
 
   const loadMembers = useCallback(async () => {
-    const { data } = await supabase
-      .from('group_members')
-      .select('user_id, profiles(display_name)')
-      .eq('group_id', groupId)
-    setMembers((data || []).map((row) => ({ id: row.user_id, name: row.profiles?.display_name || 'Someone' })))
+    setMembers(await fetchGroupMembers(groupId))
   }, [groupId])
 
   const loadBills = useCallback(async () => {
@@ -44,6 +42,14 @@ export default function GroupView() {
       .select('id, paid_by, items(id, total_price, item_shares(user_id, shares))')
       .eq('group_id', groupId)
 
+    const { data: paymentsData } = await supabase
+      .from('payments')
+      .select('id, from_user, to_user, amount, created_at')
+      .eq('group_id', groupId)
+      .order('created_at', { ascending: false })
+
+    setPayments(paymentsData || [])
+
     if (!billsData) return
 
     const items = []
@@ -57,7 +63,7 @@ export default function GroupView() {
       }
     }
 
-    const balances = computeBalances({ bills: billsData, items, itemShares })
+    const balances = computeBalances({ bills: billsData, items, itemShares, payments: paymentsData || [] })
     setSettlement(simplifyDebts(balances))
   }, [groupId])
 
@@ -76,6 +82,7 @@ export default function GroupView() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bills' }, reloadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, reloadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, reloadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, reloadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members' }, loadMembers)
       .subscribe()
 
@@ -107,6 +114,18 @@ export default function GroupView() {
     navigator.clipboard.writeText(link)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function recordPayment(fromUserId, toUserId, amount) {
+    if (!fromUserId || !toUserId || fromUserId === toUserId || !amount) return
+    await supabase.from('payments').insert({
+      group_id: groupId,
+      from_user: fromUserId,
+      to_user: toUserId,
+      amount,
+      created_by: user.id,
+    })
+    loadSettlement()
   }
 
   return (
@@ -151,7 +170,12 @@ export default function GroupView() {
         ))}
       </ul>
 
-      <SettlementSummary transactions={settlement} members={members} />
+      <SettlementSummary
+        transactions={settlement}
+        members={members}
+        payments={payments}
+        onRecordPayment={recordPayment}
+      />
     </div>
   )
 }
