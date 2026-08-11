@@ -72,6 +72,7 @@ create table bills (
   id uuid primary key default gen_random_uuid(),
   group_id uuid not null references groups(id) on delete cascade,
   title text not null default 'New bill',
+  note text,
   paid_by uuid references auth.users(id),
   default_buyer_ids uuid[],
   created_by uuid references auth.users(id),

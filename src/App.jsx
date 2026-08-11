@@ -10,6 +10,7 @@ import BillView from './pages/BillView'
 import JoinGroup from './pages/JoinGroup'
 import About from './pages/About'
 import GroupSettings from './pages/GroupSettings'
+import GroupStats from './pages/GroupStats'
 
 function RequireAuth({ children }) {
   const { session } = useAuth()
@@ -55,6 +56,7 @@ function Shell() {
       <Route path="/" element={<RequireAuth><Groups /></RequireAuth>} />
       <Route path="/groups/:groupId" element={<RequireAuth><GroupView /></RequireAuth>} />
       <Route path="/groups/:groupId/settings" element={<RequireAuth><GroupSettings /></RequireAuth>} />
+      <Route path="/groups/:groupId/stats" element={<RequireAuth><GroupStats /></RequireAuth>} />
       <Route path="/groups/:groupId/bills/:billId" element={<RequireAuth><BillView /></RequireAuth>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

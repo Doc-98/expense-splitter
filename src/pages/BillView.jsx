@@ -16,6 +16,8 @@ export default function BillView() {
   const [newItem, setNewItem] = useState({ name: '', price: '', quantity: '1' })
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState(null)
+  const [noteDraft, setNoteDraft] = useState('')
+  const [noteSaved, setNoteSaved] = useState(false)
 
   const nameRef = useRef(null)
   const priceRef = useRef(null)
@@ -44,6 +46,7 @@ export default function BillView() {
     async function loadBillAndMembers() {
       const { data: billData } = await supabase.from('bills').select('*').eq('id', billId).single()
       setBill(billData)
+      setNoteDraft(billData?.note || '')
       setAllMembers(await fetchAllGroupMembers(groupId))
     }
     loadBillAndMembers()
@@ -130,6 +133,12 @@ export default function BillView() {
     setBill((b) => ({ ...b, paid_by: userId }))
   }
 
+  async function saveNote() {
+    await supabase.from('bills').update({ note: noteDraft || null }).eq('id', billId)
+    setNoteSaved(true)
+    setTimeout(() => setNoteSaved(false), 1200)
+  }
+
   async function toggleDefaultBuyer(memberId) {
     const current = defaultBuyerIds
     const next = current.includes(memberId)
@@ -175,6 +184,18 @@ export default function BillView() {
         </Link>
         <h1>{bill?.title}</h1>
       </header>
+
+      <div className="bill-note-row">
+        <textarea
+          className="bill-note"
+          placeholder="Add a note — what this was for, who was around that week…"
+          value={noteDraft}
+          onChange={(e) => setNoteDraft(e.target.value)}
+          onBlur={saveNote}
+          rows={2}
+        />
+        {noteSaved && <span className="muted note-saved">Saved</span>}
+      </div>
 
       <div className="paid-by-row">
         <span className="muted">Paid by</span>

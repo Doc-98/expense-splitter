@@ -159,6 +159,9 @@ export default function GroupView() {
           ← Groups
         </Link>
         <h1>{group?.name}</h1>
+        <Link to={`/groups/${groupId}/stats`} className="btn-link">
+          Stats
+        </Link>
         <Link to={`/groups/${groupId}/settings`} className="btn-link">
           Settings
         </Link>
@@ -206,7 +209,10 @@ export default function GroupView() {
         {bills?.map((bill) => (
           <li key={bill.id} className="bill-list-item">
             <Link to={`/groups/${groupId}/bills/${bill.id}`} className="card-list-item">
-              <span>{bill.title}</span>
+              <span className="card-list-item-main">
+                <span>{bill.title}</span>
+                {bill.note && <span className="card-list-item-note">{bill.note}</span>}
+              </span>
               <span className="chevron">→</span>
             </Link>
             <button

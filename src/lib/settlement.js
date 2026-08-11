@@ -63,6 +63,45 @@ export function computeBalances({ bills, items, itemShares, payments = [] }) {
   return balances
 }
 
+// Raw spending totals per person, for a stats view — deliberately separate
+// from computeBalances/payments, since "how much have I spent" and "who
+// owes whom right now" are different questions. Returns, per user:
+// - paid: total money they've fronted (sum of bills where they're paid_by)
+// - consumed: total value of their own share of items, across all bills
+export function computeSpendingTotals({ bills, items, itemShares }) {
+  const totals = {}
+  const ensure = (userId) => {
+    if (!totals[userId]) totals[userId] = { paid: 0, consumed: 0 }
+    return totals[userId]
+  }
+
+  const itemsByBill = groupBy(items, 'bill_id')
+  for (const bill of bills) {
+    if (!bill.paid_by) continue
+    const billItems = itemsByBill[bill.id] || []
+    const billTotal = billItems.reduce((sum, it) => sum + Number(it.total_price), 0)
+    ensure(bill.paid_by).paid += billTotal
+  }
+
+  const sharesByItem = groupBy(itemShares, 'item_id')
+  for (const item of items) {
+    const shares = sharesByItem[item.id] || []
+    const totalShares = shares.reduce((sum, s) => sum + Number(s.shares), 0)
+    if (totalShares <= 0) continue
+    for (const share of shares) {
+      const portion = (Number(item.total_price) * Number(share.shares)) / totalShares
+      ensure(share.user_id).consumed += portion
+    }
+  }
+
+  for (const userId of Object.keys(totals)) {
+    totals[userId].paid = round2(totals[userId].paid)
+    totals[userId].consumed = round2(totals[userId].consumed)
+  }
+
+  return totals
+}
+
 // Greedy debt simplification: repeatedly match the biggest creditor with the
 // biggest debtor. Produces close to the minimum number of payments needed to
 // settle the whole group, instead of everyone paying everyone.
