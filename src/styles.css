@@ -327,6 +327,32 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .bill-list-item .card-list-item { flex: 1; }
 
+.member-count-wrap { position: relative; }
+.member-count-btn {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+.member-count-popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: var(--space-sm) var(--space-md);
+  min-width: 160px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  z-index: 10;
+}
+.member-count-popover ul { list-style: none; margin: 0 0 var(--space-sm); padding: 0; font-size: 14px; }
+.member-count-popover li { padding: 3px 0; }
+
 /* ---------- Settlement ---------- */
 .settlement { margin-top: var(--space-lg); }
 .settlement h2 {
@@ -376,6 +402,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   gap: var(--space-sm);
   margin-bottom: var(--space-md);
 }
+
+.default-buyers-row { margin-bottom: var(--space-lg); }
+.default-buyers-row .muted { display: block; margin-bottom: 6px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.confirm-btn { display: block; width: 100%; margin-top: var(--space-lg); text-align: center; }
 
 .receipt-tape {
   position: relative;
@@ -438,6 +470,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   cursor: pointer;
 }
 .buyer-chip.active { background: var(--accent-light); border-color: var(--accent); color: var(--accent-dark); }
+.buyer-chip.former { border-style: dashed; opacity: 0.7; }
 .buyer-chip input { display: none; }
 
 .item-warning {
@@ -467,3 +500,24 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .scan-row .btn-secondary { width: 100%; }
 
 .sample-link { display: block; text-align: center; margin: var(--space-xs) auto 0; }
+
+/* ---------- Group settings page ---------- */
+.settings-section-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  margin: var(--space-lg) 0 var(--space-sm);
+}
+.settings-section-title:first-of-type { margin-top: 0; }
+
+.member-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.member-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+.member-list-item.former { opacity: 0.7; border-style: dashed; }

@@ -102,8 +102,8 @@ It now behaves like a native app icon — full screen, no browser bar.
 |----------------|-------------------------------------------------------------------|
 | `profiles`     | Display name per user, auto-created on signup                    |
 | `groups`       | A household / trip / friend circle, with a shareable invite code |
-| `group_members`| Who's in which group                                             |
-| `bills`        | One receipt/expense event, with a single `paid_by` (who fronted it) |
+| `group_members`| Who's in which group. `active=false` means they've left/been removed — kept, not deleted, so old bills/payments referencing them still make sense |
+| `bills`        | One receipt/expense event, with a single `paid_by` (who fronted it) and an optional `default_buyer_ids` (who *new* items on this bill split with by default) |
 | `items`        | One line item on a bill                                           |
 | `item_shares`  | Who's responsible for how much of each item (`shares` = weight, so someone taking 2 of 3 units owes double) |
 
@@ -113,17 +113,18 @@ readable JS with no dependencies, worth a read.
 ## What's intentionally left simple (v1)
 
 - One payer per bill (no split front-money between multiple payers yet)
-- Equal shares by default when adding an item — you can uncheck people, but
-  there's no UI yet for "I only had half a portion" style partial weights
-  (the `shares` column already supports it — just needs a stepper in `ItemRow`)
+- No UI yet for "I only had half a portion" style partial weights — the
+  `shares` column already supports fractional/unequal shares, just needs a
+  stepper control in `ItemRow` instead of a plain checkbox
 - No push notifications when a group-mate adds a bill (realtime *within* the
   open app works today; background notifications would need a service worker
   + web push setup)
 - No receipt photo is kept after scanning — only the extracted items are
   saved. Add a Supabase Storage upload in `ScanReceiptButton.jsx` if you'd
   like to keep the originals.
-- Deleting a group or removing a member isn't wired up in the UI yet — bills
-  and payment records can be deleted, groups themselves can't yet.
+- Deleting a whole group isn't wired up in the UI yet — bills, payment
+  records, and individual members can all be removed, the group itself can't
+  be deleted yet.
 
 ## Security notes
 

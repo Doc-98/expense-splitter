@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
-import { fetchGroupMembers } from '../lib/members'
+import { fetchAllGroupMembers } from '../lib/members'
 import { computeBalances, simplifyDebts } from '../lib/settlement'
 import SettlementSummary from '../components/SettlementSummary'
 
@@ -11,12 +11,16 @@ export default function GroupView() {
   const { user } = useAuth()
 
   const [group, setGroup] = useState(null)
-  const [members, setMembers] = useState([])
+  const [allMembers, setAllMembers] = useState([])
+  const [showMembers, setShowMembers] = useState(false)
   const [bills, setBills] = useState(null)
   const [newBillTitle, setNewBillTitle] = useState('')
   const [copied, setCopied] = useState(false)
   const [settlement, setSettlement] = useState(null)
   const [payments, setPayments] = useState([])
+  const [error, setError] = useState(null)
+
+  const activeMembers = allMembers.filter((m) => m.active)
 
   const loadGroup = useCallback(async () => {
     const { data } = await supabase.from('groups').select('*').eq('id', groupId).single()
@@ -24,7 +28,7 @@ export default function GroupView() {
   }, [groupId])
 
   const loadMembers = useCallback(async () => {
-    setMembers(await fetchGroupMembers(groupId))
+    setAllMembers(await fetchAllGroupMembers(groupId))
   }, [groupId])
 
   const loadBills = useCallback(async () => {
@@ -92,7 +96,7 @@ export default function GroupView() {
 
   async function createBill(e) {
     e.preventDefault()
-    const { data, error } = await supabase
+    const { data, error: createError } = await supabase
       .from('bills')
       .insert({
         group_id: groupId,
@@ -103,7 +107,9 @@ export default function GroupView() {
       .select()
       .single()
 
-    if (!error) {
+    if (createError) {
+      setError(createError.message)
+    } else {
       setNewBillTitle('')
       window.location.href = `/groups/${groupId}/bills/${data.id}`
     }
@@ -118,25 +124,31 @@ export default function GroupView() {
 
   async function recordPayment(fromUserId, toUserId, amount) {
     if (!fromUserId || !toUserId || fromUserId === toUserId || !amount) return
-    await supabase.from('payments').insert({
+    setError(null)
+    const { error: paymentError } = await supabase.from('payments').insert({
       group_id: groupId,
       from_user: fromUserId,
       to_user: toUserId,
       amount,
       created_by: user.id,
     })
+    if (paymentError) setError(paymentError.message)
     loadSettlement()
   }
 
   async function deletePayment(paymentId) {
     if (!window.confirm('Delete this payment record?')) return
-    await supabase.from('payments').delete().eq('id', paymentId)
+    setError(null)
+    const { error: deleteError } = await supabase.from('payments').delete().eq('id', paymentId)
+    if (deleteError) setError(deleteError.message)
     loadSettlement()
   }
 
   async function deleteBill(bill) {
     if (!window.confirm(`Delete "${bill.title}"? This removes all its items too.`)) return
-    await supabase.from('bills').delete().eq('id', bill.id)
+    setError(null)
+    const { error: deleteError } = await supabase.from('bills').delete().eq('id', bill.id)
+    if (deleteError) setError(deleteError.message)
     reloadAll()
   }
 
@@ -147,13 +159,32 @@ export default function GroupView() {
           ← Groups
         </Link>
         <h1>{group?.name}</h1>
+        <Link to={`/groups/${groupId}/settings`} className="btn-link">
+          Settings
+        </Link>
       </header>
 
       <div className="group-actions">
         <button className="btn-secondary" onClick={copyInvite}>
           {copied ? 'Link copied!' : 'Copy invite link'}
         </button>
-        <span className="muted">{members.length} {members.length === 1 ? 'person' : 'people'}</span>
+        <div className="member-count-wrap">
+          <button type="button" className="member-count-btn" onClick={() => setShowMembers((s) => !s)}>
+            {activeMembers.length} {activeMembers.length === 1 ? 'person' : 'people'}
+          </button>
+          {showMembers && (
+            <div className="member-count-popover">
+              <ul>
+                {activeMembers.map((m) => (
+                  <li key={m.id}>{m.name}</li>
+                ))}
+              </ul>
+              <Link to={`/groups/${groupId}/settings`} className="btn-link">
+                Manage members →
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
 
       <form onSubmit={createBill} className="inline-form">
@@ -190,9 +221,11 @@ export default function GroupView() {
         ))}
       </ul>
 
+      {error && <p className="status-error">{error}</p>}
+
       <SettlementSummary
         transactions={settlement}
-        members={members}
+        members={allMembers}
         payments={payments}
         onRecordPayment={recordPayment}
         onDeletePayment={deletePayment}

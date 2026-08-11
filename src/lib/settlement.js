@@ -22,9 +22,13 @@ function groupBy(list, key) {
 
 export function computeBalances({ bills, items, itemShares, payments = [] }) {
   const balances = {}
+  // Accumulate in full floating-point precision; round only once, at the
+  // very end. Rounding after every single addition (as an earlier version
+  // did) can compound tiny drift across many operations — harmless for a
+  // handful of transactions, but there's no reason not to do this properly.
   const add = (userId, amount) => {
     if (!userId) return
-    balances[userId] = round2((balances[userId] || 0) + amount)
+    balances[userId] = (balances[userId] || 0) + amount
   }
 
   const itemsByBill = groupBy(items, 'bill_id')
@@ -50,6 +54,10 @@ export function computeBalances({ bills, items, itemShares, payments = [] }) {
   for (const payment of payments) {
     add(payment.from_user, Number(payment.amount))
     add(payment.to_user, -Number(payment.amount))
+  }
+
+  for (const userId of Object.keys(balances)) {
+    balances[userId] = round2(balances[userId])
   }
 
   return balances

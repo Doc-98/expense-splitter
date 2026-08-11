@@ -47,21 +47,33 @@ create table groups (
   created_at timestamptz not null default now()
 );
 
+-- `active` lets someone be removed from a group without deleting the row:
+-- their historical bills/items/payments still reference their user_id
+-- directly, so nothing breaks — they just stop being selectable for *new*
+-- things, and lose access going forward. If they rejoin later (same invite
+-- link, same account), it's the same row flipping back to active=true, so
+-- all their history is automatically still theirs — never disconnected.
 create table group_members (
   group_id uuid not null references groups(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
+  active boolean not null default true,
   joined_at timestamptz not null default now(),
   primary key (group_id, user_id)
 );
 
 -- ---------------------------------------------------------------------------
 -- bills: one receipt / expense event. paid_by is whoever fronted the money.
+-- default_buyer_ids is who new items on *this* bill get split with by
+-- default (null/empty means "everyone currently active") — lets a
+-- household set it to just the two people actually shopping today instead
+-- of unchecking everyone else on every single item.
 -- ---------------------------------------------------------------------------
 create table bills (
   id uuid primary key default gen_random_uuid(),
   group_id uuid not null references groups(id) on delete cascade,
   title text not null default 'New bill',
   paid_by uuid references auth.users(id),
+  default_buyer_ids uuid[],
   created_by uuid references auth.users(id),
   settled boolean not null default false,
   created_at timestamptz not null default now()
@@ -93,8 +105,27 @@ create table item_shares (
   primary key (item_id, user_id)
 );
 
+-- ---------------------------------------------------------------------------
+-- payments: a recorded cash transfer between two group members, settling
+-- some amount of what one owes the other. Separate from bills/items — this
+-- is money moving between people directly, not a purchase.
+-- ---------------------------------------------------------------------------
+create table payments (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references groups(id) on delete cascade,
+  from_user uuid not null references auth.users(id),
+  to_user uuid not null references auth.users(id),
+  amount numeric(10,2) not null,
+  created_by uuid references auth.users(id),
+  created_at timestamptz not null default now()
+);
+
 -- ============================================================================
--- Row Level Security — every table is locked to "members of the same group"
+-- Row Level Security — every table is locked to "active members of the same
+-- group". Someone removed from a group (active=false) loses access to it
+-- going forward, but their profile stays visible to former groupmates (see
+-- the profiles policy below) so their name still renders correctly on old
+-- bills, items, and payments that reference them.
 -- ============================================================================
 
 alter table profiles enable row level security;
@@ -103,16 +134,17 @@ alter table group_members enable row level security;
 alter table bills enable row level security;
 alter table items enable row level security;
 alter table item_shares enable row level security;
+alter table payments enable row level security;
 
--- Helper: checks group membership from *inside* a SECURITY DEFINER function,
--- so it runs with the function owner's privileges and doesn't re-trigger
--- group_members' own RLS policy. Needed because that policy itself has to
--- check "is this user a member of this group" — if it did that with a plain
--- subquery against group_members, Postgres would recurse into the same
--- policy infinitely ("infinite recursion detected in policy for relation
--- group_members"). Other tables' policies below query group_members
--- directly (not a problem — they're a different table's policy), but
--- group_members' own policy must go through this function.
+-- Helper: checks *active* group membership from inside a SECURITY DEFINER
+-- function, so it runs with the function owner's privileges and doesn't
+-- re-trigger group_members' own RLS policy. Needed because that policy
+-- itself has to check "is this user a member of this group" — if it did
+-- that with a plain subquery against group_members, Postgres would recurse
+-- into the same policy infinitely ("infinite recursion detected in policy
+-- for relation group_members"). Other tables' policies below query
+-- group_members directly (not a problem — they're a different table's
+-- policy), but group_members' own policy must go through this function.
 create function public.is_group_member(target_group_id uuid)
 returns boolean
 language sql
@@ -124,10 +156,14 @@ as $$
     select 1 from group_members
     where group_id = target_group_id
       and user_id = auth.uid()
+      and active = true
   );
 $$;
 
--- profiles: see your own profile, and profiles of anyone you share a group with
+-- profiles: see your own profile, and profiles of anyone you have EVER
+-- shared a group with — deliberately not filtered to active membership, so
+-- a removed person's name still resolves on old bills for the people who
+-- remain in the group.
 create policy "profiles are visible to groupmates" on profiles
   for select using (
     id = auth.uid()
@@ -141,18 +177,28 @@ create policy "profiles are visible to groupmates" on profiles
 create policy "users can update their own profile" on profiles
   for update using (id = auth.uid()) with check (id = auth.uid());
 
--- groups: only visible to members. Joining a new group happens through the
--- join_group_by_code() function below (so the invite_code doesn't need to be
--- publicly selectable).
+-- groups: only visible to active members. Joining a new group happens
+-- through the join_group_by_code() function below (so the invite_code
+-- doesn't need to be publicly selectable).
 create policy "members can view their groups" on groups
   for select using (
-    exists (select 1 from group_members gm where gm.group_id = groups.id and gm.user_id = auth.uid())
+    exists (
+      select 1 from group_members gm
+      where gm.group_id = groups.id and gm.user_id = auth.uid() and gm.active = true
+    )
   );
 
 create policy "authenticated users can create groups" on groups
   for insert with check (created_by = auth.uid());
 
--- group_members: see membership rows for groups you're in; only ever add yourself
+create policy "members can rename their group" on groups
+  for update using (public.is_group_member(id)) with check (public.is_group_member(id));
+
+-- group_members: see membership rows for groups you're (still) an active
+-- member of, or your own row regardless (so a removed person can still see
+-- that they were removed, rather than the row just vanishing on them).
+-- Active members can update rosters — used for removing someone (flip
+-- active to false) and is also how a self-removal ("leave group") works.
 create policy "members can view group rosters" on group_members
   for select using (
     user_id = auth.uid()
@@ -162,32 +208,52 @@ create policy "members can view group rosters" on group_members
 create policy "users can add themselves to a group" on group_members
   for insert with check (user_id = auth.uid());
 
--- bills / items / item_shares: gated on group membership, walking the chain down
+create policy "members can update group rosters" on group_members
+  for update using (public.is_group_member(group_id)) with check (public.is_group_member(group_id));
+
+-- bills / items / item_shares: gated on *active* group membership, walking
+-- the chain down
 create policy "members can view bills" on bills
   for select using (
-    exists (select 1 from group_members gm where gm.group_id = bills.group_id and gm.user_id = auth.uid())
+    exists (
+      select 1 from group_members gm
+      where gm.group_id = bills.group_id and gm.user_id = auth.uid() and gm.active = true
+    )
   );
 create policy "members can create bills" on bills
   for insert with check (
-    exists (select 1 from group_members gm where gm.group_id = bills.group_id and gm.user_id = auth.uid())
+    exists (
+      select 1 from group_members gm
+      where gm.group_id = bills.group_id and gm.user_id = auth.uid() and gm.active = true
+    )
   );
 create policy "members can update bills" on bills
   for update using (
-    exists (select 1 from group_members gm where gm.group_id = bills.group_id and gm.user_id = auth.uid())
+    exists (
+      select 1 from group_members gm
+      where gm.group_id = bills.group_id and gm.user_id = auth.uid() and gm.active = true
+    )
+  );
+create policy "members can delete bills" on bills
+  for delete using (
+    exists (
+      select 1 from group_members gm
+      where gm.group_id = bills.group_id and gm.user_id = auth.uid() and gm.active = true
+    )
   );
 
 create policy "members can view items" on items
   for select using (
     exists (
       select 1 from bills b join group_members gm on gm.group_id = b.group_id
-      where b.id = items.bill_id and gm.user_id = auth.uid()
+      where b.id = items.bill_id and gm.user_id = auth.uid() and gm.active = true
     )
   );
 create policy "members can manage items" on items
   for all using (
     exists (
       select 1 from bills b join group_members gm on gm.group_id = b.group_id
-      where b.id = items.bill_id and gm.user_id = auth.uid()
+      where b.id = items.bill_id and gm.user_id = auth.uid() and gm.active = true
     )
   );
 
@@ -197,7 +263,7 @@ create policy "members can view item shares" on item_shares
       select 1 from items i
       join bills b on b.id = i.bill_id
       join group_members gm on gm.group_id = b.group_id
-      where i.id = item_shares.item_id and gm.user_id = auth.uid()
+      where i.id = item_shares.item_id and gm.user_id = auth.uid() and gm.active = true
     )
   );
 create policy "members can manage item shares" on item_shares
@@ -206,9 +272,23 @@ create policy "members can manage item shares" on item_shares
       select 1 from items i
       join bills b on b.id = i.bill_id
       join group_members gm on gm.group_id = b.group_id
-      where i.id = item_shares.item_id and gm.user_id = auth.uid()
+      where i.id = item_shares.item_id and gm.user_id = auth.uid() and gm.active = true
     )
   );
+
+-- payments: any active member can view and record payments within their own
+-- group. Deliberately NOT restricted once someone leaves the group that
+-- created them — a removed member's payment history stays intact and
+-- visible to the group (is_group_member() checks the *viewer*, not who the
+-- payment mentions).
+create policy "members can view payments" on payments
+  for select using (public.is_group_member(group_id));
+
+create policy "members can record payments" on payments
+  for insert with check (public.is_group_member(group_id));
+
+create policy "members can delete payments" on payments
+  for delete using (public.is_group_member(group_id));
 
 -- ============================================================================
 -- create_group: creates a group AND adds the creator as its first member in
@@ -233,8 +313,11 @@ end;
 $$;
 
 -- ============================================================================
--- join_group_by_code: lets someone who isn't a member yet redeem an invite
--- code, without needing broad SELECT access to the groups table.
+-- join_group_by_code: lets someone who isn't a member yet (or who left and
+-- is coming back) redeem an invite code, without needing broad SELECT
+-- access to the groups table. If they already have a group_members row
+-- (they were removed or left before), this just reactivates it — same row,
+-- same history, nothing to relink.
 -- ============================================================================
 create function public.join_group_by_code(invite text)
 returns groups
@@ -251,9 +334,9 @@ begin
     raise exception 'Invalid invite code';
   end if;
 
-  insert into group_members (group_id, user_id)
-  values (g.id, auth.uid())
-  on conflict (group_id, user_id) do nothing;
+  insert into group_members (group_id, user_id, active)
+  values (g.id, auth.uid(), true)
+  on conflict (group_id, user_id) do update set active = true;
 
   return g;
 end;
@@ -262,6 +345,6 @@ $$;
 -- ============================================================================
 -- Realtime: after running this file, go to
 -- Database -> Replication -> supabase_realtime in the Supabase dashboard and
--- turn on replication for: bills, items, item_shares, group_members.
+-- turn on replication for: bills, items, item_shares, payments, group_members.
 -- That's what makes changes show up live on everyone's phone.
 -- ============================================================================

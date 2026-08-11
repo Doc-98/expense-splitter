@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
-import { fetchGroupMembers } from '../lib/members'
+import { fetchAllGroupMembers } from '../lib/members'
 import { parseNumber } from '../lib/parseNumber'
 import ItemRow from '../components/ItemRow'
 import ScanReceiptButton from '../components/ScanReceiptButton'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
+  const navigate = useNavigate()
 
   const [bill, setBill] = useState(null)
-  const [members, setMembers] = useState([])
+  const [allMembers, setAllMembers] = useState([])
   const [items, setItems] = useState([])
   const [newItem, setNewItem] = useState({ name: '', price: '', quantity: '1' })
   const [scanning, setScanning] = useState(false)
@@ -19,6 +20,16 @@ export default function BillView() {
   const nameRef = useRef(null)
   const priceRef = useRef(null)
   const qtyRef = useRef(null)
+
+  const activeMembers = allMembers.filter((m) => m.active)
+
+  // Who a brand-new item defaults to being split with: the bill's own
+  // "default split" setting if one's been chosen, otherwise everyone
+  // currently active. Filtered against active members so a default that
+  // included someone who has since left doesn't silently reattach them.
+  const defaultBuyerIds = (
+    bill?.default_buyer_ids?.length ? bill.default_buyer_ids : activeMembers.map((m) => m.id)
+  ).filter((id) => activeMembers.some((m) => m.id === id))
 
   const loadItems = useCallback(async () => {
     const { data } = await supabase
@@ -33,7 +44,7 @@ export default function BillView() {
     async function loadBillAndMembers() {
       const { data: billData } = await supabase.from('bills').select('*').eq('id', billId).single()
       setBill(billData)
-      setMembers(await fetchGroupMembers(groupId))
+      setAllMembers(await fetchAllGroupMembers(groupId))
     }
     loadBillAndMembers()
     loadItems()
@@ -49,31 +60,34 @@ export default function BillView() {
 
   const total = items.reduce((sum, it) => sum + Number(it.total_price), 0)
 
+  async function insertItemWithShares(name, unitPrice, quantity, buyerIds) {
+    const { data: inserted } = await supabase
+      .from('items')
+      .insert({
+        bill_id: billId,
+        name,
+        unit_price: unitPrice,
+        quantity,
+        total_price: Math.round(unitPrice * quantity * 100) / 100,
+      })
+      .select()
+      .single()
+
+    if (inserted && buyerIds.length) {
+      await supabase
+        .from('item_shares')
+        .insert(buyerIds.map((id) => ({ item_id: inserted.id, user_id: id, shares: 1 })))
+    }
+    return inserted
+  }
+
   async function addItem(e) {
     e.preventDefault()
     if (!newItem.name.trim()) return
     const quantity = parseNumber(newItem.quantity) || 1
     const unitPrice = parseNumber(newItem.price) || 0
-    const totalPrice = Math.round(unitPrice * quantity * 100) / 100
 
-    const { data: inserted } = await supabase
-      .from('items')
-      .insert({
-        bill_id: billId,
-        name: newItem.name.trim(),
-        unit_price: unitPrice,
-        quantity,
-        total_price: totalPrice,
-      })
-      .select()
-      .single()
-
-    // Default: split evenly among everyone currently in the group.
-    if (inserted && members.length) {
-      await supabase
-        .from('item_shares')
-        .insert(members.map((m) => ({ item_id: inserted.id, user_id: m.id, shares: 1 })))
-    }
+    await insertItemWithShares(newItem.name.trim(), unitPrice, quantity, defaultBuyerIds)
 
     setNewItem({ name: '', price: '', quantity: '1' })
     loadItems()
@@ -116,28 +130,21 @@ export default function BillView() {
     setBill((b) => ({ ...b, paid_by: userId }))
   }
 
+  async function toggleDefaultBuyer(memberId) {
+    const current = defaultBuyerIds
+    const next = current.includes(memberId)
+      ? current.filter((id) => id !== memberId)
+      : [...current, memberId]
+    await supabase.from('bills').update({ default_buyer_ids: next }).eq('id', billId)
+    setBill((b) => ({ ...b, default_buyer_ids: next }))
+  }
+
   async function handleScanned(parsedItems) {
     setScanning(false)
     for (const p of parsedItems) {
       const unitPrice = Number(p.unit_price) || 0
       const quantity = Number(p.quantity) || 1
-      const { data: inserted } = await supabase
-        .from('items')
-        .insert({
-          bill_id: billId,
-          name: p.name || 'Item',
-          unit_price: unitPrice,
-          quantity,
-          total_price: Math.round(unitPrice * quantity * 100) / 100,
-        })
-        .select()
-        .single()
-
-      if (inserted && members.length) {
-        await supabase
-          .from('item_shares')
-          .insert(members.map((m) => ({ item_id: inserted.id, user_id: m.id, shares: 1 })))
-      }
+      await insertItemWithShares(p.name || 'Item', unitPrice, quantity, defaultBuyerIds)
     }
     loadItems()
   }
@@ -155,6 +162,11 @@ export default function BillView() {
     ])
   }
 
+  // The "paid by" dropdown always needs an option matching whoever's
+  // currently set, even if they've since left the group — otherwise the
+  // select would silently show the wrong person.
+  const paidByOptions = allMembers.filter((m) => m.active || m.id === bill?.paid_by)
+
   return (
     <div className="page receipt-page">
       <header className="page-header">
@@ -167,12 +179,29 @@ export default function BillView() {
       <div className="paid-by-row">
         <span className="muted">Paid by</span>
         <select value={bill?.paid_by || ''} onChange={(e) => setPaidBy(e.target.value)}>
-          {members.map((m) => (
+          {paidByOptions.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}
+              {!m.active ? ' (left)' : ''}
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="default-buyers-row">
+        <span className="muted">New items split with:</span>
+        <div className="chip-row">
+          {activeMembers.map((m) => (
+            <label key={m.id} className={defaultBuyerIds.includes(m.id) ? 'buyer-chip active' : 'buyer-chip'}>
+              <input
+                type="checkbox"
+                checked={defaultBuyerIds.includes(m.id)}
+                onChange={() => toggleDefaultBuyer(m.id)}
+              />
+              {m.name}
+            </label>
+          ))}
+        </div>
       </div>
 
       <div className="receipt-tape">
@@ -180,7 +209,7 @@ export default function BillView() {
           <ItemRow
             key={item.id}
             item={item}
-            members={members}
+            members={allMembers}
             onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
             onDelete={() => deleteItem(item.id)}
           />
@@ -230,6 +259,10 @@ export default function BillView() {
         Try sample items instead (no API key needed)
       </button>
       {scanError && <p className="status-error">{scanError}</p>}
+
+      <button type="button" className="btn-primary confirm-btn" onClick={() => navigate(`/groups/${groupId}`)}>
+        Confirm
+      </button>
     </div>
   )
 }
