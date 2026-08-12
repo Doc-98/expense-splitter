@@ -20,6 +20,7 @@ export default function Groups() {
       .from('group_members')
       .select('group_id')
       .eq('user_id', user.id)
+      .eq('active', true)
 
     if (membershipError) {
       setError(membershipError.message)
@@ -66,7 +67,12 @@ export default function Groups() {
 
   return (
     <div className="page">
-      <h1 className="page-title">Your groups</h1>
+      <div className="page-header">
+        <h1 className="page-title">Your groups</h1>
+        <Link to="/stats" className="btn-link">
+          Your stats
+        </Link>
+      </div>
 
       <form onSubmit={createGroup} className="inline-form">
         <input

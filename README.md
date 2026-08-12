@@ -106,9 +106,29 @@ It now behaves like a native app icon — full screen, no browser bar.
 | `bills`        | One receipt/expense event, with a single `paid_by` (who fronted it) and an optional `default_buyer_ids` (who *new* items on this bill split with by default) |
 | `items`        | One line item on a bill                                           |
 | `item_shares`  | Who's responsible for how much of each item (`shares` = weight, so someone taking 2 of 3 units owes double) |
+| `departure_snapshots` | A frozen personal record of your paid/consumed totals in a group you've left, day-by-day, plus your balance at that moment — see below |
 
 Settlement math lives entirely in `src/lib/settlement.js` — it's plain,
 readable JS with no dependencies, worth a read.
+
+### Leaving a group and personal stats
+
+Removing someone from a group (or leaving one yourself) doesn't delete
+anything — it flips `group_members.active` to `false`, which is what every
+RLS policy checks to decide access going forward. That person's old bills,
+items, and payments stay exactly as they were; they just lose the ability to
+query that group's live data again.
+
+To keep their personal "Your stats" page accurate anyway, the
+`remove_group_member()` function computes a `departure_snapshots` row for
+them *at the moment of removal* — while they still have access — storing
+their own paid/consumed totals bucketed by calendar day, plus their balance
+right then. Day-level buckets are what let "by week / month / year" views
+stay exactly correct for a departed group forever, without needing to keep
+querying it: any coarser period is just the right days summed together, no
+approximation. If they rejoin later, live data (which was never touched)
+naturally covers everything again, snapshot included, and the account stats
+page prefers live data whenever it's available.
 
 ## What's intentionally left simple (v1)
 
@@ -125,6 +145,11 @@ readable JS with no dependencies, worth a read.
 - Deleting a whole group isn't wired up in the UI yet — bills, payment
   records, and individual members can all be removed, the group itself can't
   be deleted yet.
+- A departure snapshot's balance is trusted from the client rather than
+  re-derived in SQL (see the comment above `remove_group_member` in
+  `schema.sql`) — reasonable for a personal-use app since it's a display-only
+  historical record, not the source of truth for any live balance, but worth
+  knowing if this ever needs to hold up to less trusted users.
 
 ## Security notes
 

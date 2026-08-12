@@ -1,0 +1,83 @@
+// Given a granularity and an offset from the current period (0 = current
+// period, -1 = previous, -2 = the one before that, etc.), returns the
+// [start, end) boundaries for that period plus a human-readable label.
+// 'all' has no boundaries at all — everything is included.
+export function getPeriodRange(granularity, offset) {
+  const now = new Date()
+
+  if (granularity === 'week') {
+    const day = now.getDay() // 0 = Sunday .. 6 = Saturday
+    const diffToMonday = (day === 0 ? -6 : 1) - day
+    const currentMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday)
+    const start = new Date(currentMonday.getFullYear(), currentMonday.getMonth(), currentMonday.getDate() + offset * 7)
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
+    const lastDay = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 1)
+    const label = `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${lastDay.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+    return { start, end, label }
+  }
+
+  if (granularity === 'month') {
+    const start = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+    const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 1)
+    const label = start.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    return { start, end, label }
+  }
+
+  if (granularity === 'year') {
+    const start = new Date(now.getFullYear() + offset, 0, 1)
+    const end = new Date(now.getFullYear() + offset + 1, 0, 1)
+    const label = String(start.getFullYear())
+    return { start, end, label }
+  }
+
+  return { start: null, end: null, label: 'All time' }
+}
+
+// Narrows a bills/items/itemShares dataset down to only what falls inside
+// [start, end). Passing nulls (the 'all time' case) returns everything
+// unchanged.
+export function filterByDateRange(bills, items, itemShares, start, end) {
+  if (!start && !end) return { bills, items, itemShares }
+
+  const filteredBills = bills.filter((b) => {
+    const t = new Date(b.created_at).getTime()
+    return (!start || t >= start.getTime()) && (!end || t < end.getTime())
+  })
+  const billIds = new Set(filteredBills.map((b) => b.id))
+  const filteredItems = items.filter((it) => billIds.has(it.bill_id))
+  const itemIds = new Set(filteredItems.map((it) => it.id))
+  const filteredItemShares = itemShares.filter((s) => itemIds.has(s.item_id))
+
+  return { bills: filteredBills, items: filteredItems, itemShares: filteredItemShares }
+}
+
+// Sums a departure snapshot's day-keyed totals ('YYYY-MM-DD' -> {paid,
+// consumed}) that fall inside [start, end). Reconstructing each key back
+// into a comparable instant has to use the same local-time construction
+// getPeriodRange() itself uses for its boundaries, or the two won't line up
+// for anyone outside UTC.
+export function sumDailyInRange(daily, start, end) {
+  let paid = 0
+  let consumed = 0
+  for (const [dateKey, v] of Object.entries(daily || {})) {
+    const [y, m, d] = dateKey.split('-').map(Number)
+    const t = new Date(y, m - 1, d).getTime()
+    if (start && t < start.getTime()) continue
+    if (end && t >= end.getTime()) continue
+    paid += v.paid
+    consumed += v.consumed
+  }
+  return { paid: Math.round(paid * 100) / 100, consumed: Math.round(consumed * 100) / 100 }
+}
+
+// Rolls a departure snapshot's daily totals up into month buckets
+// ('YYYY-MM' -> paid), for merging into a "by month" chart alongside live
+// groups' data.
+export function monthlyFromDaily(daily) {
+  const monthly = {}
+  for (const [dateKey, v] of Object.entries(daily || {})) {
+    const key = dateKey.slice(0, 7)
+    monthly[key] = (monthly[key] || 0) + v.paid
+  }
+  return monthly
+}

@@ -598,3 +598,28 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .stats-bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
 .stats-bar-value { width: 70px; text-align: right; flex-shrink: 0; }
+
+.time-range { margin-bottom: var(--space-lg); }
+.time-range-tabs { margin-bottom: var(--space-sm); }
+.time-range-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+}
+.time-range-label { font-size: 14px; font-weight: 500; min-width: 140px; text-align: center; }
+.time-range-nav .btn-icon { font-size: 22px; }
+.time-range-nav .btn-icon:disabled { opacity: 0.3; cursor: default; }
+
+.balance-positive { color: var(--accent-dark); }
+.balance-negative { color: var(--warn); }
+
+.stale-balance {
+  display: inline-block;
+  font-size: 12px;
+  margin-left: 8px;
+}
+.stats-table .btn-link {
+  font-size: 12px;
+  margin-left: 6px;
+}

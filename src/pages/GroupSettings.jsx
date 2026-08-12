@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { fetchAllGroupMembers } from '../lib/members'
+import { computeBalances, computeDailyTotalsForUser } from '../lib/settlement'
 
 export default function GroupSettings() {
   const { groupId } = useParams()
@@ -45,14 +46,57 @@ export default function GroupSettings() {
 
   async function removeMember(memberId, isSelf) {
     const label = isSelf ? 'leave this group' : 'remove this person from the group'
-    if (!window.confirm(`Are you sure you want to ${label}? Their past bills and payments stay on record.`)) {
+    if (!window.confirm(`Are you sure you want to ${label}? Your stats for this group are kept, just frozen as of right now.`)) {
       return
     }
-    const { error: removeError } = await supabase
-      .from('group_members')
-      .update({ active: false })
+
+    setError(null)
+
+    // Compute their frozen record from the group's full data while access
+    // still allows it — this is the last moment that's possible, since
+    // removing them is what cuts that access off.
+    const { data: billsData, error: billsError } = await supabase
+      .from('bills')
+      .select('id, paid_by, created_at, items(id, total_price, item_shares(user_id, shares))')
       .eq('group_id', groupId)
-      .eq('user_id', memberId)
+
+    if (billsError) {
+      setError(billsError.message)
+      return
+    }
+
+    const bills = (billsData || []).map((b) => ({ id: b.id, paid_by: b.paid_by, created_at: b.created_at }))
+    const items = []
+    const itemShares = []
+    for (const bill of billsData || []) {
+      for (const item of bill.items || []) {
+        items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price })
+        for (const share of item.item_shares || []) {
+          itemShares.push({ item_id: item.id, user_id: share.user_id, shares: share.shares })
+        }
+      }
+    }
+
+    const { data: paymentsData, error: paymentsError } = await supabase
+      .from('payments')
+      .select('from_user, to_user, amount')
+      .eq('group_id', groupId)
+
+    if (paymentsError) {
+      setError(paymentsError.message)
+      return
+    }
+
+    const balances = computeBalances({ bills, items, itemShares, payments: paymentsData || [] })
+    const dailyTotals = computeDailyTotalsForUser(memberId, { bills, items, itemShares })
+
+    const { error: removeError } = await supabase.rpc('remove_group_member', {
+      target_group_id: groupId,
+      target_user_id: memberId,
+      group_name: name,
+      snapshot_balance: balances[memberId] || 0,
+      snapshot_daily: dailyTotals,
+    })
 
     if (removeError) {
       setError(removeError.message)
@@ -105,8 +149,9 @@ export default function GroupSettings() {
         <>
           <h2 className="settings-section-title">Former members</h2>
           <p className="muted">
-            They've left the group, but their bills, items, and payments are still kept. If they use the
-            invite link again, they'll pick up right where they left off.
+            They've left the group, but their bills, items, and payments are still kept — and their own
+            stats page keeps a frozen record of what they spent here. If they use the invite link again,
+            they'll pick up right where they left off.
           </p>
           <ul className="member-list">
             {formerMembers.map((m) => (

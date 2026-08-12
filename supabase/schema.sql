@@ -121,6 +121,31 @@ create table payments (
   created_at timestamptz not null default now()
 );
 
+-- ---------------------------------------------------------------------------
+-- departure_snapshots: a frozen personal record of someone's history in a
+-- group, written the moment they leave/are removed (see remove_group_member
+-- below), while they still have access to compute it. After that, RLS on
+-- bills/items/item_shares cuts off their access to the group entirely — this
+-- is what lets their account-wide stats page keep showing accurate numbers
+-- for that group anyway, without granting them any ongoing visibility into
+-- it. daily_totals is keyed by ISO date ('YYYY-MM-DD') -> {paid, consumed};
+-- days nest cleanly into any week/month/year view with no approximation.
+-- One row per (group, person) — leaving a second time overwrites it with a
+-- fresh, complete recomputation rather than stacking duplicates.
+-- ---------------------------------------------------------------------------
+create table departure_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references groups(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  group_name text not null,
+  left_at timestamptz not null default now(),
+  balance numeric(10,2) not null default 0,
+  balance_settled boolean not null default false,
+  daily_totals jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  unique (group_id, user_id)
+);
+
 -- ============================================================================
 -- Row Level Security — every table is locked to "active members of the same
 -- group". Someone removed from a group (active=false) loses access to it
@@ -136,6 +161,7 @@ alter table bills enable row level security;
 alter table items enable row level security;
 alter table item_shares enable row level security;
 alter table payments enable row level security;
+alter table departure_snapshots enable row level security;
 
 -- Helper: checks *active* group membership from inside a SECURITY DEFINER
 -- function, so it runs with the function owner's privileges and doesn't
@@ -290,6 +316,68 @@ create policy "members can record payments" on payments
 
 create policy "members can delete payments" on payments
   for delete using (public.is_group_member(group_id));
+
+-- departure_snapshots: strictly personal — only ever visible to and
+-- editable by the person it belongs to. Writing a new snapshot happens
+-- through remove_group_member() below (since the person removing someone
+-- else needs to write it on their behalf); the "mark settled" toggle is a
+-- plain update the owner does themselves.
+create policy "users can view their own departure snapshots" on departure_snapshots
+  for select using (user_id = auth.uid());
+
+create policy "users can update their own departure snapshots" on departure_snapshots
+  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- ============================================================================
+-- remove_group_member: deactivates someone's membership AND writes their
+-- departure snapshot in one step. This has to be a SECURITY DEFINER
+-- function rather than a plain client-side update, because the person doing
+-- the removing (which might be someone removing a groupmate, not just
+-- themselves) needs to write a snapshot row owned by the *other* person —
+-- something the plain "users can update their own departure snapshots"
+-- policy above deliberately does not allow on its own.
+--
+-- The balance and daily_totals numbers are computed client-side (reusing
+-- the exact same, already-tested settlement.js math) and passed in, rather
+-- than re-derived here in SQL — this is a personal, display-only historical
+-- record, not the source of truth for any live balance, so trusting the
+-- caller's arithmetic here is a reasonable trade for not maintaining a
+-- second implementation of the settlement math in PL/pgSQL.
+-- ============================================================================
+create function public.remove_group_member(
+  target_group_id uuid,
+  target_user_id uuid,
+  group_name text,
+  snapshot_balance numeric,
+  snapshot_daily jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from group_members
+    where group_id = target_group_id and user_id = auth.uid() and active = true
+  ) then
+    raise exception 'Not authorized to remove members from this group';
+  end if;
+
+  update group_members
+  set active = false
+  where group_id = target_group_id and user_id = target_user_id;
+
+  insert into departure_snapshots (group_id, user_id, group_name, left_at, balance, daily_totals)
+  values (target_group_id, target_user_id, group_name, now(), snapshot_balance, snapshot_daily)
+  on conflict (group_id, user_id) do update
+    set group_name = excluded.group_name,
+        left_at = excluded.left_at,
+        balance = excluded.balance,
+        daily_totals = excluded.daily_totals,
+        balance_settled = false;
+end;
+$$;
 
 -- ============================================================================
 -- create_group: creates a group AND adds the creator as its first member in

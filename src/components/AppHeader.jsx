@@ -44,6 +44,9 @@ export default function AppHeader() {
         {open && (
           <div className="account-dropdown">
             <p className="account-email">{user?.email}</p>
+            <Link to="/stats" className="dropdown-item" onClick={() => setOpen(false)}>
+              Your stats
+            </Link>
             <button type="button" className="dropdown-item" onClick={toggleTheme}>
               {theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             </button>

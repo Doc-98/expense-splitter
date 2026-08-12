@@ -102,6 +102,59 @@ export function computeSpendingTotals({ bills, items, itemShares }) {
   return totals
 }
 
+// One person's paid/consumed totals, bucketed by exact calendar day. This is
+// what a "departure snapshot" stores when someone leaves a group — days are
+// the one bucket size that always nests cleanly into weeks, months, AND
+// years with no fuzzy splitting, so summing the right days later correctly
+// reconstructs a total for any of those coarser views, forever, without
+// needing to keep the group's underlying data queryable.
+export function computeDailyTotalsForUser(userId, { bills, items, itemShares }) {
+  const daily = {}
+  const ensure = (key) => {
+    if (!daily[key]) daily[key] = { paid: 0, consumed: 0 }
+    return daily[key]
+  }
+  // Local calendar day, not UTC — has to match how getPeriodRange() builds
+  // its week/month/year boundaries (also local time), or a late-night bill
+  // could get bucketed under the wrong day for anyone outside UTC.
+  const dayKey = (dateStr) => {
+    const d = new Date(dateStr)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  const billById = new Map(bills.map((b) => [b.id, b]))
+
+  const itemsByBill = groupBy(items, 'bill_id')
+  for (const bill of bills) {
+    if (bill.paid_by !== userId) continue
+    const billItems = itemsByBill[bill.id] || []
+    const billTotal = billItems.reduce((sum, it) => sum + Number(it.total_price), 0)
+    ensure(dayKey(bill.created_at)).paid += billTotal
+  }
+
+  const sharesByItem = groupBy(itemShares, 'item_id')
+  for (const item of items) {
+    const shares = sharesByItem[item.id] || []
+    const totalShares = shares.reduce((sum, s) => sum + Number(s.shares), 0)
+    if (totalShares <= 0) continue
+    const myShare = shares.find((s) => s.user_id === userId)
+    if (!myShare) continue
+    const bill = billById.get(item.bill_id)
+    if (!bill) continue
+    const portion = (Number(item.total_price) * Number(myShare.shares)) / totalShares
+    ensure(dayKey(bill.created_at)).consumed += portion
+  }
+
+  for (const key of Object.keys(daily)) {
+    daily[key].paid = round2(daily[key].paid)
+    daily[key].consumed = round2(daily[key].consumed)
+  }
+
+  return daily
+}
+
 // Greedy debt simplification: repeatedly match the biggest creditor with the
 // biggest debtor. Produces close to the minimum number of payments needed to
 // settle the whole group, instead of everyone paying everyone.

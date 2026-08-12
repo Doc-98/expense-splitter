@@ -11,6 +11,7 @@ import JoinGroup from './pages/JoinGroup'
 import About from './pages/About'
 import GroupSettings from './pages/GroupSettings'
 import GroupStats from './pages/GroupStats'
+import AccountStats from './pages/AccountStats'
 
 function RequireAuth({ children }) {
   const { session } = useAuth()
@@ -53,6 +54,7 @@ function Shell() {
       <Route path="/login" element={<Login />} />
       <Route path="/join/:code" element={<RequireAuth><JoinGroup /></RequireAuth>} />
       <Route path="/about" element={<RequireAuth><About /></RequireAuth>} />
+      <Route path="/stats" element={<RequireAuth><AccountStats /></RequireAuth>} />
       <Route path="/" element={<RequireAuth><Groups /></RequireAuth>} />
       <Route path="/groups/:groupId" element={<RequireAuth><GroupView /></RequireAuth>} />
       <Route path="/groups/:groupId/settings" element={<RequireAuth><GroupSettings /></RequireAuth>} />
