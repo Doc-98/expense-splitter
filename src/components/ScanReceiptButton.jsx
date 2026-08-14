@@ -1,8 +1,10 @@
-import { useRef } from 'react'
-import { supabase } from '../supabaseClient'
+import { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { parseReceipt, currentStrategyLabel } from '../lib/receipt-parsing'
 
 export default function ScanReceiptButton({ scanning, setScanning, onScanned, onError }) {
   const inputRef = useRef(null)
+  const [progress, setProgress] = useState(null)
 
   async function handleFile(e) {
     const file = e.target.files?.[0]
@@ -10,22 +12,21 @@ export default function ScanReceiptButton({ scanning, setScanning, onScanned, on
     if (!file) return
 
     setScanning(true)
+    setProgress(null)
     onError(null)
 
     try {
       const base64 = await fileToBase64(file)
-      const { data, error } = await supabase.functions.invoke('parse-receipt', {
-        body: { image: base64, mediaType: file.type },
-      })
-      if (error) throw error
-      if (data?.error) throw new Error(data.error)
-      if (!data?.items?.length) {
+      const { items } = await parseReceipt(base64, file.type, (p) => setProgress(Math.round(p * 100)))
+      if (!items?.length) {
         throw new Error('No items found on that receipt — try a clearer photo, or add items manually.')
       }
-      onScanned(data.items)
+      onScanned(items)
     } catch (err) {
-      setScanning(false)
       onError(err.message || 'Could not read that receipt.')
+    } finally {
+      setScanning(false)
+      setProgress(null)
     }
   }
 
@@ -37,7 +38,7 @@ export default function ScanReceiptButton({ scanning, setScanning, onScanned, on
         disabled={scanning}
         onClick={() => inputRef.current?.click()}
       >
-        {scanning ? 'Reading receipt…' : 'Scan a receipt'}
+        {scanning ? (progress !== null ? `Reading receipt… ${progress}%` : 'Reading receipt…') : 'Scan a receipt'}
       </button>
       <input
         ref={inputRef}
@@ -47,6 +48,9 @@ export default function ScanReceiptButton({ scanning, setScanning, onScanned, on
         onChange={handleFile}
         style={{ display: 'none' }}
       />
+      <p className="scan-strategy-note muted">
+        Using: {currentStrategyLabel()} — <Link to="/scan-settings">change</Link>
+      </p>
     </div>
   )
 }

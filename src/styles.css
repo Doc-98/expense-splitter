@@ -58,6 +58,15 @@ input, select { font-family: inherit; font-size: 16px; } /* 16px prevents iOS zo
 
 .mono { font-family: var(--font-mono); }
 
+code {
+  font-family: var(--font-mono);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.9em;
+}
+
 /* ---------- Layout ---------- */
 .page {
   max-width: 560px;
@@ -524,6 +533,32 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .scan-row .btn-secondary { width: 100%; }
 
 .sample-link { display: block; text-align: center; margin: var(--space-xs) auto 0; }
+.scan-strategy-note { text-align: center; margin-top: 6px; }
+
+/* ---------- Scan settings page ---------- */
+.scan-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+  cursor: pointer;
+}
+.scan-option input[type='radio'] { margin-top: 4px; }
+.scan-option strong { display: block; margin-bottom: 4px; }
+.scan-option p { margin: 0; font-size: 13px; }
+.scan-option-detail {
+  margin: 0 0 var(--space-lg) var(--space-md);
+  padding-left: var(--space-md);
+  border-left: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.scan-option-detail input { width: 100%; }
 
 /* ---------- Group settings page ---------- */
 .settings-section-title {

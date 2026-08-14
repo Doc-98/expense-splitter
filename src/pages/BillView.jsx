@@ -158,9 +158,10 @@ export default function BillView() {
     loadItems()
   }
 
-  // Lets you try the whole scan → review → assign-buyers flow without a
-  // working Anthropic API key or any cost — useful while deciding if the
-  // scanning feature is worth setting up billing for.
+  // Lets you try the whole scan → review → assign-buyers flow without
+  // scanning a real receipt at all — handy for a quick demo, or for
+  // checking the rest of the flow while you're still deciding on a
+  // scanning strategy in Scan settings.
   function trySampleReceipt() {
     handleScanned([
       { name: 'Whole milk 1L', unit_price: 1.29, quantity: 2 },

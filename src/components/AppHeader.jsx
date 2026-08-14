@@ -47,6 +47,9 @@ export default function AppHeader() {
             <Link to="/stats" className="dropdown-item" onClick={() => setOpen(false)}>
               Your stats
             </Link>
+            <Link to="/scan-settings" className="dropdown-item" onClick={() => setOpen(false)}>
+              Scan settings
+            </Link>
             <button type="button" className="dropdown-item" onClick={toggleTheme}>
               {theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             </button>

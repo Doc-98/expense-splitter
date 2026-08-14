@@ -9,9 +9,8 @@ live, real-time settle-up with everyone in your group — no app store required.
 - **Frontend**: React + Vite, packaged as an installable PWA (`vite-plugin-pwa`)
 - **Backend**: [Supabase](https://supabase.com) — Postgres database, auth,
   realtime sync, all on the free tier to start
-- **Receipt scanning**: a Supabase Edge Function sends the photo straight to
-  the Claude API (vision) and gets back structured items — no OCR step, no
-  per-store parsing code
+- **Receipt scanning**: no server, no shared API key, and no per-store parsing
+  code required by default — see [Receipt scanning](#receipt-scanning) below
 - **Settlement**: `src/lib/settlement.js` computes net balances per person and
   simplifies them into the minimum number of payments needed to settle up
 
@@ -52,23 +51,7 @@ VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-public-key
 ```
 
-## 3. Deploy the receipt-scanning function
-
-This step needs the [Supabase CLI](https://supabase.com/docs/guides/cli).
-
-```bash
-npm install -g supabase
-supabase login
-supabase link --project-ref your-project-ref
-
-# Get a key at https://console.anthropic.com — this stays server-side,
-# it is never sent to the browser.
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-your-key-here
-
-supabase functions deploy parse-receipt
-```
-
-## 4. Run it locally / deploy it
+## 3. Run it locally / deploy it
 
 Local dev:
 
@@ -87,7 +70,7 @@ or [Netlify](https://netlify.com) both have generous free tiers:
 4. Deploy. Copy the resulting URL back into Supabase's **Site URL** setting
    from step 1.4 so magic links redirect correctly.
 
-## 5. Install it on a phone
+## 4. Install it on a phone
 
 Once deployed, open the URL on a phone:
 
@@ -95,6 +78,57 @@ Once deployed, open the URL on a phone:
 - **Android Chrome**: menu (⋮) → *Install app* (or it'll prompt automatically)
 
 It now behaves like a native app icon — full screen, no browser bar.
+
+## Receipt scanning
+
+There's no server-side piece to deploy for this at all — every scanning
+strategy runs entirely in the browser, chosen per-person from **Scan
+settings** (account menu → Scan settings), stored only on that device.
+
+- **Free OCR (default, zero setup)** — Tesseract.js runs OCR right on the
+  phone, and `src/lib/receipt-parsing/lineParser.js` groups the recognized
+  words into item/price pairs using their position on the page (name on the
+  left, price on the right — the one layout convention nearly every receipt
+  follows, regardless of store). No account, no key, no server, no per-store
+  templates to maintain. Works best on a clear, reasonably well-lit photo of
+  a typical two-column receipt; unusual layouts are where this is weakest.
+- **Google Gemini (bring your own key)** — more accurate, handles messy
+  receipts better. Each person gets a free key at
+  [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+  and enters it in Scan settings; the app calls Gemini directly from the
+  browser with it. Nothing about this needs a Supabase deployment either —
+  it's a straight fetch from the phone to Google using that person's own key
+  and their own free-tier quota.
+- **Anthropic Claude (bring your own key)** — the same model this app's
+  scanning originally ran on, now with each person's own key from
+  [console.anthropic.com](https://console.anthropic.com) instead of one
+  shared server secret. Not a free tier, but a single scan costs well under
+  a cent. Calls Anthropic directly from the browser using their
+  `anthropic-dangerous-direct-browser-access` header — a real, documented
+  opt-in for exactly this BYOK pattern, not a workaround.
+- **Local Ollama (private, your own hardware)** — runs on a computer on your
+  own network; a receipt photo never leaves your house. Needs a decent
+  computer with a vision-capable model already pulled (`ollama pull
+  qwen2.5vl`, or `llama3.2-vision` as an alternative). **Ollama blocks
+  cross-origin browser requests by default** — since this app runs on a
+  different origin than `localhost:11434`, you must set the `OLLAMA_ORIGINS`
+  environment variable on the machine running Ollama (to this app's address,
+  or `*` for simplicity) and restart Ollama, or every scan attempt will fail
+  with a network error even though Ollama itself is running fine. This is
+  the single most common way this option trips people up.
+
+Adding yet another provider (OpenAI, Mistral, anything else) means writing
+one more file under `src/lib/receipt-parsing/strategies/` that matches the
+existing shape (`id`, `label`, `isConfigured()`, `parse(imageBase64,
+mediaType)`), and listing it in `src/lib/receipt-parsing/index.js`.
+`spatialStrategy` always stays available as the no-config fallback, so
+scanning never fails outright even with nothing else set up.
+
+The **old, server-side approach still exists** in
+`supabase/functions/parse-receipt/` (calls Claude using a single shared,
+hardcoded `ANTHROPIC_API_KEY` secret) but isn't wired up to anything
+anymore — kept only as a reference/starting point if you'd rather run a
+centralized paid option for your own household than rely on BYOK.
 
 ## How the data model works
 
@@ -150,6 +184,13 @@ page prefers live data whenever it's available.
   `schema.sql`) — reasonable for a personal-use app since it's a display-only
   historical record, not the source of truth for any live balance, but worth
   knowing if this ever needs to hold up to less trusted users.
+- The free OCR fallback expects an item's name and price to sit on the same
+  line; a receipt that wraps a long item name onto its own line above the
+  price won't parse correctly for that item. This is the honest tradeoff of
+  "no per-store templates, ever" — it degrades gracefully rather than
+  guessing wrong, but it does mean occasionally missing a line entirely.
+- OpenAI and other providers aren't built yet, but would follow the exact
+  same `ReceiptParserStrategy` shape as the four that already exist.
 
 ## Security notes
 
