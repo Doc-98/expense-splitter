@@ -1,6 +1,23 @@
 import { extractItemsFromLines } from '../lineParser'
 import { getReceiptSettings } from '../../receiptSettings'
 
+// Tesseract's actual nested shape is blocks[].paragraphs[].lines[].words[]
+// — there's no flat data.lines. Block-level output also has to be
+// explicitly requested (see the {blocks: true} argument below); by default
+// Tesseract.js only returns plain text, to avoid the overhead of building
+// the full layout tree when nobody asked for it.
+function collectLines(page) {
+  const lines = []
+  for (const block of page.blocks || []) {
+    for (const paragraph of block.paragraphs || []) {
+      for (const line of paragraph.lines || []) {
+        lines.push(line)
+      }
+    }
+  }
+  return lines
+}
+
 // Dynamically imported rather than a static import at the top of the file —
 // this keeps Tesseract.js's JS wrapper out of the main bundle entirely for
 // anyone who never uses this fallback (e.g. everyone who prefers Gemini),
@@ -14,14 +31,12 @@ export async function runSpatialOCR(imageBase64, mediaType, language, onProgress
   })
   try {
     const dataUrl = `data:${mediaType};base64,${imageBase64}`
-    const { data } = await worker.recognize(dataUrl)
+    const { data } = await worker.recognize(dataUrl, {}, { blocks: true })
 
-    // Tesseract already does its own line segmentation (data.lines), so
-    // there's no need to reimplement Y-coordinate clustering here — this
-    // just adapts that structure into the plain {text, x} shape
+    // This just adapts Tesseract's structure into the plain {text, x} shape
     // extractItemsFromLines expects, keeping the actual parsing heuristic
     // decoupled from Tesseract's specific API and independently testable.
-    const lines = (data.lines || []).map((line) =>
+    const lines = collectLines(data).map((line) =>
       (line.words || []).map((w) => ({ text: w.text, x: w.bbox.x0 }))
     )
 
