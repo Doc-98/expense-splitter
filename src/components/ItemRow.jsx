@@ -1,5 +1,5 @@
 export default function ItemRow({ item, members, onToggleBuyer, onDelete }) {
-  const buyerIds = new Set(item.item_shares.map((s) => s.user_id))
+  const buyerIds = new Set(item.item_shares.map((s) => s.member_id))
   // Always show current members (whether checked or not), plus anyone no
   // longer active who's still assigned to this specific item — so a former
   // member's existing split stays visible on old items, but they don't show
@@ -25,6 +25,7 @@ export default function ItemRow({ item, members, onToggleBuyer, onDelete }) {
           >
             <input type="checkbox" checked={buyerIds.has(m.id)} onChange={() => onToggleBuyer(m.id)} />
             {m.name}
+            {m.isGuest && ' (guest)'}
             {!m.active && ' (left)'}
           </label>
         ))}

@@ -21,6 +21,15 @@ time.
 
 ## 1. Create your Supabase project
 
+> **Updating an existing installation?** This version restructures how
+> `bills`, `items`, and `payments` reference people — supporting guests with
+> no account meant every "who is this about" column now points at a new
+> `group_members.id` instead of a real account ID directly. There's no
+> migration path from the previous schema; the cleanest move is resetting
+> the database and starting fresh (see "Resetting the database" below).
+> Fine for test/personal data; if you have data you actually need to keep,
+> stop here and get in touch before running the new schema.
+
 1. Go to [supabase.com](https://supabase.com) → New project (free tier is fine).
 2. Once it's created, open **SQL Editor** → New query, paste in the entire
    contents of [`supabase/schema.sql`](supabase/schema.sql), and run it. This
@@ -79,6 +88,40 @@ Once deployed, open the URL on a phone:
 
 It now behaves like a native app icon — full screen, no browser bar.
 
+## Resetting the database
+
+Only needed if you're updating an existing installation to this version (see
+the callout at the top) — skip this on a brand new project, just run
+`schema.sql` directly.
+
+Run this in the SQL Editor first, then run the entire `schema.sql` file
+straight after it in a second query. This only removes the specific
+tables/functions this project created — it deliberately avoids touching the
+`public` schema itself or Supabase's own default permissions on it, which a
+broader reset (`drop schema public cascade`) would wipe out and require
+manually restoring.
+
+```sql
+drop function if exists public.remove_group_member(uuid, uuid, text, numeric, jsonb);
+drop function if exists public.join_group_by_code(text);
+drop function if exists public.create_group(text);
+drop function if exists public.is_group_member(uuid);
+drop function if exists public.handle_new_user() cascade;
+
+drop table if exists departure_snapshots cascade;
+drop table if exists payments cascade;
+drop table if exists item_shares cascade;
+drop table if exists items cascade;
+drop table if exists bills cascade;
+drop table if exists group_members cascade;
+drop table if exists groups cascade;
+drop table if exists profiles cascade;
+```
+
+This does **not** delete anyone's actual login (`auth.users` is untouched) —
+just re-run the "add themselves"/"join group" steps of the app again
+afterward (create a fresh group, everyone re-joins via a new invite link).
+
 ## Receipt scanning
 
 There's no server-side piece to deploy for this at all — every scanning
@@ -136,22 +179,48 @@ centralized paid option for your own household than rely on BYOK.
 |----------------|-------------------------------------------------------------------|
 | `profiles`     | Display name per user, auto-created on signup                    |
 | `groups`       | A household / trip / friend circle, with a shareable invite code |
-| `group_members`| Who's in which group. `active=false` means they've left/been removed — kept, not deleted, so old bills/payments referencing them still make sense |
-| `bills`        | One receipt/expense event, with a single `paid_by` (who fronted it) and an optional `default_buyer_ids` (who *new* items on this bill split with by default) |
+| `group_members`| Every *participant* a group can have — a real account (`user_id` set, name from `profiles`) or a guest with no account at all (`user_id` null, `display_name` set directly). `active=false` means they've left/been removed/archived — kept, not deleted. |
+| `bills`        | One receipt/expense event, with a single `paid_by` (a `group_members.id` — real or guest — who fronted it) and an optional `default_buyer_ids` (who *new* items on this bill split with by default) |
 | `items`        | One line item on a bill                                           |
-| `item_shares`  | Who's responsible for how much of each item (`shares` = weight, so someone taking 2 of 3 units owes double) |
-| `departure_snapshots` | A frozen personal record of your paid/consumed totals in a group you've left, day-by-day, plus your balance at that moment — see below |
+| `item_shares`  | Who's responsible for how much of each item (`member_id` is a `group_members.id`; `shares` = weight, so someone taking 2 of 3 units owes double) |
+| `payments`     | A recorded cash transfer between two participants (`from_member`/`to_member`, both `group_members.id`) |
+| `departure_snapshots` | A frozen personal record of a *real account's* paid/consumed totals in a group they've left, day-by-day, plus their balance at that moment — see below |
 
 Settlement math lives entirely in `src/lib/settlement.js` — it's plain,
-readable JS with no dependencies, worth a read.
+readable JS with no dependencies, worth a read. It's worth noting that it
+operates on whatever ID it's handed with zero special-casing — it's never
+needed to know whether an ID belongs to a real account or a guest.
+
+### Guests
+
+Anyone can be added to a group without ever making an account — useful any
+time only some of the people splitting a bill actually want the app.
+`group_members` is the one place this lives: a guest is a row with no
+`user_id`, just a `display_name`, added by any active real member from
+Group Settings. Every other table that references "a person" —
+`bills.paid_by`, `item_shares.member_id`, `payments.from_member`/
+`to_member` — points at `group_members.id`, so a guest can be assigned to
+items, front a bill, or owe/be owed money exactly like a real account,
+using the exact same settlement math.
+
+Removing a guest is just flipping `active` to `false` directly — unlike a
+real account leaving, there's no login-gated access to protect, so no
+snapshot is involved, and they can be restored any time from Group
+Settings.
+
+The `user_id` column being nullable, rather than a guest being a
+fundamentally different kind of row, is deliberate: it leaves room for a
+future "claim this profile" flow, where a guest who decides to actually
+sign up would just have their existing row gain a `user_id`, rather than
+needing their history relinked from a separate identity.
 
 ### Leaving a group and personal stats
 
-Removing someone from a group (or leaving one yourself) doesn't delete
-anything — it flips `group_members.active` to `false`, which is what every
-RLS policy checks to decide access going forward. That person's old bills,
-items, and payments stay exactly as they were; they just lose the ability to
-query that group's live data again.
+Removing a *real account* from a group (or leaving one yourself) doesn't
+delete anything — it flips `group_members.active` to `false`, which is what
+every RLS policy checks to decide access going forward. That person's old
+bills, items, and payments stay exactly as they were; they just lose the
+ability to query that group's live data again.
 
 To keep their personal "Your stats" page accurate anyway, the
 `remove_group_member()` function computes a `departure_snapshots` row for
@@ -191,6 +260,14 @@ page prefers live data whenever it's available.
   guessing wrong, but it does mean occasionally missing a line entirely.
 - OpenAI and other providers aren't built yet, but would follow the exact
   same `ReceiptParserStrategy` shape as the four that already exist.
+- No "claim this guest profile" flow yet — a guest stays a guest
+  permanently for now. The schema (nullable `user_id` on `group_members`)
+  was deliberately designed to leave this open, but the actual claim/invite
+  UI isn't built.
+- Recaps are plain shareable text only, not a downloadable file (PDF, etc.)
+  — a deliberate v1 choice, since it matches "tell people what they owe"
+  more directly and needed no new dependency. Worth adding a real file
+  export later if that turns out to matter more than expected.
 
 ## Security notes
 

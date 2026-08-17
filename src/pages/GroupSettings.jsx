@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
-import { fetchAllGroupMembers } from '../lib/members'
+import { fetchAllGroupMembers, addGuest, setGuestActive, renameGuest } from '../lib/members'
 import { computeBalances, computeDailyTotalsForUser } from '../lib/settlement'
 
 export default function GroupSettings() {
@@ -14,6 +14,9 @@ export default function GroupSettings() {
   const [members, setMembers] = useState([])
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(false)
+  const [guestName, setGuestName] = useState('')
+  const [editingGuestId, setEditingGuestId] = useState(null)
+  const [editingGuestName, setEditingGuestName] = useState('')
 
   const loadGroup = useCallback(async () => {
     const { data } = await supabase.from('groups').select('*').eq('id', groupId).single()
@@ -44,20 +47,62 @@ export default function GroupSettings() {
     }
   }
 
-  async function removeMember(memberId, isSelf) {
+  async function submitAddGuest(e) {
+    e.preventDefault()
+    if (!guestName.trim()) return
+    setError(null)
+    try {
+      await addGuest(groupId, guestName.trim())
+      setGuestName('')
+      loadMembers()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function saveGuestRename(memberId) {
+    if (!editingGuestName.trim()) return
+    setError(null)
+    try {
+      await renameGuest(memberId, editingGuestName.trim())
+      setEditingGuestId(null)
+      loadMembers()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function toggleGuestActive(member, active) {
+    setError(null)
+    try {
+      await setGuestActive(member.id, active)
+      loadMembers()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  // Real accounts go through remove_group_member — this both revokes their
+  // access (they'd otherwise keep querying group data forever) and freezes
+  // a personal record of their history first, while they still can. Guests
+  // never had that access to begin with, so removing one is just flipping
+  // active off directly (see toggleGuestActive above) — no snapshot needed.
+  async function removeRealMember(member) {
+    const isSelf = member.userId === user.id
     const label = isSelf ? 'leave this group' : 'remove this person from the group'
-    if (!window.confirm(`Are you sure you want to ${label}? Your stats for this group are kept, just frozen as of right now.`)) {
+    if (
+      !window.confirm(
+        `Are you sure you want to ${label}? Your stats for this group are kept, just frozen as of right now.`
+      )
+    ) {
       return
     }
 
     setError(null)
 
-    // Compute their frozen record from the group's full data while access
-    // still allows it — this is the last moment that's possible, since
-    // removing them is what cuts that access off.
     const { data: billsData, error: billsError } = await supabase
       .from('bills')
-      .select('id, paid_by, created_at, items(id, total_price, item_shares(user_id, shares))')
+      .select('id, paid_by, created_at, items(id, total_price, item_shares(member_id, shares))')
       .eq('group_id', groupId)
 
     if (billsError) {
@@ -72,14 +117,14 @@ export default function GroupSettings() {
       for (const item of bill.items || []) {
         items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price })
         for (const share of item.item_shares || []) {
-          itemShares.push({ item_id: item.id, user_id: share.user_id, shares: share.shares })
+          itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
         }
       }
     }
 
     const { data: paymentsData, error: paymentsError } = await supabase
       .from('payments')
-      .select('from_user, to_user, amount')
+      .select('from_member, to_member, amount')
       .eq('group_id', groupId)
 
     if (paymentsError) {
@@ -87,14 +132,20 @@ export default function GroupSettings() {
       return
     }
 
-    const balances = computeBalances({ bills, items, itemShares, payments: paymentsData || [] })
-    const dailyTotals = computeDailyTotalsForUser(memberId, { bills, items, itemShares })
+    const paymentsForBalances = (paymentsData || []).map((p) => ({
+      from_user: p.from_member,
+      to_user: p.to_member,
+      amount: p.amount,
+    }))
+
+    const balances = computeBalances({ bills, items, itemShares, payments: paymentsForBalances })
+    const dailyTotals = computeDailyTotalsForUser(member.id, { bills, items, itemShares })
 
     const { error: removeError } = await supabase.rpc('remove_group_member', {
       target_group_id: groupId,
-      target_user_id: memberId,
+      target_user_id: member.userId,
       group_name: name,
-      snapshot_balance: balances[memberId] || 0,
+      snapshot_balance: balances[member.id] || 0,
       snapshot_daily: dailyTotals,
     })
 
@@ -110,8 +161,10 @@ export default function GroupSettings() {
     }
   }
 
-  const activeMembers = members.filter((m) => m.active)
-  const formerMembers = members.filter((m) => !m.active)
+  const activeRealMembers = members.filter((m) => m.active && !m.isGuest)
+  const activeGuests = members.filter((m) => m.active && m.isGuest)
+  const formerRealMembers = members.filter((m) => !m.active && !m.isGuest)
+  const archivedGuests = members.filter((m) => !m.active && m.isGuest)
 
   return (
     <div className="page">
@@ -130,22 +183,94 @@ export default function GroupSettings() {
         </button>
       </form>
 
-      <h2 className="settings-section-title">Members ({activeMembers.length})</h2>
+      <h2 className="settings-section-title">Members ({activeRealMembers.length})</h2>
       <ul className="member-list">
-        {activeMembers.map((m) => (
+        {activeRealMembers.map((m) => (
           <li key={m.id} className="member-list-item">
             <span>
               {m.name}
-              {m.id === user.id && <span className="muted"> (you)</span>}
+              {m.userId === user.id && <span className="muted"> (you)</span>}
             </span>
-            <button type="button" className="btn-link dropdown-item-warn" onClick={() => removeMember(m.id, m.id === user.id)}>
-              {m.id === user.id ? 'Leave' : 'Remove'}
+            <button
+              type="button"
+              className="btn-link dropdown-item-warn"
+              onClick={() => removeRealMember(m)}
+            >
+              {m.userId === user.id ? 'Leave' : 'Remove'}
             </button>
           </li>
         ))}
       </ul>
 
-      {formerMembers.length > 0 && (
+      <h2 className="settings-section-title">Guests ({activeGuests.length})</h2>
+      <p className="muted">
+        People without an account of their own — add anyone who's splitting a bill but doesn't want to
+        sign up. They can be assigned to items and settled up with exactly like anyone else.
+      </p>
+      <ul className="member-list">
+        {activeGuests.map((m) => (
+          <li key={m.id} className="member-list-item">
+            {editingGuestId === m.id ? (
+              <form
+                className="guest-rename-form"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  saveGuestRename(m.id)
+                }}
+              >
+                <input
+                  value={editingGuestName}
+                  onChange={(e) => setEditingGuestName(e.target.value)}
+                  autoFocus
+                />
+                <button type="submit" className="btn-link">
+                  Save
+                </button>
+                <button type="button" className="btn-link" onClick={() => setEditingGuestId(null)}>
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <>
+                <span>
+                  {m.name} <span className="muted">(guest)</span>
+                </span>
+                <span className="member-list-actions">
+                  <button
+                    type="button"
+                    className="btn-link"
+                    onClick={() => {
+                      setEditingGuestId(m.id)
+                      setEditingGuestName(m.name)
+                    }}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-link dropdown-item-warn"
+                    onClick={() => toggleGuestActive(m, false)}
+                  >
+                    Remove
+                  </button>
+                </span>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={submitAddGuest} className="inline-form">
+        <input
+          value={guestName}
+          onChange={(e) => setGuestName(e.target.value)}
+          placeholder="Guest's name"
+        />
+        <button type="submit" className="btn-primary">
+          Add guest
+        </button>
+      </form>
+
+      {formerRealMembers.length > 0 && (
         <>
           <h2 className="settings-section-title">Former members</h2>
           <p className="muted">
@@ -154,9 +279,28 @@ export default function GroupSettings() {
             they'll pick up right where they left off.
           </p>
           <ul className="member-list">
-            {formerMembers.map((m) => (
+            {formerRealMembers.map((m) => (
               <li key={m.id} className="member-list-item former">
                 <span>{m.name}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {archivedGuests.length > 0 && (
+        <>
+          <h2 className="settings-section-title">Archived guests</h2>
+          <p className="muted">
+            Kept on old bills, but won't be offered for new ones. Restore any time.
+          </p>
+          <ul className="member-list">
+            {archivedGuests.map((m) => (
+              <li key={m.id} className="member-list-item former">
+                <span>{m.name}</span>
+                <button type="button" className="btn-link" onClick={() => toggleGuestActive(m, true)}>
+                  Restore
+                </button>
               </li>
             ))}
           </ul>

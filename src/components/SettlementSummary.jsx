@@ -21,6 +21,7 @@ function RecordPaymentForm({ members, onRecordPayment }) {
         {members.map((m) => (
           <option key={m.id} value={m.id}>
             {m.name}
+            {m.isGuest ? ' (guest)' : ''}
           </option>
         ))}
       </select>
@@ -29,6 +30,7 @@ function RecordPaymentForm({ members, onRecordPayment }) {
         {members.map((m) => (
           <option key={m.id} value={m.id}>
             {m.name}
+            {m.isGuest ? ' (guest)' : ''}
           </option>
         ))}
       </select>
@@ -84,9 +86,9 @@ export default function SettlementSummary({ transactions, members, payments, onR
           <ul className="settlement-list">
             {payments.map((p) => (
               <li key={p.id}>
-                <span className="debtor">{nameOf(p.from_user)}</span>
+                <span className="debtor">{nameOf(p.from_member)}</span>
                 <span className="settlement-verb">paid</span>
-                <span className="creditor">{nameOf(p.to_user)}</span>
+                <span className="creditor">{nameOf(p.to_member)}</span>
                 <span className="mono amount">€{Number(p.amount).toFixed(2)}</span>
                 <button
                   type="button"

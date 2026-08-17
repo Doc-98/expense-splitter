@@ -34,7 +34,7 @@ export default function GroupStats() {
 
     const { data: billsData } = await supabase
       .from('bills')
-      .select('id, title, created_at, paid_by, items(id, total_price, item_shares(user_id, shares))')
+      .select('id, title, created_at, paid_by, items(id, total_price, item_shares(member_id, shares))')
       .eq('group_id', groupId)
       .order('created_at', { ascending: true })
 
@@ -45,7 +45,7 @@ export default function GroupStats() {
       for (const item of bill.items || []) {
         items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price })
         for (const share of item.item_shares || []) {
-          itemShares.push({ item_id: item.id, user_id: share.user_id, shares: share.shares })
+          itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
         }
       }
     }
@@ -138,6 +138,7 @@ export default function GroupStats() {
               <tr key={m.id}>
                 <td>
                   {m.name}
+                  {m.isGuest && <span className="muted"> (guest)</span>}
                   {!m.active && <span className="muted"> (left)</span>}
                 </td>
                 <td className="mono">€{(totals[m.id]?.paid || 0).toFixed(2)}</td>

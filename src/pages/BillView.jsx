@@ -3,8 +3,10 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { fetchAllGroupMembers } from '../lib/members'
 import { parseNumber } from '../lib/parseNumber'
+import { formatBillRecap } from '../lib/recapText'
 import ItemRow from '../components/ItemRow'
 import ScanReceiptButton from '../components/ScanReceiptButton'
+import ShareButton from '../components/ShareButton'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
@@ -28,7 +30,8 @@ export default function BillView() {
   // Who a brand-new item defaults to being split with: the bill's own
   // "default split" setting if one's been chosen, otherwise everyone
   // currently active. Filtered against active members so a default that
-  // included someone who has since left doesn't silently reattach them.
+  // included someone who has since left (or an archived guest) doesn't
+  // silently reattach them.
   const defaultBuyerIds = (
     bill?.default_buyer_ids?.length ? bill.default_buyer_ids : activeMembers.map((m) => m.id)
   ).filter((id) => activeMembers.some((m) => m.id === id))
@@ -36,7 +39,7 @@ export default function BillView() {
   const loadItems = useCallback(async () => {
     const { data } = await supabase
       .from('items')
-      .select('*, item_shares(user_id, shares)')
+      .select('*, item_shares(member_id, shares)')
       .eq('bill_id', billId)
       .order('created_at', { ascending: true })
     setItems(data || [])
@@ -79,7 +82,7 @@ export default function BillView() {
     if (inserted && buyerIds.length) {
       await supabase
         .from('item_shares')
-        .insert(buyerIds.map((id) => ({ item_id: inserted.id, user_id: id, shares: 1 })))
+        .insert(buyerIds.map((id) => ({ item_id: inserted.id, member_id: id, shares: 1 })))
     }
     return inserted
   }
@@ -114,11 +117,11 @@ export default function BillView() {
   }
 
   async function toggleBuyer(item, memberId) {
-    const existing = item.item_shares.find((s) => s.user_id === memberId)
+    const existing = item.item_shares.find((s) => s.member_id === memberId)
     if (existing) {
-      await supabase.from('item_shares').delete().eq('item_id', item.id).eq('user_id', memberId)
+      await supabase.from('item_shares').delete().eq('item_id', item.id).eq('member_id', memberId)
     } else {
-      await supabase.from('item_shares').insert({ item_id: item.id, user_id: memberId, shares: 1 })
+      await supabase.from('item_shares').insert({ item_id: item.id, member_id: memberId, shares: 1 })
     }
     loadItems()
   }
@@ -128,9 +131,9 @@ export default function BillView() {
     loadItems()
   }
 
-  async function setPaidBy(userId) {
-    await supabase.from('bills').update({ paid_by: userId }).eq('id', billId)
-    setBill((b) => ({ ...b, paid_by: userId }))
+  async function setPaidBy(memberId) {
+    await supabase.from('bills').update({ paid_by: memberId }).eq('id', billId)
+    setBill((b) => ({ ...b, paid_by: memberId }))
   }
 
   async function saveNote() {
@@ -204,6 +207,7 @@ export default function BillView() {
           {paidByOptions.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}
+              {m.isGuest ? ' (guest)' : ''}
               {!m.active ? ' (left)' : ''}
             </option>
           ))}
@@ -281,6 +285,12 @@ export default function BillView() {
         Try sample items instead (no API key needed)
       </button>
       {scanError && <p className="status-error">{scanError}</p>}
+
+      <ShareButton
+        label="Share recap"
+        title={bill?.title}
+        getText={() => formatBillRecap(bill, items, allMembers)}
+      />
 
       <button type="button" className="btn-primary confirm-btn" onClick={() => navigate(`/groups/${groupId}`)}>
         Confirm

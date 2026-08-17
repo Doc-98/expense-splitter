@@ -580,6 +580,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   font-size: 14px;
 }
 .member-list-item.former { opacity: 0.7; border-style: dashed; }
+.member-list-actions { display: flex; gap: 10px; }
+.guest-rename-form { display: flex; gap: 8px; align-items: center; flex: 1; }
+.guest-rename-form input { flex: 1; }
+
+.share-button-wrap { display: flex; align-items: center; gap: 10px; margin-top: var(--space-sm); }
+.share-status { font-size: 13px; }
 
 /* ---------- Group stats page ---------- */
 .stats-summary {

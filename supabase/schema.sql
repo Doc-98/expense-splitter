@@ -47,33 +47,57 @@ create table groups (
   created_at timestamptz not null default now()
 );
 
--- `active` lets someone be removed from a group without deleting the row:
--- their historical bills/items/payments still reference their user_id
--- directly, so nothing breaks — they just stop being selectable for *new*
--- things, and lose access going forward. If they rejoin later (same invite
--- link, same account), it's the same row flipping back to active=true, so
--- all their history is automatically still theirs — never disconnected.
+-- ---------------------------------------------------------------------------
+-- group_members: every "person" a bill/item/payment can be about — a real
+-- signed-up account (user_id set, display_name comes from profiles) OR a
+-- guest with no account at all (user_id null, display_name set directly on
+-- this row). Exactly one of the two is always set — see the check
+-- constraint below. This is the one column that changed shape for every
+-- other table: bills.paid_by, item_shares.member_id, and
+-- payments.from_member/to_member all point at group_members.id now,
+-- instead of pointing at a real account directly — which is what makes a
+-- guest usable everywhere a real member is, with zero changes needed to the
+-- settlement math itself (it already just sums things up by whatever ID
+-- it's given).
+--
+-- `active` still means "removed/left" for real members exactly as before
+-- (see departure_snapshots below); for a guest it just means "archived,
+-- don't offer them for new things" — a guest never had login-gated access
+-- to lose, so there's nothing to preserve a snapshot of.
+--
+-- Keeping user_id nullable (rather than never reusing this row) is also
+-- what leaves room for a future "claim this guest profile" flow: someone
+-- signing up for real later would just be this same row gaining a user_id,
+-- not a fresh identity that needs their old history relinked to it.
 create table group_members (
+  id uuid primary key default gen_random_uuid(),
   group_id uuid not null references groups(id) on delete cascade,
-  user_id uuid not null references auth.users(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
+  display_name text,
   active boolean not null default true,
+  created_by uuid references auth.users(id),
   joined_at timestamptz not null default now(),
-  primary key (group_id, user_id)
+  constraint group_members_person_shape check (
+    (user_id is not null and display_name is null)
+    or (user_id is null and display_name is not null)
+  ),
+  unique (group_id, user_id)
 );
 
 -- ---------------------------------------------------------------------------
--- bills: one receipt / expense event. paid_by is whoever fronted the money.
--- default_buyer_ids is who new items on *this* bill get split with by
--- default (null/empty means "everyone currently active") — lets a
--- household set it to just the two people actually shopping today instead
--- of unchecking everyone else on every single item.
+-- bills: one receipt / expense event. paid_by is whoever fronted the money
+-- — a group_members.id, so a guest can front the money just as well as a
+-- real member can. default_buyer_ids is who new items on *this* bill get
+-- split with by default (null/empty means "everyone currently active") —
+-- lets a household set it to just the two people actually shopping today
+-- instead of unchecking everyone else on every single item.
 -- ---------------------------------------------------------------------------
 create table bills (
   id uuid primary key default gen_random_uuid(),
   group_id uuid not null references groups(id) on delete cascade,
   title text not null default 'New bill',
   note text,
-  paid_by uuid references auth.users(id),
+  paid_by uuid references group_members(id),
   default_buyer_ids uuid[],
   created_by uuid references auth.users(id),
   settled boolean not null default false,
@@ -81,8 +105,8 @@ create table bills (
 );
 
 -- ---------------------------------------------------------------------------
--- items: one line on a bill, either typed manually or extracted by the
--- parse-receipt edge function from a photo.
+-- items: one line on a bill, either typed manually or extracted by a
+-- receipt scan.
 -- ---------------------------------------------------------------------------
 create table items (
   id uuid primary key default gen_random_uuid(),
@@ -95,40 +119,43 @@ create table items (
 );
 
 -- ---------------------------------------------------------------------------
--- item_shares: who is buying how much of an item. `shares` lets one person
--- be responsible for more than an equal split (e.g. they took 2 of the 3
+-- item_shares: who is buying how much of an item. member_id is a
+-- group_members.id (real or guest). `shares` lets one person be
+-- responsible for more than an equal split (e.g. they took 2 of the 3
 -- units), matching the old app's per-buyer amount tracking.
 -- ---------------------------------------------------------------------------
 create table item_shares (
   item_id uuid not null references items(id) on delete cascade,
-  user_id uuid not null references auth.users(id) on delete cascade,
+  member_id uuid not null references group_members(id) on delete cascade,
   shares numeric(10,2) not null default 1,
-  primary key (item_id, user_id)
+  primary key (item_id, member_id)
 );
 
 -- ---------------------------------------------------------------------------
--- payments: a recorded cash transfer between two group members, settling
--- some amount of what one owes the other. Separate from bills/items — this
--- is money moving between people directly, not a purchase.
+-- payments: a recorded cash transfer between two group members (real or
+-- guest), settling some amount of what one owes the other. Separate from
+-- bills/items — this is money moving between people directly, not a
+-- purchase.
 -- ---------------------------------------------------------------------------
 create table payments (
   id uuid primary key default gen_random_uuid(),
   group_id uuid not null references groups(id) on delete cascade,
-  from_user uuid not null references auth.users(id),
-  to_user uuid not null references auth.users(id),
+  from_member uuid not null references group_members(id),
+  to_member uuid not null references group_members(id),
   amount numeric(10,2) not null,
   created_by uuid references auth.users(id),
   created_at timestamptz not null default now()
 );
 
 -- ---------------------------------------------------------------------------
--- departure_snapshots: a frozen personal record of someone's history in a
--- group, written the moment they leave/are removed (see remove_group_member
--- below), while they still have access to compute it. After that, RLS on
--- bills/items/item_shares cuts off their access to the group entirely — this
--- is what lets their account-wide stats page keep showing accurate numbers
--- for that group anyway, without granting them any ongoing visibility into
--- it. daily_totals is keyed by ISO date ('YYYY-MM-DD') -> {paid, consumed};
+-- departure_snapshots: a frozen personal record of a *real account's*
+-- history in a group, written the moment they leave/are removed (see
+-- remove_group_member below), while they still have access to compute it.
+-- This is deliberately unaffected by guests existing at all — a guest never
+-- had their own login-gated access to a group in the first place, so
+-- there's no "loss of access" to compensate for, and archiving one is just
+-- a plain update to group_members.active with no snapshot involved.
+-- daily_totals is keyed by ISO date ('YYYY-MM-DD') -> {paid, consumed};
 -- days nest cleanly into any week/month/year view with no approximation.
 -- One row per (group, person) — leaving a second time overwrites it with a
 -- fresh, complete recomputation rather than stacking duplicates.
@@ -147,11 +174,12 @@ create table departure_snapshots (
 );
 
 -- ============================================================================
--- Row Level Security — every table is locked to "active members of the same
--- group". Someone removed from a group (active=false) loses access to it
--- going forward, but their profile stays visible to former groupmates (see
--- the profiles policy below) so their name still renders correctly on old
--- bills, items, and payments that reference them.
+-- Row Level Security — every table is locked to "active [real-account]
+-- members of the same group". Access checks are entirely about *who is
+-- asking* (always a real authenticated account — a guest never asks
+-- anything, they're only ever data), which is exactly why adding guests
+-- required zero changes to any policy's actual logic below beyond one new
+-- insert policy for creating them in the first place.
 -- ============================================================================
 
 alter table profiles enable row level security;
@@ -225,7 +253,8 @@ create policy "members can rename their group" on groups
 -- member of, or your own row regardless (so a removed person can still see
 -- that they were removed, rather than the row just vanishing on them).
 -- Active members can update rosters — used for removing someone (flip
--- active to false) and is also how a self-removal ("leave group") works.
+-- active to false), self-removal ("leave group"), and archiving/renaming a
+-- guest, all the same way.
 create policy "members can view group rosters" on group_members
   for select using (
     user_id = auth.uid()
@@ -235,11 +264,21 @@ create policy "members can view group rosters" on group_members
 create policy "users can add themselves to a group" on group_members
   for insert with check (user_id = auth.uid());
 
+-- A guest row is never self-inserted (a guest never authenticates at all)
+-- — an active member adds one on the group's behalf instead.
+create policy "members can add guests to their group" on group_members
+  for insert with check (
+    user_id is null
+    and display_name is not null
+    and public.is_group_member(group_id)
+  );
+
 create policy "members can update group rosters" on group_members
   for update using (public.is_group_member(group_id)) with check (public.is_group_member(group_id));
 
 -- bills / items / item_shares: gated on *active* group membership, walking
--- the chain down
+-- the chain down. Untouched by guests existing — these checks are about
+-- who's asking (always a real account), never about who a row is *about*.
 create policy "members can view bills" on bills
   for select using (
     exists (
@@ -304,10 +343,8 @@ create policy "members can manage item shares" on item_shares
   );
 
 -- payments: any active member can view and record payments within their own
--- group. Deliberately NOT restricted once someone leaves the group that
--- created them — a removed member's payment history stays intact and
--- visible to the group (is_group_member() checks the *viewer*, not who the
--- payment mentions).
+-- group — including ones involving a guest, since is_group_member() checks
+-- the *viewer*, never who the payment is between.
 create policy "members can view payments" on payments
   for select using (public.is_group_member(group_id));
 
@@ -329,13 +366,16 @@ create policy "users can update their own departure snapshots" on departure_snap
   for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- ============================================================================
--- remove_group_member: deactivates someone's membership AND writes their
--- departure snapshot in one step. This has to be a SECURITY DEFINER
--- function rather than a plain client-side update, because the person doing
--- the removing (which might be someone removing a groupmate, not just
--- themselves) needs to write a snapshot row owned by the *other* person —
--- something the plain "users can update their own departure snapshots"
--- policy above deliberately does not allow on its own.
+-- remove_group_member: deactivates a *real account's* membership AND writes
+-- their departure snapshot in one step. Never used for guests — archiving
+-- a guest is just a plain update to group_members.active (see the update
+-- policy above), since there's no access to lose and so nothing to
+-- snapshot. Has to be a SECURITY DEFINER function rather than a plain
+-- client-side update, because the person doing the removing (which might
+-- be someone removing a groupmate, not just themselves) needs to write a
+-- snapshot row owned by the *other* person — something the plain "users
+-- can update their own departure snapshots" policy above deliberately does
+-- not allow on its own.
 --
 -- The balance and daily_totals numbers are computed client-side (reusing
 -- the exact same, already-tested settlement.js math) and passed in, rather
@@ -382,7 +422,7 @@ $$;
 -- ============================================================================
 -- create_group: creates a group AND adds the creator as its first member in
 -- one atomic step. Doing this as two separate client-side inserts caused a
--- race against the "members can view their groups" policy below — the group
+-- race against the "members can view their groups" policy above — the group
 -- row existed but wasn't readable yet, since the membership row that grants
 -- read access hadn't been written. This sidesteps that entirely.
 -- ============================================================================

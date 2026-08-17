@@ -21,6 +21,11 @@ export default function AccountStats() {
   const { user } = useAuth()
 
   const [groups, setGroups] = useState([]) // currently active groups: [{ id, name }]
+  // My own participant ID is a *different* group_members.id in every group
+  // now (bills/items/payments reference that, not the account ID directly)
+  // — so "which row is me" has to be looked up per group, not assumed to
+  // be a single constant the way user.id used to be.
+  const [myParticipantByGroup, setMyParticipantByGroup] = useState(new Map())
   const [rawBills, setRawBills] = useState([]) // includes group_id
   const [rawItems, setRawItems] = useState([])
   const [rawShares, setRawShares] = useState([])
@@ -33,11 +38,13 @@ export default function AccountStats() {
   const load = useCallback(async () => {
     const { data: memberRows } = await supabase
       .from('group_members')
-      .select('group_id')
+      .select('id, group_id')
       .eq('user_id', user.id)
       .eq('active', true)
 
     const groupIds = (memberRows || []).map((r) => r.group_id)
+    const participantByGroup = new Map((memberRows || []).map((r) => [r.group_id, r.id]))
+    setMyParticipantByGroup(participantByGroup)
 
     const { data: groupsData } = groupIds.length
       ? await supabase.from('groups').select('id, name').in('id', groupIds)
@@ -47,7 +54,7 @@ export default function AccountStats() {
     const { data: billsData } = groupIds.length
       ? await supabase
           .from('bills')
-          .select('id, group_id, title, created_at, paid_by, items(id, total_price, item_shares(user_id, shares))')
+          .select('id, group_id, title, created_at, paid_by, items(id, total_price, item_shares(member_id, shares))')
           .in('group_id', groupIds)
       : { data: [] }
 
@@ -58,7 +65,7 @@ export default function AccountStats() {
       for (const item of bill.items || []) {
         items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price })
         for (const share of item.item_shares || []) {
-          itemShares.push({ item_id: item.id, user_id: share.user_id, shares: share.shares })
+          itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
         }
       }
     }
@@ -81,22 +88,25 @@ export default function AccountStats() {
     // every group you're still in, plus any not-yet-settled balance frozen
     // from groups you've left.
     const { data: paymentsData } = groupIds.length
-      ? await supabase.from('payments').select('id, group_id, from_user, to_user, amount').in('group_id', groupIds)
+      ? await supabase.from('payments').select('id, group_id, from_member, to_member, amount').in('group_id', groupIds)
       : { data: [] }
 
     let balanceSum = 0
     for (const groupId of groupIds) {
+      const myId = participantByGroup.get(groupId)
       const groupBills = list.filter((b) => b.group_id === groupId)
       const groupItems = items.filter((it) => groupBills.some((b) => b.id === it.bill_id))
       const groupShares = itemShares.filter((s) => groupItems.some((it) => it.id === s.item_id))
-      const groupPayments = (paymentsData || []).filter((p) => p.group_id === groupId)
+      const groupPayments = (paymentsData || [])
+        .filter((p) => p.group_id === groupId)
+        .map((p) => ({ from_user: p.from_member, to_user: p.to_member, amount: p.amount }))
       const balances = computeBalances({
         bills: groupBills,
         items: groupItems,
         itemShares: groupShares,
         payments: groupPayments,
       })
-      balanceSum += balances[user.id] || 0
+      balanceSum += balances[myId] || 0
     }
     for (const snap of (snapshotData || []).filter((s) => !groupIds.includes(s.group_id))) {
       if (!snap.balance_settled) balanceSum += Number(snap.balance)
@@ -111,19 +121,6 @@ export default function AccountStats() {
   const { start, end, label } = getPeriodRange(granularity, offset)
   const { bills, items, itemShares } = filterByDateRange(rawBills, rawItems, rawShares, start, end)
 
-  const liveTotals = computeSpendingTotals({ bills, items, itemShares })[user.id] || { paid: 0, consumed: 0 }
-  const snapshotTotals = snapshots.reduce(
-    (acc, s) => {
-      const t = sumDailyInRange(s.daily_totals, start, end)
-      return { paid: acc.paid + t.paid, consumed: acc.consumed + t.consumed }
-    },
-    { paid: 0, consumed: 0 }
-  )
-  const myTotals = {
-    paid: Math.round((liveTotals.paid + snapshotTotals.paid) * 100) / 100,
-    consumed: Math.round((liveTotals.consumed + snapshotTotals.consumed) * 100) / 100,
-  }
-
   const showMonthly = granularity === 'all' || granularity === 'year'
   const monthly = {}
   for (const b of bills) {
@@ -131,7 +128,7 @@ export default function AccountStats() {
     // group's snapshot can supply below (just your own portion, by design),
     // or the chart would silently mix "everyone's spending" with "just my
     // spending" depending on whether a group happens to still be live.
-    if (b.paid_by !== user.id) continue
+    if (b.paid_by !== myParticipantByGroup.get(b.group_id)) continue
     const billTotal = items.filter((it) => it.bill_id === b.id).reduce((sum, it) => sum + Number(it.total_price), 0)
     const key = monthKey(b.created_at)
     monthly[key] = (monthly[key] || 0) + billTotal
@@ -145,12 +142,13 @@ export default function AccountStats() {
   const maxMonthly = Math.max(1, ...monthlyRows.map(([, v]) => v))
 
   const activeGroupRows = groups.map((g) => {
+    const myId = myParticipantByGroup.get(g.id)
     const groupBills = bills.filter((b) => b.group_id === g.id)
     const groupBillIds = new Set(groupBills.map((b) => b.id))
     const groupItems = items.filter((it) => groupBillIds.has(it.bill_id))
     const groupItemIds = new Set(groupItems.map((it) => it.id))
     const groupShares = itemShares.filter((s) => groupItemIds.has(s.item_id))
-    const totals = computeSpendingTotals({ bills: groupBills, items: groupItems, itemShares: groupShares })[user.id] || {
+    const totals = computeSpendingTotals({ bills: groupBills, items: groupItems, itemShares: groupShares })[myId] || {
       paid: 0,
       consumed: 0,
     }
@@ -173,6 +171,17 @@ export default function AccountStats() {
     .filter((g) => granularity === 'all' || g.paid > 0 || g.consumed > 0)
 
   const byGroup = [...activeGroupRows, ...departedGroupRows]
+
+  // Rather than a separate merged computation across every group at once
+  // (which can't work now — "my ID" differs per group, so there's no
+  // single key to look up in a pooled result), the top summary is just the
+  // sum of the already-correct, per-group rows above.
+  const myTotals = byGroup.reduce(
+    (acc, g) => ({ paid: acc.paid + g.paid, consumed: acc.consumed + g.consumed }),
+    { paid: 0, consumed: 0 }
+  )
+  myTotals.paid = Math.round(myTotals.paid * 100) / 100
+  myTotals.consumed = Math.round(myTotals.consumed * 100) / 100
 
   async function markSettled(snapshotId) {
     const { error: settleError } = await supabase

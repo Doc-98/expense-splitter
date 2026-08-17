@@ -4,7 +4,9 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { fetchAllGroupMembers } from '../lib/members'
 import { computeBalances, simplifyDebts } from '../lib/settlement'
+import { formatSettlementRecap } from '../lib/recapText'
 import SettlementSummary from '../components/SettlementSummary'
+import ShareButton from '../components/ShareButton'
 
 export default function GroupView() {
   const { groupId } = useParams()
@@ -21,6 +23,10 @@ export default function GroupView() {
   const [error, setError] = useState(null)
 
   const activeMembers = allMembers.filter((m) => m.active)
+  // My own participant row in this group — bills/items/payments reference
+  // group_members.id now, not the raw account ID, so anything I create
+  // needs this resolved first (e.g. defaulting a new bill's payer to me).
+  const myParticipantId = allMembers.find((m) => m.userId === user.id)?.id
 
   const loadGroup = useCallback(async () => {
     const { data } = await supabase.from('groups').select('*').eq('id', groupId).single()
@@ -43,12 +49,12 @@ export default function GroupView() {
   const loadSettlement = useCallback(async () => {
     const { data: billsData } = await supabase
       .from('bills')
-      .select('id, paid_by, items(id, total_price, item_shares(user_id, shares))')
+      .select('id, paid_by, items(id, total_price, item_shares(member_id, shares))')
       .eq('group_id', groupId)
 
     const { data: paymentsData } = await supabase
       .from('payments')
-      .select('id, from_user, to_user, amount, created_at')
+      .select('id, from_member, to_member, amount, created_at')
       .eq('group_id', groupId)
       .order('created_at', { ascending: false })
 
@@ -62,12 +68,22 @@ export default function GroupView() {
       for (const item of bill.items || []) {
         items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price })
         for (const share of item.item_shares || []) {
-          itemShares.push({ item_id: item.id, user_id: share.user_id, shares: share.shares })
+          itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
         }
       }
     }
 
-    const balances = computeBalances({ bills: billsData, items, itemShares, payments: paymentsData || [] })
+    // computeBalances/simplifyDebts operate on a generic "userId" key — it's
+    // always been just an opaque ID as far as they're concerned, so feeding
+    // them group_members.id values (real accounts and guests alike) needs
+    // no changes there, only here at the query/mapping boundary.
+    const paymentsForBalances = (paymentsData || []).map((p) => ({
+      from_user: p.from_member,
+      to_user: p.to_member,
+      amount: p.amount,
+    }))
+
+    const balances = computeBalances({ bills: billsData, items, itemShares, payments: paymentsForBalances })
     setSettlement(simplifyDebts(balances))
   }, [groupId])
 
@@ -102,7 +118,7 @@ export default function GroupView() {
         group_id: groupId,
         title: newBillTitle.trim() || 'New bill',
         created_by: user.id,
-        paid_by: user.id,
+        paid_by: myParticipantId,
       })
       .select()
       .single()
@@ -122,13 +138,13 @@ export default function GroupView() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  async function recordPayment(fromUserId, toUserId, amount) {
-    if (!fromUserId || !toUserId || fromUserId === toUserId || !amount) return
+  async function recordPayment(fromMemberId, toMemberId, amount) {
+    if (!fromMemberId || !toMemberId || fromMemberId === toMemberId || !amount) return
     setError(null)
     const { error: paymentError } = await supabase.from('payments').insert({
       group_id: groupId,
-      from_user: fromUserId,
-      to_user: toUserId,
+      from_member: fromMemberId,
+      to_member: toMemberId,
       amount,
       created_by: user.id,
     })
@@ -179,7 +195,10 @@ export default function GroupView() {
             <div className="member-count-popover">
               <ul>
                 {activeMembers.map((m) => (
-                  <li key={m.id}>{m.name}</li>
+                  <li key={m.id}>
+                    {m.name}
+                    {m.isGuest && <span className="muted"> (guest)</span>}
+                  </li>
                 ))}
               </ul>
               <Link to={`/groups/${groupId}/settings`} className="btn-link">
@@ -236,6 +255,14 @@ export default function GroupView() {
         onRecordPayment={recordPayment}
         onDeletePayment={deletePayment}
       />
+
+      {settlement && (
+        <ShareButton
+          label="Share settle-up"
+          title={`Settle up — ${group?.name}`}
+          getText={() => formatSettlementRecap(group?.name, settlement, allMembers)}
+        />
+      )}
     </div>
   )
 }
