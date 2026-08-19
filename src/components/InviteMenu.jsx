@@ -1,10 +1,14 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { shareOrCopyText } from '../lib/shareText'
+import { useClickOutside } from '../lib/useClickOutside'
 
 export default function InviteMenu({ inviteUrl, groupName }) {
   const [open, setOpen] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState(null)
   const [status, setStatus] = useState(null)
+  const wrapRef = useRef(null)
+
+  useClickOutside(wrapRef, () => setOpen(false), open)
 
   async function toggleOpen() {
     const next = !open
@@ -27,7 +31,7 @@ export default function InviteMenu({ inviteUrl, groupName }) {
   }
 
   return (
-    <div className="invite-menu-wrap">
+    <div className="invite-menu-wrap" ref={wrapRef}>
       <button type="button" className="btn-secondary" onClick={toggleOpen}>
         Invite
       </button>

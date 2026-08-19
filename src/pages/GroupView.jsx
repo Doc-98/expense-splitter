@@ -1,14 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { fetchAllGroupMembers } from '../lib/members'
 import { computeBalances, simplifyDebts } from '../lib/settlement'
 import { formatSettlementRecap } from '../lib/recapText'
+import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
+import { useClickOutside } from '../lib/useClickOutside'
 import SettlementSummary from '../components/SettlementSummary'
 import ShareButton from '../components/ShareButton'
 import InviteMenu from '../components/InviteMenu'
+import Pagination from '../components/Pagination'
 import { PrintableSettlementRecap } from '../components/PrintableRecap'
+
+const BILLS_PAGE_SIZE = 15
 
 export default function GroupView() {
   const { groupId } = useParams()
@@ -17,9 +22,14 @@ export default function GroupView() {
   const [group, setGroup] = useState(null)
   const [allMembers, setAllMembers] = useState([])
   const [showMembers, setShowMembers] = useState(false)
+  const memberPopoverRef = useRef(null)
+  useClickOutside(memberPopoverRef, () => setShowMembers(false), showMembers)
   const [bills, setBills] = useState(null)
+  const [billsPage, setBillsPage] = useState(0)
   const [newBillTitle, setNewBillTitle] = useState('')
   const [settlement, setSettlement] = useState(null)
+  const [weekTotal, setWeekTotal] = useState(0)
+  const [monthTotal, setMonthTotal] = useState(0)
   const [payments, setPayments] = useState([])
   const [error, setError] = useState(null)
 
@@ -50,7 +60,7 @@ export default function GroupView() {
   const loadSettlement = useCallback(async () => {
     const { data: billsData } = await supabase
       .from('bills')
-      .select('id, paid_by, items(id, total_price, item_shares(member_id, shares))')
+      .select('id, paid_by, created_at, items(id, total_price, item_shares(member_id, shares))')
       .eq('group_id', groupId)
 
     const { data: paymentsData } = await supabase
@@ -74,6 +84,16 @@ export default function GroupView() {
       }
     }
 
+    // Reuses the same fetch for the quick weekly/monthly preview at the
+    // bottom of the page, rather than firing off a second round-trip for
+    // numbers this data already contains.
+    const thisWeek = getPeriodRange('week', 0)
+    const thisMonth = getPeriodRange('month', 0)
+    const weekBills = filterByDateRange(billsData, items, [], thisWeek.start, thisWeek.end)
+    const monthBills = filterByDateRange(billsData, items, [], thisMonth.start, thisMonth.end)
+    setWeekTotal(weekBills.items.reduce((sum, it) => sum + Number(it.total_price), 0))
+    setMonthTotal(monthBills.items.reduce((sum, it) => sum + Number(it.total_price), 0))
+
     // computeBalances/simplifyDebts operate on a generic "userId" key — it's
     // always been just an opaque ID as far as they're concerned, so feeding
     // them group_members.id values (real accounts and guests alike) needs
@@ -87,6 +107,12 @@ export default function GroupView() {
     const balances = computeBalances({ bills: billsData, items, itemShares, payments: paymentsForBalances })
     setSettlement(simplifyDebts(balances))
   }, [groupId])
+
+  useEffect(() => {
+    if (!bills) return
+    const maxPage = Math.max(0, Math.ceil(bills.length / BILLS_PAGE_SIZE) - 1)
+    if (billsPage > maxPage) setBillsPage(maxPage)
+  }, [bills, billsPage])
 
   const reloadAll = useCallback(() => {
     loadBills()
@@ -182,7 +208,7 @@ export default function GroupView() {
           inviteUrl={group ? `${window.location.origin}/join/${group.invite_code}` : ''}
           groupName={group?.name}
         />
-        <div className="member-count-wrap">
+        <div className="member-count-wrap" ref={memberPopoverRef}>
           <button type="button" className="member-count-btn" onClick={() => setShowMembers((s) => !s)}>
             {activeMembers.length} {activeMembers.length === 1 ? 'person' : 'people'}
           </button>
@@ -223,7 +249,7 @@ export default function GroupView() {
       )}
 
       <ul className="card-list">
-        {bills?.map((bill) => (
+        {bills?.slice(billsPage * BILLS_PAGE_SIZE, (billsPage + 1) * BILLS_PAGE_SIZE).map((bill) => (
           <li key={bill.id} className="bill-list-item">
             <Link to={`/groups/${groupId}/bills/${bill.id}`} className="card-list-item">
               <span className="card-list-item-main">
@@ -243,6 +269,7 @@ export default function GroupView() {
           </li>
         ))}
       </ul>
+      <Pagination page={billsPage} setPage={setBillsPage} totalItems={bills?.length || 0} pageSize={BILLS_PAGE_SIZE} />
 
       {error && <p className="status-error">{error}</p>}
 
@@ -267,6 +294,21 @@ export default function GroupView() {
         </div>
       )}
       <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />
+
+      <h2 className="settings-section-title group-stats-preview-title">Quick stats</h2>
+      <div className="stats-summary">
+        <div className="stats-summary-item">
+          <span className="stats-summary-value mono">€{weekTotal.toFixed(2)}</span>
+          <span className="muted">this week</span>
+        </div>
+        <div className="stats-summary-item">
+          <span className="stats-summary-value mono">€{monthTotal.toFixed(2)}</span>
+          <span className="muted">this month</span>
+        </div>
+      </div>
+      <Link to={`/groups/${groupId}/stats`} className="btn-link">
+        See full stats →
+      </Link>
     </div>
   )
 }

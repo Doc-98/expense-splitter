@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
+import { useClickOutside } from '../lib/useClickOutside'
 
 export default function AppHeader() {
   const { user } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const [displayName, setDisplayName] = useState('')
   const [open, setOpen] = useState(false)
+  const menuRef = useRef(null)
+
+  useClickOutside(menuRef, () => setOpen(false), open)
 
   useEffect(() => {
     let cancelled = false
@@ -32,7 +36,7 @@ export default function AppHeader() {
       <Link to="/" className="app-header-brand">
         Spesa
       </Link>
-      <div className="account-menu">
+      <div className="account-menu" ref={menuRef}>
         <button
           type="button"
           className="account-chip"
