@@ -7,6 +7,8 @@ import { computeBalances, simplifyDebts } from '../lib/settlement'
 import { formatSettlementRecap } from '../lib/recapText'
 import SettlementSummary from '../components/SettlementSummary'
 import ShareButton from '../components/ShareButton'
+import InviteMenu from '../components/InviteMenu'
+import { PrintableSettlementRecap } from '../components/PrintableRecap'
 
 export default function GroupView() {
   const { groupId } = useParams()
@@ -17,7 +19,6 @@ export default function GroupView() {
   const [showMembers, setShowMembers] = useState(false)
   const [bills, setBills] = useState(null)
   const [newBillTitle, setNewBillTitle] = useState('')
-  const [copied, setCopied] = useState(false)
   const [settlement, setSettlement] = useState(null)
   const [payments, setPayments] = useState([])
   const [error, setError] = useState(null)
@@ -131,13 +132,6 @@ export default function GroupView() {
     }
   }
 
-  function copyInvite() {
-    const link = `${window.location.origin}/join/${group.invite_code}`
-    navigator.clipboard.writeText(link)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
   async function recordPayment(fromMemberId, toMemberId, amount) {
     if (!fromMemberId || !toMemberId || fromMemberId === toMemberId || !amount) return
     setError(null)
@@ -184,9 +178,10 @@ export default function GroupView() {
       </header>
 
       <div className="group-actions">
-        <button className="btn-secondary" onClick={copyInvite}>
-          {copied ? 'Link copied!' : 'Copy invite link'}
-        </button>
+        <InviteMenu
+          inviteUrl={group ? `${window.location.origin}/join/${group.invite_code}` : ''}
+          groupName={group?.name}
+        />
         <div className="member-count-wrap">
           <button type="button" className="member-count-btn" onClick={() => setShowMembers((s) => !s)}>
             {activeMembers.length} {activeMembers.length === 1 ? 'person' : 'people'}
@@ -219,6 +214,9 @@ export default function GroupView() {
           Start
         </button>
       </form>
+      <Link to={`/groups/${groupId}/import`} className="btn-link import-link">
+        Import bills from Splitwise (CSV)
+      </Link>
 
       {bills?.length === 0 && (
         <p className="empty-state">No bills yet. Start one above, then scan or add a receipt.</p>
@@ -257,12 +255,18 @@ export default function GroupView() {
       />
 
       {settlement && (
-        <ShareButton
-          label="Share settle-up"
-          title={`Settle up — ${group?.name}`}
-          getText={() => formatSettlementRecap(group?.name, settlement, allMembers)}
-        />
+        <div className="recap-actions">
+          <ShareButton
+            label="Share settle-up"
+            title={`Settle up — ${group?.name}`}
+            getText={() => formatSettlementRecap(group?.name, settlement, allMembers)}
+          />
+          <button type="button" className="btn-secondary" onClick={() => window.print()}>
+            Download PDF
+          </button>
+        </div>
       )}
+      <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />
     </div>
   )
 }

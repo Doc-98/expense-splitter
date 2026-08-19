@@ -55,11 +55,16 @@ export async function fetchGroupMembers(groupId) {
 }
 
 // Adds a guest to the group — a person with no account of their own.
+// Returns the created row (participants that need the new ID right away,
+// like a bulk import, need this — GroupSettings just calls it and reloads).
 export async function addGuest(groupId, displayName) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('group_members')
     .insert({ group_id: groupId, display_name: displayName })
+    .select()
+    .single()
   if (error) throw error
+  return data
 }
 
 // Archives (or restores) a guest. Unlike a real member leaving, this is

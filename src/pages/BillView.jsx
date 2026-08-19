@@ -4,9 +4,11 @@ import { supabase } from '../supabaseClient'
 import { fetchAllGroupMembers } from '../lib/members'
 import { parseNumber } from '../lib/parseNumber'
 import { formatBillRecap } from '../lib/recapText'
+import { buildBillCsvRows, toCsv, downloadCsv } from '../lib/csv'
 import ItemRow from '../components/ItemRow'
 import ScanReceiptButton from '../components/ScanReceiptButton'
 import ShareButton from '../components/ShareButton'
+import { PrintableBillRecap } from '../components/PrintableRecap'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
@@ -180,6 +182,12 @@ export default function BillView() {
   // select would silently show the wrong person.
   const paidByOptions = allMembers.filter((m) => m.active || m.id === bill?.paid_by)
 
+  function exportCsv() {
+    const { header, rows } = buildBillCsvRows(items, allMembers)
+    const filename = `${(bill?.title || 'bill').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`
+    downloadCsv(filename, toCsv(header, rows))
+  }
+
   return (
     <div className="page receipt-page">
       <header className="page-header">
@@ -286,11 +294,20 @@ export default function BillView() {
       </button>
       {scanError && <p className="status-error">{scanError}</p>}
 
-      <ShareButton
-        label="Share recap"
-        title={bill?.title}
-        getText={() => formatBillRecap(bill, items, allMembers)}
-      />
+      <div className="recap-actions">
+        <ShareButton
+          label="Share recap"
+          title={bill?.title}
+          getText={() => formatBillRecap(bill, items, allMembers)}
+        />
+        <button type="button" className="btn-secondary" onClick={() => window.print()}>
+          Download PDF
+        </button>
+        <button type="button" className="btn-secondary" onClick={exportCsv}>
+          Export CSV
+        </button>
+      </div>
+      <PrintableBillRecap bill={bill} items={items} members={allMembers} />
 
       <button type="button" className="btn-primary confirm-btn" onClick={() => navigate(`/groups/${groupId}`)}>
         Confirm

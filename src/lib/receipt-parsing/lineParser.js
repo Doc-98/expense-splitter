@@ -60,7 +60,11 @@ export function extractItemsFromLines(lines) {
     if (priceIndex === -1) continue
 
     const price = parseNumber(sorted[priceIndex].text)
-    if (!Number.isFinite(price) || price <= 0) continue
+    // Zero isn't a real price and usually means a bad OCR read, but a
+    // negative price is a legitimate discount line (e.g. "-0.50" right
+    // after an item) and should come through as its own line rather than
+    // being silently dropped — this used to filter those out too.
+    if (!Number.isFinite(price) || price === 0) continue
 
     let nameWords = sorted.slice(0, priceIndex).map((w) => w.text)
 

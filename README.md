@@ -128,13 +128,22 @@ There's no server-side piece to deploy for this at all — every scanning
 strategy runs entirely in the browser, chosen per-person from **Scan
 settings** (account menu → Scan settings), stored only on that device.
 
-- **Free OCR (default, zero setup)** — Tesseract.js runs OCR right on the
-  phone, and `src/lib/receipt-parsing/lineParser.js` groups the recognized
+- **Free OCR (default, zero setup)** — before OCR even runs,
+  `src/lib/receipt-parsing/imagePreprocess.js` cleans up the photo: converts
+  to grayscale and binarizes it (pure black text on white) using a local,
+  per-region contrast threshold rather than one fixed cutoff for the whole
+  image — the same technique real scanner apps use, and what actually
+  matters for a phone photo with a shadow or uneven lighting across it,
+  which a single global threshold handles poorly. Tesseract.js then runs
+  OCR on the cleaned-up image, and `lineParser.js` groups the recognized
   words into item/price pairs using their position on the page (name on the
   left, price on the right — the one layout convention nearly every receipt
-  follows, regardless of store). No account, no key, no server, no per-store
-  templates to maintain. Works best on a clear, reasonably well-lit photo of
-  a typical two-column receipt; unusual layouts are where this is weakest.
+  follows, regardless of store). A negative price right after an item (a
+  discount line) comes through as its own line rather than being dropped —
+  the total still nets out correctly either way, it just shows as two lines
+  instead of one adjusted price, since a rule-based parser can't reliably
+  tell *which* item a discount belongs to the way a real model can. No
+  account, no key, no server, no per-store templates to maintain.
 - **Google Gemini (bring your own key)** — more accurate, handles messy
   receipts better. Each person gets a free key at
   [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
@@ -165,7 +174,13 @@ one more file under `src/lib/receipt-parsing/strategies/` that matches the
 existing shape (`id`, `label`, `isConfigured()`, `parse(imageBase64,
 mediaType)`), and listing it in `src/lib/receipt-parsing/index.js`.
 `spatialStrategy` always stays available as the no-config fallback, so
-scanning never fails outright even with nothing else set up.
+scanning never fails outright even with nothing else set up. All three
+cloud/local model strategies share one prompt
+(`src/lib/receipt-parsing/extractionPrompt.js`), which — unlike the
+rule-based OCR path — asks the model to actually merge a discount into the
+item it belongs to when that's clear from the photo, falling back to a
+separate negative-price line only when it can't confidently tell which item
+a discount applies to.
 
 The **old, server-side approach still exists** in
 `supabase/functions/parse-receipt/` (calls Claude using a single shared,
@@ -173,12 +188,66 @@ hardcoded `ANTHROPIC_API_KEY` secret) but isn't wired up to anything
 anymore — kept only as a reference/starting point if you'd rather run a
 centralized paid option for your own household than rely on BYOK.
 
+## Inviting people
+
+The **Invite** button on a group's page opens a QR code (for someone
+standing right next to you) plus a **Share invite link** option, which uses
+`src/lib/shareText.js` — the same native-share-with-clipboard-fallback logic
+already used for recaps, rather than a separate copy-only implementation.
+The QR code itself is generated client-side (the `qrcode` package, lazy
+imported so it's never fetched by anyone who doesn't open the invite menu)
+— no third-party image service involved, consistent with everything else
+in this app never depending on an external call for something this core.
+
+## The in-app guide
+
+`/guide` (also reachable from the account menu as "How to use") is a set of
+collapsible sections covering the whole app, aimed at anyone joining a
+group who didn't build it and doesn't know which parts are obvious and
+which aren't. Worth keeping in sync as features are added — it's a single
+page, `src/pages/Guide.jsx`, and each section is self-contained.
+
+## Recaps, PDFs, and CSV
+
+Every bill and every group's settle-up has three export options sitting
+next to each other:
+
+- **Share recap** — plain text via the phone's native share sheet (straight
+  into WhatsApp, Messages, wherever), falling back to copy-to-clipboard on
+  desktop. `src/lib/recapText.js` builds the text; it leans on WhatsApp's
+  own `*bold*`/`_italic_` formatting rather than markdown, since markdown
+  wouldn't render there at all.
+- **Download PDF** — uses the browser's own print dialog rather than a new
+  dependency: a `.print-only` element (see `PrintableRecap.jsx` and the
+  `@media print` rules in `styles.css`) stays hidden on screen and is the
+  only thing visible when `window.print()` is called, so "Save as PDF" in
+  the print dialog produces a clean recap with none of the app's own UI in it.
+- **Export CSV** *(bills only)* — one row per item, via `src/lib/csv.js`.
+
+### Importing from Splitwise
+
+`/groups/:groupId/import` reads a Splitwise CSV export directly (Group
+settings → Export as CSV, inside Splitwise). Splitwise's format is `Date,
+Description, Category, Cost, Currency`, then one column per group member
+holding their **net balance** for that expense (positive = they're owed,
+negative = they owe) — not a raw share amount. `src/lib/splitwiseImport.js`
+reconstructs who paid (whoever has the largest positive net) and each
+person's actual share (`cost - theirNet` for the payer, `-theirNet` for
+everyone else) from that. Since Splitwise doesn't track individual line
+items the way this app does, each imported expense becomes one bill with a
+single item covering the whole cost, dated to match the original expense.
+
+Before importing, you're asked to match each name Splitwise exported
+against an existing member of the group (real or guest) or create a new
+guest for them — names that already match exactly are pre-selected
+automatically.
+
 ## How the data model works
 
 | Table          | What it's for                                                   |
 |----------------|-------------------------------------------------------------------|
 | `profiles`     | Display name per user, auto-created on signup                    |
-| `groups`       | A household / trip / friend circle, with a shareable invite code |
+| `groups`       | A household / trip / friend circle, with a shareable invite code and an `admin_id` (a `group_members.id`) |
 | `group_members`| Every *participant* a group can have — a real account (`user_id` set, name from `profiles`) or a guest with no account at all (`user_id` null, `display_name` set directly). `active=false` means they've left/been removed/archived — kept, not deleted. |
 | `bills`        | One receipt/expense event, with a single `paid_by` (a `group_members.id` — real or guest — who fronted it) and an optional `default_buyer_ids` (who *new* items on this bill split with by default) |
 | `items`        | One line item on a bill                                           |
@@ -213,6 +282,26 @@ fundamentally different kind of row, is deliberate: it leaves room for a
 future "claim this profile" flow, where a guest who decides to actually
 sign up would just have their existing row gain a `user_id`, rather than
 needing their history relinked from a separate identity.
+
+### Admin permissions
+
+Each group has exactly one admin (`groups.admin_id`), starting with
+whoever created it. Only the admin can remove someone *else* from the
+group — anyone can still remove themselves (leave) regardless. Both rules
+are enforced inside `remove_group_member()` itself, not just hidden behind
+a UI button, so they hold even against a raw API call.
+
+If the admin leaves, the role automatically passes to whoever's been in
+the group the longest among the remaining active real members
+(`join_group_by_code` order by `joined_at`) — a group is never left without
+an admin as long as a real member remains in it. The current admin can also
+hand the role to anyone else directly, via `transfer_admin()`, from Group
+Settings.
+
+Guest management (add/rename/archive/restore) is deliberately **not**
+admin-gated — any active member can manage guests, the same as adding a
+bill. The restriction is specifically about removing a *real person*
+against their will, not about editing shared group data.
 
 ### Leaving a group and personal stats
 
@@ -264,10 +353,22 @@ page prefers live data whenever it's available.
   permanently for now. The schema (nullable `user_id` on `group_members`)
   was deliberately designed to leave this open, but the actual claim/invite
   UI isn't built.
-- Recaps are plain shareable text only, not a downloadable file (PDF, etc.)
-  — a deliberate v1 choice, since it matches "tell people what they owe"
-  more directly and needed no new dependency. Worth adding a real file
-  export later if that turns out to matter more than expected.
+- PDF export goes through the browser's print dialog rather than a
+  one-tap download — deliberate, to avoid a new dependency, but it is an
+  extra step compared to Share recap.
+- Splitwise import assumes a single payer per expense (reconstructed from
+  whoever has the largest positive net balance in that row) — Splitwise
+  does support genuine multi-payer expenses, which are rare in practice but
+  would import with only the biggest contributor credited. A row where
+  literally everyone's net balance is zero (no sharing happened at all) is
+  skipped with a warning rather than guessed at.
+- `groups.admin_id` changes are only supposed to happen through
+  `transfer_admin()`, but the general "members can rename their group" RLS
+  policy is a blanket per-row check, not a per-column one — so it can't
+  actually stop a determined client from changing `admin_id` directly via a
+  raw API call, only the app's own code never does. Reasonable for a
+  personal-use app; would need tightening (a trigger, most likely) before
+  this held up against untrusted users.
 
 ## Security notes
 

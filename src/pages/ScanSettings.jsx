@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { getReceiptSettings, setReceiptSettings } from '../lib/receiptSettings'
 
 export default function ScanSettings() {
+  const navigate = useNavigate()
   const [settings, setSettings] = useState(getReceiptSettings())
   const [saved, setSaved] = useState(false)
 
@@ -13,12 +14,19 @@ export default function ScanSettings() {
     setTimeout(() => setSaved(false), 1200)
   }
 
+  // Goes back to whatever page was actually open before this one — a bill
+  // you were mid-scan on, the group page, wherever — rather than always
+  // landing on the groups list regardless of where you came from.
+  function goBack() {
+    navigate(-1)
+  }
+
   return (
     <div className="page">
       <header className="page-header">
-        <Link to="/" className="btn-link">
+        <button type="button" className="btn-link" onClick={goBack}>
           ← Back
-        </Link>
+        </button>
         <h1>Scan settings</h1>
       </header>
 
@@ -202,6 +210,10 @@ export default function ScanSettings() {
       />
 
       {saved && <p className="status-success">Saved</p>}
+
+      <button type="button" className="btn-primary confirm-btn" onClick={goBack}>
+        Confirm
+      </button>
     </div>
   )
 }

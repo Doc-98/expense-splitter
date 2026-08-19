@@ -372,6 +372,32 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .member-count-popover ul { list-style: none; margin: 0 0 var(--space-sm); padding: 0; font-size: 14px; }
 .member-count-popover li { padding: 3px 0; }
 
+.invite-menu-wrap { position: relative; }
+.invite-menu-popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: var(--space-md);
+  min-width: 220px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  z-index: 10;
+  text-align: center;
+}
+.invite-qr {
+  display: block;
+  width: 160px;
+  height: 160px;
+  margin: 0 auto var(--space-sm);
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  border: 1px solid var(--border);
+}
+.invite-hint { margin: 0 0 var(--space-sm); font-size: 13px; }
+
 /* ---------- Settlement ---------- */
 .settlement { margin-top: var(--space-lg); }
 .settlement h2 {
@@ -585,6 +611,8 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .guest-rename-form input { flex: 1; }
 
 .share-button-wrap { display: flex; align-items: center; gap: 10px; margin-top: var(--space-sm); }
+.recap-actions { display: flex; gap: 10px; margin-top: var(--space-sm); flex-wrap: wrap; }
+.recap-actions .share-button-wrap { margin-top: 0; }
 .share-status { font-size: 13px; }
 
 /* ---------- Group stats page ---------- */
@@ -664,3 +692,75 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   font-size: 12px;
   margin-left: 6px;
 }
+
+/* ---------- Print / PDF recaps ---------- */
+.print-only { display: none; }
+
+@media print {
+  body * { visibility: hidden; }
+  .print-only, .print-only * { visibility: visible; }
+  .print-only {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 20px;
+    color: #000;
+    background: #fff;
+    font-family: var(--font-body);
+  }
+  .print-only h1 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    margin: 0 0 8px;
+  }
+  .print-only .print-note { font-style: italic; color: #444; }
+  .print-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  .print-table th, .print-table td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid #ccc;
+    font-size: 13px;
+  }
+  .print-table th { font-weight: 600; }
+  .print-total { font-size: 16px; font-weight: 700; margin-top: 16px; text-align: right; }
+  .print-footer { margin-top: 32px; font-size: 11px; color: #888; }
+}
+
+/* ---------- CSV import ---------- */
+.import-link { display: block; margin-bottom: var(--space-lg); }
+.import-mapping-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+.import-mapping-row select { max-width: 60%; }
+
+/* ---------- How-to-use guide ---------- */
+.guide-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+.guide-section summary {
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+}
+.guide-section[open] summary { margin-bottom: var(--space-sm); }
+.guide-section-body { font-size: 14px; line-height: 1.55; }
+.guide-section-body p { margin: 0 0 10px; }
+.guide-section-body p:last-child { margin-bottom: 0; }
+.guide-section-body ul { margin: 0 0 10px; padding-left: 20px; }
+.guide-section-body li { margin-bottom: 6px; }

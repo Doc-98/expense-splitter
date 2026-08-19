@@ -44,6 +44,9 @@ export default function AppHeader() {
         {open && (
           <div className="account-dropdown">
             <p className="account-email">{user?.email}</p>
+            <Link to="/guide" className="dropdown-item" onClick={() => setOpen(false)}>
+              How to use
+            </Link>
             <Link to="/stats" className="dropdown-item" onClick={() => setOpen(false)}>
               Your stats
             </Link>

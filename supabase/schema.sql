@@ -84,6 +84,16 @@ create table group_members (
   unique (group_id, user_id)
 );
 
+-- admin_id has to be added after group_members exists — groups.admin_id
+-- references group_members(id), and group_members.group_id references
+-- groups(id), so neither table can be created with the other's FK already
+-- in place. The one admin per group (not "any active member," which is how
+-- removal used to work) can kick someone else out; anyone can still remove
+-- themselves. See remove_group_member() and transfer_admin() below for how
+-- that's enforced, and how the role automatically passes to the
+-- longest-standing remaining member if the admin leaves.
+alter table groups add column admin_id uuid references group_members(id);
+
 -- ---------------------------------------------------------------------------
 -- bills: one receipt / expense event. paid_by is whoever fronted the money
 -- — a group_members.id, so a guest can front the money just as well as a
@@ -377,6 +387,12 @@ create policy "users can update their own departure snapshots" on departure_snap
 -- can update their own departure snapshots" policy above deliberately does
 -- not allow on its own.
 --
+-- Only the current admin can remove someone *else*; anyone can remove
+-- themselves (leave). If the admin is the one leaving, the role
+-- automatically passes to whoever's been in the group longest among the
+-- remaining active real members — deterministic, no group is ever left
+-- without an admin as long as a real member remains in it.
+--
 -- The balance and daily_totals numbers are computed client-side (reusing
 -- the exact same, already-tested settlement.js math) and passed in, rather
 -- than re-derived here in SQL — this is a personal, display-only historical
@@ -396,17 +412,43 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  caller_participant_id uuid;
+  target_participant_id uuid;
+  current_admin_id uuid;
+  next_admin_id uuid;
 begin
-  if not exists (
-    select 1 from group_members
-    where group_id = target_group_id and user_id = auth.uid() and active = true
-  ) then
+  select id into caller_participant_id from group_members
+    where group_id = target_group_id and user_id = auth.uid() and active = true;
+
+  if caller_participant_id is null then
     raise exception 'Not authorized to remove members from this group';
+  end if;
+
+  select id into target_participant_id from group_members
+    where group_id = target_group_id and user_id = target_user_id;
+
+  select admin_id into current_admin_id from groups where id = target_group_id;
+
+  if caller_participant_id <> target_participant_id and caller_participant_id <> current_admin_id then
+    raise exception 'Only the group admin can remove other members';
   end if;
 
   update group_members
   set active = false
   where group_id = target_group_id and user_id = target_user_id;
+
+  if target_participant_id = current_admin_id then
+    select id into next_admin_id from group_members
+      where group_id = target_group_id
+        and active = true
+        and user_id is not null
+        and id <> target_participant_id
+      order by joined_at asc
+      limit 1;
+
+    update groups set admin_id = next_admin_id where id = target_group_id;
+  end if;
 
   insert into departure_snapshots (group_id, user_id, group_name, left_at, balance, daily_totals)
   values (target_group_id, target_user_id, group_name, now(), snapshot_balance, snapshot_daily)
@@ -416,6 +458,44 @@ begin
         balance = excluded.balance,
         daily_totals = excluded.daily_totals,
         balance_settled = false;
+end;
+$$;
+
+-- ============================================================================
+-- transfer_admin: hands the admin role to another active real member.
+-- Only the current admin can call this — enforced here, not just left to
+-- the general "members can rename their group" policy, since that policy
+-- (being a blanket per-row check, not a per-column one) would otherwise
+-- let any member overwrite admin_id directly. This function is the one
+-- sanctioned path the app itself ever uses to change it.
+-- ============================================================================
+create function public.transfer_admin(target_group_id uuid, new_admin_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  caller_participant_id uuid;
+  current_admin_id uuid;
+begin
+  select id into caller_participant_id from group_members
+    where group_id = target_group_id and user_id = auth.uid() and active = true;
+
+  select admin_id into current_admin_id from groups where id = target_group_id;
+
+  if caller_participant_id is null or caller_participant_id <> current_admin_id then
+    raise exception 'Only the current admin can transfer this role';
+  end if;
+
+  if not exists (
+    select 1 from group_members
+    where id = new_admin_id and group_id = target_group_id and active = true and user_id is not null
+  ) then
+    raise exception 'That person is not an active member of this group';
+  end if;
+
+  update groups set admin_id = new_admin_id where id = target_group_id;
 end;
 $$;
 
@@ -434,9 +514,12 @@ set search_path = public
 as $$
 declare
   g groups;
+  new_member_id uuid;
 begin
   insert into groups (name, created_by) values (name, auth.uid()) returning * into g;
-  insert into group_members (group_id, user_id) values (g.id, auth.uid());
+  insert into group_members (group_id, user_id) values (g.id, auth.uid()) returning id into new_member_id;
+  update groups set admin_id = new_member_id where id = g.id;
+  g.admin_id := new_member_id;
   return g;
 end;
 $$;
@@ -456,6 +539,7 @@ set search_path = public
 as $$
 declare
   g groups;
+  participant_id uuid;
 begin
   select * into g from groups where invite_code = invite;
 
@@ -465,7 +549,16 @@ begin
 
   insert into group_members (group_id, user_id, active)
   values (g.id, auth.uid(), true)
-  on conflict (group_id, user_id) do update set active = true;
+  on conflict (group_id, user_id) do update set active = true
+  returning id into participant_id;
+
+  -- Safety net: if the group somehow has no admin (every real member left
+  -- at some point), whoever joins next becomes admin rather than the group
+  -- staying permanently unadministered.
+  if g.admin_id is null then
+    update groups set admin_id = participant_id where id = g.id;
+    g.admin_id := participant_id;
+  end if;
 
   return g;
 end;

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
@@ -9,10 +9,17 @@ import GroupView from './pages/GroupView'
 import BillView from './pages/BillView'
 import JoinGroup from './pages/JoinGroup'
 import About from './pages/About'
+import Guide from './pages/Guide'
 import GroupSettings from './pages/GroupSettings'
 import GroupStats from './pages/GroupStats'
 import AccountStats from './pages/AccountStats'
 import ScanSettings from './pages/ScanSettings'
+
+// A one-time-use flow for most people — kept out of the main bundle
+// entirely (same reasoning as lazy-loading Tesseract.js) so its code, and
+// the CSV/Splitwise parsing logic it pulls in, is only fetched by whoever
+// actually opens it.
+const ImportBills = lazy(() => import('./pages/ImportBills'))
 
 function RequireAuth({ children }) {
   const { session } = useAuth()
@@ -55,12 +62,23 @@ function Shell() {
       <Route path="/login" element={<Login />} />
       <Route path="/join/:code" element={<RequireAuth><JoinGroup /></RequireAuth>} />
       <Route path="/about" element={<RequireAuth><About /></RequireAuth>} />
+      <Route path="/guide" element={<RequireAuth><Guide /></RequireAuth>} />
       <Route path="/stats" element={<RequireAuth><AccountStats /></RequireAuth>} />
       <Route path="/scan-settings" element={<RequireAuth><ScanSettings /></RequireAuth>} />
       <Route path="/" element={<RequireAuth><Groups /></RequireAuth>} />
       <Route path="/groups/:groupId" element={<RequireAuth><GroupView /></RequireAuth>} />
       <Route path="/groups/:groupId/settings" element={<RequireAuth><GroupSettings /></RequireAuth>} />
       <Route path="/groups/:groupId/stats" element={<RequireAuth><GroupStats /></RequireAuth>} />
+      <Route
+        path="/groups/:groupId/import"
+        element={
+          <RequireAuth>
+            <Suspense fallback={<div className="page-loading">Loading…</div>}>
+              <ImportBills />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
       <Route path="/groups/:groupId/bills/:billId" element={<RequireAuth><BillView /></RequireAuth>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

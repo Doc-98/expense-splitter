@@ -1,5 +1,6 @@
 import { extractItemsFromLines } from '../lineParser'
 import { getReceiptSettings } from '../../receiptSettings'
+import { preprocessImageForOcr } from '../preprocessImage'
 
 // Tesseract's actual nested shape is blocks[].paragraphs[].lines[].words[]
 // — there's no flat data.lines. Block-level output also has to be
@@ -30,7 +31,20 @@ export async function runSpatialOCR(imageBase64, mediaType, language, onProgress
     },
   })
   try {
-    const dataUrl = `data:${mediaType};base64,${imageBase64}`
+    // Cleans up lighting/contrast before OCR sees the photo at all — falls
+    // back to the untouched original if preprocessing itself has a
+    // problem, rather than losing the scan over it.
+    let processedBase64 = imageBase64
+    let processedMediaType = mediaType
+    try {
+      const processed = await preprocessImageForOcr(imageBase64, mediaType)
+      processedBase64 = processed.base64
+      processedMediaType = processed.mediaType
+    } catch {
+      // fall through with the original image
+    }
+
+    const dataUrl = `data:${processedMediaType};base64,${processedBase64}`
     const { data } = await worker.recognize(dataUrl, {}, { blocks: true })
 
     // This just adapts Tesseract's structure into the plain {text, x} shape

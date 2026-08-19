@@ -1,12 +1,14 @@
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 export default function About() {
+  const navigate = useNavigate()
+
   return (
     <div className="page">
       <header className="page-header">
-        <Link to="/" className="btn-link">
+        <button type="button" className="btn-link" onClick={() => navigate(-1)}>
           ← Back
-        </Link>
+        </button>
         <h1>About</h1>
       </header>
 

@@ -10,6 +10,7 @@ Rules:
 - "quantity" defaults to 1 if not shown.
 - Ignore subtotals, tax lines, totals, payment method, loyalty program text, and store header/footer info.
 - Use plain item names (clean up obvious abbreviations, otherwise keep as printed).
+- Some receipts show a discount as its own line with a negative price, right after the item it applies to (e.g. "-0.50" or "SCONTO -0.50"). When it's clearly tied to one specific item, subtract it from that item's unit_price directly instead of listing it separately. If you can't confidently tell which item a discount belongs to, include it as its own line with a negative unit_price and a name like "Discount" — never drop it silently.
 - If you cannot read the receipt at all, return {"items": []}.`
 
 // Every strategy asks for a bare JSON object, but models occasionally wrap

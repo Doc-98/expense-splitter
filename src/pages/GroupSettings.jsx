@@ -11,6 +11,7 @@ export default function GroupSettings() {
   const navigate = useNavigate()
 
   const [name, setName] = useState('')
+  const [adminId, setAdminId] = useState(null)
   const [members, setMembers] = useState([])
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(false)
@@ -18,9 +19,13 @@ export default function GroupSettings() {
   const [editingGuestId, setEditingGuestId] = useState(null)
   const [editingGuestName, setEditingGuestName] = useState('')
 
+  const myParticipantId = members.find((m) => m.userId === user.id)?.id
+  const isAdmin = myParticipantId && myParticipantId === adminId
+
   const loadGroup = useCallback(async () => {
     const { data } = await supabase.from('groups').select('*').eq('id', groupId).single()
     setName(data?.name || '')
+    setAdminId(data?.admin_id || null)
   }, [groupId])
 
   const loadMembers = useCallback(async () => {
@@ -82,11 +87,32 @@ export default function GroupSettings() {
     }
   }
 
+  async function makeAdmin(member) {
+    if (!window.confirm(`Make ${member.name} the admin of this group? You'll no longer be able to remove other members yourself.`)) {
+      return
+    }
+    setError(null)
+    const { error: transferError } = await supabase.rpc('transfer_admin', {
+      target_group_id: groupId,
+      new_admin_id: member.id,
+    })
+    if (transferError) {
+      setError(transferError.message)
+    } else {
+      loadGroup()
+    }
+  }
+
   // Real accounts go through remove_group_member — this both revokes their
   // access (they'd otherwise keep querying group data forever) and freezes
   // a personal record of their history first, while they still can. Guests
   // never had that access to begin with, so removing one is just flipping
   // active off directly (see toggleGuestActive above) — no snapshot needed.
+  //
+  // Only the admin can remove someone else; anyone can still remove
+  // themselves — the RPC itself enforces this too, so this is a UX
+  // convenience (hiding a button that would fail) not the actual security
+  // boundary.
   async function removeRealMember(member) {
     const isSelf = member.userId === user.id
     const label = isSelf ? 'leave this group' : 'remove this person from the group'
@@ -157,6 +183,7 @@ export default function GroupSettings() {
     if (isSelf) {
       navigate('/')
     } else {
+      loadGroup() // admin may have changed if the admin themself just left
       loadMembers()
     }
   }
@@ -185,22 +212,41 @@ export default function GroupSettings() {
 
       <h2 className="settings-section-title">Members ({activeRealMembers.length})</h2>
       <ul className="member-list">
-        {activeRealMembers.map((m) => (
-          <li key={m.id} className="member-list-item">
-            <span>
-              {m.name}
-              {m.userId === user.id && <span className="muted"> (you)</span>}
-            </span>
-            <button
-              type="button"
-              className="btn-link dropdown-item-warn"
-              onClick={() => removeRealMember(m)}
-            >
-              {m.userId === user.id ? 'Leave' : 'Remove'}
-            </button>
-          </li>
-        ))}
+        {activeRealMembers.map((m) => {
+          const isSelf = m.userId === user.id
+          const isThisMemberAdmin = m.id === adminId
+          return (
+            <li key={m.id} className="member-list-item">
+              <span>
+                {m.name}
+                {isSelf && <span className="muted"> (you)</span>}
+                {isThisMemberAdmin && <span className="muted"> (admin)</span>}
+              </span>
+              <span className="member-list-actions">
+                {isAdmin && !isThisMemberAdmin && (
+                  <button type="button" className="btn-link" onClick={() => makeAdmin(m)}>
+                    Make admin
+                  </button>
+                )}
+                {(isSelf || isAdmin) && (
+                  <button
+                    type="button"
+                    className="btn-link dropdown-item-warn"
+                    onClick={() => removeRealMember(m)}
+                  >
+                    {isSelf ? 'Leave' : 'Remove'}
+                  </button>
+                )}
+              </span>
+            </li>
+          )
+        })}
       </ul>
+      {!isAdmin && (
+        <p className="muted">
+          Only the group admin can remove other members — you can still leave any time.
+        </p>
+      )}
 
       <h2 className="settings-section-title">Guests ({activeGuests.length})</h2>
       <p className="muted">
