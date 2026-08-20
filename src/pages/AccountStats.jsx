@@ -45,104 +45,115 @@ export default function AccountStats() {
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
-    const { data: memberRows } = await supabase
-      .from('group_members')
-      .select('id, group_id')
-      .eq('user_id', user.id)
-      .eq('active', true)
+    setError(null)
+    try {
+      const { data: memberRows } = await supabase
+        .from('group_members')
+        .select('id, group_id')
+        .eq('user_id', user.id)
+        .eq('active', true)
 
-    const groupIds = (memberRows || []).map((r) => r.group_id)
-    const participantByGroup = new Map((memberRows || []).map((r) => [r.group_id, r.id]))
-    setMyParticipantByGroup(participantByGroup)
+      const groupIds = (memberRows || []).map((r) => r.group_id)
+      const participantByGroup = new Map((memberRows || []).map((r) => [r.group_id, r.id]))
+      setMyParticipantByGroup(participantByGroup)
 
-    const { data: groupsData } = groupIds.length
-      ? await supabase.from('groups').select('id, name').in('id', groupIds)
-      : { data: [] }
-    setGroups(groupsData || [])
+      const { data: groupsData } = groupIds.length
+        ? await supabase.from('groups').select('id, name').in('id', groupIds)
+        : { data: [] }
+      setGroups(groupsData || [])
 
-    const { data: rawBillsData } = groupIds.length
-      ? await supabase
-          .from('bills')
-          .select(
-            'id, group_id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
-          )
-          .in('group_id', groupIds)
-      : { data: [] }
+      const { data: rawBillsData } = groupIds.length
+        ? await supabase
+            .from('bills')
+            .select(
+              'id, group_id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+            )
+            .in('group_id', groupIds)
+        : { data: [] }
 
-    const list = (rawBillsData || []).map((b) => ({ ...b, payers: b.bill_payers || [] }))
-    const items = []
-    const itemShares = []
-    for (const bill of list) {
-      for (const item of bill.items || []) {
-        items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price, category_id: item.category_id })
-        for (const share of item.item_shares || []) {
-          itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
+      const list = (rawBillsData || []).map((b) => ({ ...b, payers: b.bill_payers || [] }))
+      const items = []
+      const itemShares = []
+      for (const bill of list) {
+        for (const item of bill.items || []) {
+          items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price, category_id: item.category_id })
+          for (const share of item.item_shares || []) {
+            itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
+          }
         }
       }
+      setRawBills(
+        list.map((b) => ({
+          id: b.id,
+          group_id: b.group_id,
+          title: b.title,
+          created_at: b.created_at,
+          paid_by: b.paid_by,
+          category_id: b.category_id,
+          payers: b.payers,
+        }))
+      )
+      setRawItems(items)
+      setRawShares(itemShares)
+
+      // For the "Spending thresholds" section below — every category across
+      // every group I'm in (so same-named tags from different groups can be
+      // merged, see mergeCategoriesByName), plus my own saved threshold
+      // amounts. Neither is scoped to whatever period the rest of this page
+      // is showing — thresholds are always compared against the current
+      // calendar month specifically (see Thresholds.jsx for why).
+      const { data: categoriesData } = groupIds.length
+        ? await supabase.from('categories').select('id, name, color').in('group_id', groupIds).order('created_at', { ascending: true })
+        : { data: [] }
+      setRawCategories(categoriesData || [])
+      setThresholds(await fetchThresholds(user.id))
+
+      // Departed groups' frozen records — a group you're back in shouldn't
+      // also show a stale snapshot, live data already covers it fully.
+      const { data: snapshotData } = await supabase
+        .from('departure_snapshots')
+        .select('*')
+        .eq('user_id', user.id)
+      setSnapshots((snapshotData || []).filter((s) => !groupIds.includes(s.group_id)))
+
+      // Overall balance is a running, "right now" figure — it isn't scoped to
+      // whatever time period is selected below. It's the live balance from
+      // every group you're still in, plus any not-yet-settled balance frozen
+      // from groups you've left.
+      const { data: paymentsData } = groupIds.length
+        ? await supabase.from('payments').select('id, group_id, from_member, to_member, amount').in('group_id', groupIds)
+        : { data: [] }
+
+      let balanceSum = 0
+      for (const groupId of groupIds) {
+        const myId = participantByGroup.get(groupId)
+        const groupBills = list.filter((b) => b.group_id === groupId)
+        const groupItems = items.filter((it) => groupBills.some((b) => b.id === it.bill_id))
+        const groupShares = itemShares.filter((s) => groupItems.some((it) => it.id === s.item_id))
+        const groupPayments = (paymentsData || [])
+          .filter((p) => p.group_id === groupId)
+          .map((p) => ({ from_user: p.from_member, to_user: p.to_member, amount: p.amount }))
+        const balances = computeBalances({
+          bills: groupBills,
+          items: groupItems,
+          itemShares: groupShares,
+          payments: groupPayments,
+        })
+        balanceSum += balances[myId] || 0
+      }
+      for (const snap of (snapshotData || []).filter((s) => !groupIds.includes(s.group_id))) {
+        if (!snap.balance_settled) balanceSum += Number(snap.balance)
+      }
+      setOverallBalance(Math.round(balanceSum * 100) / 100)
+    } catch (err) {
+      // Without this, a failure anywhere above (most likely: fetchThresholds
+      // hitting a spending_thresholds table that doesn't exist yet on a
+      // database that hasn't run migration_thresholds.sql) silently
+      // aborted the rest of load() with nothing shown — whatever state had
+      // already been set before the failure just stayed on screen,
+      // incomplete, with no indication anything had gone wrong.
+      setError(err.message)
     }
-    setRawBills(
-      list.map((b) => ({
-        id: b.id,
-        group_id: b.group_id,
-        title: b.title,
-        created_at: b.created_at,
-        paid_by: b.paid_by,
-        category_id: b.category_id,
-        payers: b.payers,
-      }))
-    )
-    setRawItems(items)
-    setRawShares(itemShares)
-
-    // For the "Spending thresholds" section below — every category across
-    // every group I'm in (so same-named tags from different groups can be
-    // merged, see mergeCategoriesByName), plus my own saved threshold
-    // amounts. Neither is scoped to whatever period the rest of this page
-    // is showing — thresholds are always compared against the current
-    // calendar month specifically (see Thresholds.jsx for why).
-    const { data: categoriesData } = groupIds.length
-      ? await supabase.from('categories').select('id, name, color').in('group_id', groupIds).order('created_at', { ascending: true })
-      : { data: [] }
-    setRawCategories(categoriesData || [])
-    setThresholds(await fetchThresholds(user.id))
-
-    // Departed groups' frozen records — a group you're back in shouldn't
-    // also show a stale snapshot, live data already covers it fully.
-    const { data: snapshotData } = await supabase
-      .from('departure_snapshots')
-      .select('*')
-      .eq('user_id', user.id)
-    setSnapshots((snapshotData || []).filter((s) => !groupIds.includes(s.group_id)))
-
-    // Overall balance is a running, "right now" figure — it isn't scoped to
-    // whatever time period is selected below. It's the live balance from
-    // every group you're still in, plus any not-yet-settled balance frozen
-    // from groups you've left.
-    const { data: paymentsData } = groupIds.length
-      ? await supabase.from('payments').select('id, group_id, from_member, to_member, amount').in('group_id', groupIds)
-      : { data: [] }
-
-    let balanceSum = 0
-    for (const groupId of groupIds) {
-      const myId = participantByGroup.get(groupId)
-      const groupBills = list.filter((b) => b.group_id === groupId)
-      const groupItems = items.filter((it) => groupBills.some((b) => b.id === it.bill_id))
-      const groupShares = itemShares.filter((s) => groupItems.some((it) => it.id === s.item_id))
-      const groupPayments = (paymentsData || [])
-        .filter((p) => p.group_id === groupId)
-        .map((p) => ({ from_user: p.from_member, to_user: p.to_member, amount: p.amount }))
-      const balances = computeBalances({
-        bills: groupBills,
-        items: groupItems,
-        itemShares: groupShares,
-        payments: groupPayments,
-      })
-      balanceSum += balances[myId] || 0
-    }
-    for (const snap of (snapshotData || []).filter((s) => !groupIds.includes(s.group_id))) {
-      if (!snap.balance_settled) balanceSum += Number(snap.balance)
-    }
-    setOverallBalance(Math.round(balanceSum * 100) / 100)
   }, [user.id])
 
   useEffect(() => {

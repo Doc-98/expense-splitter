@@ -20,30 +20,43 @@ export default function Thresholds() {
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
-    const { data: memberRows } = await supabase
-      .from('group_members')
-      .select('group_id')
-      .eq('user_id', user.id)
-      .eq('active', true)
-    const groupIds = [...new Set((memberRows || []).map((r) => r.group_id))]
+    setError(null)
+    try {
+      const { data: memberRows, error: memberError } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id)
+        .eq('active', true)
+      if (memberError) throw memberError
+      const groupIds = [...new Set((memberRows || []).map((r) => r.group_id))]
 
-    const { data: categoriesData } = groupIds.length
-      ? await supabase
-          .from('categories')
-          .select('name, color')
-          .in('group_id', groupIds)
-          .order('created_at', { ascending: true })
-      : { data: [] }
+      const { data: categoriesData, error: categoriesError } = groupIds.length
+        ? await supabase
+            .from('categories')
+            .select('name, color')
+            .in('group_id', groupIds)
+            .order('created_at', { ascending: true })
+        : { data: [], error: null }
+      if (categoriesError) throw categoriesError
 
-    const merged = mergeCategoriesByName(categoriesData || [])
-    const custom = merged
-      .filter((c) => !DEFAULT_NAME_KEYS.has(c.name.toLowerCase()))
-      .sort((a, b) => a.name.localeCompare(b.name))
-    setCustomCategories(custom)
+      const merged = mergeCategoriesByName(categoriesData || [])
+      const custom = merged
+        .filter((c) => !DEFAULT_NAME_KEYS.has(c.name.toLowerCase()))
+        .sort((a, b) => a.name.localeCompare(b.name))
+      setCustomCategories(custom)
 
-    const thresholds = await fetchThresholds(user.id)
-    setThresholdByKey(new Map(thresholds.map((t) => [t.category_name.trim().toLowerCase(), t])))
-    setLoading(false)
+      const thresholds = await fetchThresholds(user.id)
+      setThresholdByKey(new Map(thresholds.map((t) => [t.category_name.trim().toLowerCase(), t])))
+    } catch (err) {
+      // Without this, a failure anywhere above (most likely: the
+      // spending_thresholds table not existing yet on a database that
+      // hasn't run migration_thresholds.sql) left this page spinning on
+      // "Loading…" forever with the actual error invisible — setLoading(false)
+      // was only ever reached on the success path.
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }, [user.id])
 
   useEffect(() => {
