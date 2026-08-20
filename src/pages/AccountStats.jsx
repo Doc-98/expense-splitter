@@ -4,8 +4,13 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
 import { computeBalances, computeSpendingTotals } from '../lib/settlement'
-import { getPeriodRange, filterByDateRange, sumDailyInRange, monthlyFromDaily } from '../lib/timeRange'
+import { computeMyCategorySpend, mergeCategorySpend } from '../lib/categoryStats'
+import { mergeCategoriesByName } from '../lib/categories'
+import { fetchThresholds } from '../lib/thresholds'
+import { getPeriodRange, filterByDateRange, sumDailyInRange, sumCategoryDailyInRange, monthlyFromDaily } from '../lib/timeRange'
+import { comparePeriods } from '../lib/periodComparison'
 import TimeRangeSelector from '../components/TimeRangeSelector'
+import ComparisonBadge from '../components/ComparisonBadge'
 
 function monthKey(dateStr) {
   const d = new Date(dateStr)
@@ -31,6 +36,8 @@ export default function AccountStats() {
   const [rawBills, setRawBills] = useState([]) // includes group_id
   const [rawItems, setRawItems] = useState([])
   const [rawShares, setRawShares] = useState([])
+  const [rawCategories, setRawCategories] = useState([]) // every category across all my active groups
+  const [thresholds, setThresholds] = useState([])
   const [snapshots, setSnapshots] = useState([]) // departed groups' frozen records
   const [overallBalance, setOverallBalance] = useState(0)
   const [granularity, setGranularity] = useState('all')
@@ -57,7 +64,7 @@ export default function AccountStats() {
       ? await supabase
           .from('bills')
           .select(
-            'id, group_id, title, created_at, paid_by, items(id, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+            'id, group_id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
           )
           .in('group_id', groupIds)
       : { data: [] }
@@ -67,7 +74,7 @@ export default function AccountStats() {
     const itemShares = []
     for (const bill of list) {
       for (const item of bill.items || []) {
-        items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price })
+        items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price, category_id: item.category_id })
         for (const share of item.item_shares || []) {
           itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
         }
@@ -80,11 +87,24 @@ export default function AccountStats() {
         title: b.title,
         created_at: b.created_at,
         paid_by: b.paid_by,
+        category_id: b.category_id,
         payers: b.payers,
       }))
     )
     setRawItems(items)
     setRawShares(itemShares)
+
+    // For the "Spending thresholds" section below — every category across
+    // every group I'm in (so same-named tags from different groups can be
+    // merged, see mergeCategoriesByName), plus my own saved threshold
+    // amounts. Neither is scoped to whatever period the rest of this page
+    // is showing — thresholds are always compared against the current
+    // calendar month specifically (see Thresholds.jsx for why).
+    const { data: categoriesData } = groupIds.length
+      ? await supabase.from('categories').select('id, name, color').in('group_id', groupIds).order('created_at', { ascending: true })
+      : { data: [] }
+    setRawCategories(categoriesData || [])
+    setThresholds(await fetchThresholds(user.id))
 
     // Departed groups' frozen records — a group you're back in shouldn't
     // also show a stale snapshot, live data already covers it fully.
@@ -131,6 +151,54 @@ export default function AccountStats() {
 
   const { start, end, label } = getPeriodRange(granularity, offset)
   const { bills, items, itemShares } = filterByDateRange(rawBills, rawItems, rawShares, start, end)
+
+  // Spending thresholds are always compared against the current calendar
+  // month specifically, independent of whatever period this page's own
+  // selector is showing above (see Thresholds.jsx for why) — a separate,
+  // fixed date range from the granularity/offset-driven one above.
+  const thisMonth = getPeriodRange('month', 0)
+  const monthFiltered = filterByDateRange(rawBills, rawItems, rawShares, thisMonth.start, thisMonth.end)
+  const myParticipantIds = new Set(myParticipantByGroup.values())
+  const categoryNameById = new Map(rawCategories.map((c) => [c.id, c.name]))
+  const categoryColorByKey = new Map(mergeCategoriesByName(rawCategories).map((c) => [c.name.toLowerCase(), c.color]))
+
+  // A departed group's category spend for a given range, combined across
+  // every snapshot — a snapshot recorded before category tracking existed
+  // simply has no `categories` key on any of its days and contributes
+  // nothing here (see sumCategoryDailyInRange), so this stays correct for a
+  // mix of old and new snapshots without any special-casing.
+  function snapshotCategorySpendForRange(rangeStart, rangeEnd) {
+    return snapshots.reduce(
+      (acc, s) => mergeCategorySpend(acc, sumCategoryDailyInRange(s.daily_totals, rangeStart, rangeEnd)),
+      {}
+    )
+  }
+
+  const myCategorySpend = mergeCategorySpend(
+    computeMyCategorySpend({
+      bills: monthFiltered.bills,
+      items: monthFiltered.items,
+      itemShares: monthFiltered.itemShares,
+      myParticipantIds,
+      categoryNameById,
+    }),
+    snapshotCategorySpendForRange(thisMonth.start, thisMonth.end)
+  )
+  const thresholdRows = thresholds
+    .map((t) => {
+      const key = t.category_name.trim().toLowerCase()
+      const spent = myCategorySpend[key]?.amount || 0
+      const amount = Number(t.amount)
+      return {
+        key,
+        name: t.category_name,
+        color: categoryColorByKey.get(key) || '#999999',
+        spent,
+        amount,
+        over: spent > amount,
+      }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   const showMonthly = granularity === 'all' || granularity === 'year'
   const monthly = {}
@@ -204,6 +272,81 @@ export default function AccountStats() {
   myTotals.paid = Math.round(myTotals.paid * 100) / 100
   myTotals.consumed = Math.round(myTotals.consumed * 100) / 100
 
+  // Same paid/consumed aggregation as byGroup/myTotals above (live groups'
+  // computeSpendingTotals plus departed groups' sumDailyInRange), just for
+  // an arbitrary range with no per-group rows kept around — only used below
+  // to get the *previous* period's totals to compare the current ones
+  // against, so there's nothing here that needs its own table.
+  function computeMyPaidConsumedForRange(rangeStart, rangeEnd) {
+    const filtered = filterByDateRange(rawBills, rawItems, rawShares, rangeStart, rangeEnd)
+    let paid = 0
+    let consumed = 0
+    for (const g of groups) {
+      const myId = myParticipantByGroup.get(g.id)
+      const groupBills = filtered.bills.filter((b) => b.group_id === g.id)
+      const groupBillIds = new Set(groupBills.map((b) => b.id))
+      const groupItems = filtered.items.filter((it) => groupBillIds.has(it.bill_id))
+      const groupItemIds = new Set(groupItems.map((it) => it.id))
+      const groupShares = filtered.itemShares.filter((s) => groupItemIds.has(s.item_id))
+      const totals = computeSpendingTotals({ bills: groupBills, items: groupItems, itemShares: groupShares })[myId]
+      paid += totals?.paid || 0
+      consumed += totals?.consumed || 0
+    }
+    for (const s of snapshots) {
+      const t = sumDailyInRange(s.daily_totals, rangeStart, rangeEnd)
+      paid += t.paid
+      consumed += t.consumed
+    }
+    return { paid: Math.round(paid * 100) / 100, consumed: Math.round(consumed * 100) / 100 }
+  }
+
+  // Category spend for whatever period is currently selected (independent
+  // of the fixed-to-this-month threshold spend computed above) — always
+  // shown, same as GroupStats' own "By category" section, whether or not
+  // there's a previous period to compare against. Includes departed
+  // groups' snapshots, same as the threshold spend above.
+  const currentCategorySpend = mergeCategorySpend(
+    computeMyCategorySpend({ bills, items, itemShares, myParticipantIds, categoryNameById }),
+    snapshotCategorySpendForRange(start, end)
+  )
+
+  // "Previous period" only means something for week/month/year — there's no
+  // period before "all time" to compare against, same reasoning as
+  // GroupStats.
+  const canCompare = granularity !== 'all'
+  let paidComparison = null
+  let consumedComparison = null
+  let previousCategorySpend = {}
+  if (canCompare) {
+    const previousRange = getPeriodRange(granularity, offset - 1)
+    const previousTotals = computeMyPaidConsumedForRange(previousRange.start, previousRange.end)
+    paidComparison = comparePeriods(myTotals.paid, previousTotals.paid)
+    consumedComparison = comparePeriods(myTotals.consumed, previousTotals.consumed)
+
+    const previousFiltered = filterByDateRange(rawBills, rawItems, rawShares, previousRange.start, previousRange.end)
+    previousCategorySpend = mergeCategorySpend(
+      computeMyCategorySpend({
+        bills: previousFiltered.bills,
+        items: previousFiltered.items,
+        itemShares: previousFiltered.itemShares,
+        myParticipantIds,
+        categoryNameById,
+      }),
+      snapshotCategorySpendForRange(previousRange.start, previousRange.end)
+    )
+  }
+
+  const categoryRows = Object.entries(currentCategorySpend)
+    .map(([key, { name, amount }]) => ({
+      key,
+      name,
+      color: categoryColorByKey.get(key) || '#999999',
+      amount,
+      comparison: canCompare ? comparePeriods(amount, previousCategorySpend[key]?.amount || 0) : null,
+    }))
+    .sort((a, b) => b.amount - a.amount)
+  const maxCategoryAmount = Math.max(1, ...categoryRows.map((c) => c.amount))
+
   async function markSettled(snapshotId) {
     const { error: settleError } = await supabase
       .from('departure_snapshots')
@@ -241,10 +384,12 @@ export default function AccountStats() {
             <div className="stats-summary-item">
               <span className="stats-summary-value mono">{format(myTotals.paid)}</span>
               <span className="muted">you fronted</span>
+              {paidComparison && <ComparisonBadge comparison={paidComparison} />}
             </div>
             <div className="stats-summary-item">
               <span className="stats-summary-value mono">{format(myTotals.consumed)}</span>
               <span className="muted">your share</span>
+              {consumedComparison && <ComparisonBadge comparison={consumedComparison} />}
             </div>
             <div className="stats-summary-item">
               <span className={`stats-summary-value mono ${overallBalance < 0 ? 'balance-negative' : 'balance-positive'}`}>
@@ -259,6 +404,71 @@ export default function AccountStats() {
             left. Overall balance is always right-now, not scoped to a time period — including any
             not-yet-settled balance frozen from a group you've left.
           </p>
+
+          {thresholdRows.length > 0 && (
+            <>
+              <h2 className="settings-section-title">Spending thresholds</h2>
+              <div className="stats-bars">
+                {thresholdRows.map((t) => (
+                  <div key={t.key} className="stats-bar-row">
+                    <span className="stats-bar-label">
+                      <span className="category-dot" style={{ background: t.color }} />
+                      {t.name}
+                    </span>
+                    <div className="stats-bar-track">
+                      <div
+                        className={`stats-bar-fill ${t.over ? 'over-budget' : ''}`}
+                        style={{
+                          width: `${Math.min(100, (t.spent / t.amount) * 100)}%`,
+                          background: t.over ? undefined : t.color,
+                        }}
+                      />
+                    </div>
+                    <span className={`mono threshold-bar-value ${t.over ? 'balance-negative' : ''}`}>
+                      {format(t.spent)} / {format(t.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="muted stats-note">
+                Always this calendar month, and always your own share — not scoped to the period
+                selected above.{' '}
+                <Link to="/thresholds">Manage thresholds →</Link>
+              </p>
+            </>
+          )}
+
+          {categoryRows.length > 0 && (
+            <>
+              <h2 className="settings-section-title">By category</h2>
+              <div className="stats-bars">
+                {categoryRows.map((c) => (
+                  <div key={c.key} className="stats-bar-group">
+                    <div className="stats-bar-row">
+                      <span className="stats-bar-label">
+                        <span className="category-dot" style={{ background: c.color }} />
+                        {c.name}
+                      </span>
+                      <div className="stats-bar-track">
+                        <div
+                          className="stats-bar-fill"
+                          style={{ width: `${(c.amount / maxCategoryAmount) * 100}%`, background: c.color }}
+                        />
+                      </div>
+                      <span className="mono stats-bar-value">{format(c.amount)}</span>
+                    </div>
+                    {c.comparison && <ComparisonBadge comparison={c.comparison} />}
+                  </div>
+                ))}
+              </div>
+              <p className="muted stats-note">
+                For the period selected above, and your own share only — same as the summary
+                numbers, including departed groups. The one exception is a group left before this
+                breakdown existed: its snapshot has no category data for that period to draw from,
+                so it's missing here even though its total still counts in the summary above.
+              </p>
+            </>
+          )}
 
           <h2 className="settings-section-title">By group</h2>
           <table className="stats-table">

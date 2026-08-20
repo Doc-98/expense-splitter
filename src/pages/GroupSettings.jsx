@@ -198,7 +198,9 @@ export default function GroupSettings() {
 
     const { data: billsData, error: billsError } = await supabase
       .from('bills')
-      .select('id, paid_by, created_at, items(id, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)')
+      .select(
+        'id, paid_by, created_at, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+      )
       .eq('group_id', groupId)
 
     if (billsError) {
@@ -210,13 +212,14 @@ export default function GroupSettings() {
       id: b.id,
       paid_by: b.paid_by,
       created_at: b.created_at,
+      category_id: b.category_id,
       payers: b.bill_payers || [],
     }))
     const items = []
     const itemShares = []
     for (const bill of billsData || []) {
       for (const item of bill.items || []) {
-        items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price })
+        items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price, category_id: item.category_id })
         for (const share of item.item_shares || []) {
           itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
         }
@@ -240,7 +243,14 @@ export default function GroupSettings() {
     }))
 
     const balances = computeBalances({ bills, items, itemShares, payments: paymentsForBalances })
-    const dailyTotals = computeDailyTotalsForUser(member.id, { bills, items, itemShares })
+    // `categories` is already loaded for this page's own category-management
+    // UI further down — reused here rather than a second fetch, resolving
+    // each item's effective category (its own, falling back to its bill's)
+    // down to a name before it's frozen into the snapshot, since a
+    // category_id stops meaning anything once this group's data is no
+    // longer queryable by the person leaving.
+    const categoryNameById = new Map(categories.map((c) => [c.id, c.name]))
+    const dailyTotals = computeDailyTotalsForUser(member.id, { bills, items, itemShares, categoryNameById })
 
     const { error: removeError } = await supabase.rpc('remove_group_member', {
       target_group_id: groupId,

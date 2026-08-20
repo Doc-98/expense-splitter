@@ -13,7 +13,7 @@ required.
   account at all
 - Front a bill with more than one payer, each with their own amount
 - Tag bills and items by category to see not just how much you spend, but
-  on what
+  on what — and set your own personal monthly budget per category
 - Share a recap as text, a PDF, or a CSV — or import your whole spending
   history straight from Splitwise
 - Track your own stats across every group you're in, even ones you've left
@@ -30,6 +30,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Receipt scanning](#receipt-scanning)
 - [Currency](#currency)
 - [Categories](#categories)
+- [Spending thresholds](#spending-thresholds)
 - [Period-over-period comparison](#period-over-period-comparison)
 - [Recurring bills](#recurring-bills)
 - [Inviting people](#inviting-people)
@@ -252,18 +253,70 @@ This lives entirely separate from `settlement.js` — category totals are a
 "where did the money go" question, nothing to do with who owes whom, so
 there was no reason to entangle the two.
 
+## Spending thresholds
+
+A personal monthly budget per category, set at **account menu → Spending
+thresholds** — deliberately a *profile*-level setting, not a group one: it's
+a measure of your own spending, and you're very possibly in more than one
+group. (A group-level or shared variant is a plausible future addition, but
+low priority — nothing about the data model rules it out later.)
+
+The page shows one amount field for each of the seven default categories
+(always available, even before you've joined a group) plus one for every
+custom category across every group you're currently in. **Categories with
+the same name are treated as one and the same budget** — trimmed and
+case-insensitive, so a "Wine" tag in one group and a "wine" tag in another
+merge into a single threshold, and a category named the same as one of the
+defaults (in any group) counts toward that default's budget rather than
+getting its own separate row. This is the one piece of behavior here worth
+internalizing, since it's not obvious from the UI alone — it's called out
+again on the Thresholds page itself, and in [the in-app
+guide](#the-in-app-guide).
+
+Once set, a threshold shows up as a progress bar on [Your
+Stats](#how-the-data-model-works) (`/stats`) — always compared against the
+*current calendar month* specifically, regardless of whatever period Your
+Stats' own selector is showing for its other numbers, and always your own
+proportional share of what's been spent (`item_shares`-weighted, via
+`computeMyCategorySpend()` in `src/lib/categoryStats.js`), not what you've
+fronted for anyone else. A bill you paid for the whole group only counts
+your own portion toward your budget, the same "fronted vs. share" split the
+rest of the app already draws everywhere else.
+
+`spending_thresholds` is keyed by `(user_id, category_name)` rather than
+`category_id` — a category name has a different UUID in every group's own
+`categories` table, so matching by name is what makes the "same tag across
+groups" merging in the paragraph above actually work; see the table's own
+comment in `schema.sql` for the full reasoning.
+
 ## Period-over-period comparison
 
-Group Stats compares whatever period you're looking at (week/month/year,
-not "all time" — there's no period before that to compare against) with
-the equivalent previous one, both overall and per category — "▲ 15% vs
-last period" next to the total, and the same next to each category's bar.
-`comparePeriods()` (`src/lib/periodComparison.js`) is a small pure
-function; the one thing worth knowing is that a percentage change *from*
-zero isn't mathematically meaningful, so a category with nothing spent in
-the previous period shows "new vs last period" instead of a nonsensical
-percentage. Account Stats (the cross-group view) doesn't have this yet —
-see [Roadmap](#roadmap).
+Both Group Stats and Your Stats compare whatever period you're looking at
+(week/month/year, not "all time" — there's no period before that to
+compare against) with the equivalent previous one — "▲ 15% vs last period"
+next to a total, and the same next to each category's bar in a "By
+category" breakdown. `comparePeriods()` (`src/lib/periodComparison.js`) is
+a small pure function shared by both pages; the one thing worth knowing is
+that a percentage change *from* zero isn't mathematically meaningful, so a
+category with nothing spent in the previous period shows "new vs last
+period" instead of a nonsensical percentage. `ComparisonBadge`
+(`src/components/ComparisonBadge.jsx`) is the one shared component that
+renders the result identically on both pages.
+
+Your Stats compares two different things, since it's a personal,
+cross-group view: the "you fronted" / "your share" totals at the top, and
+the "By category" breakdown below that. Both include departed groups —
+each departure snapshot's `daily_totals` keeps a day-by-day paid/consumed
+figure *and* a category breakdown of that day's consumed portion (see
+[Leaving a group and personal stats](#leaving-a-group-and-personal-stats)),
+so a previous period's sum is recoverable from either the same way the
+current period's already was. The one gap is a snapshot recorded before
+that category breakdown existed: its days simply have no category data to
+draw from, so that group's spending still counts toward the top totals for
+whatever period it falls in, just not toward any specific category —
+`mergeCategorySpend()` (`src/lib/categoryStats.js`) is what combines live
+and snapshot-derived category totals, and it degrades to exactly this for
+an old snapshot without anything needing to special-case it.
 
 ## Recurring bills
 
@@ -376,7 +429,8 @@ automatically.
 | `payments`     | A recorded cash transfer between two participants (`from_member`/`to_member`, both `group_members.id`) |
 | `categories`   | A group's own list of spending categories, seeded with a starter set on group creation, freely editable afterward |
 | `recurring_bills` | A template for a repeating bill (rent, a subscription) — fixed amount, single payer, fixed split, plus a frequency and the next date it's due. Each occurrence created from it is a normal row in `bills`, linked back via `bills.recurring_bill_id` |
-| `departure_snapshots` | A frozen personal record of a *real account's* paid/consumed totals in a group they've left, day-by-day, plus their balance at that moment — see below |
+| `departure_snapshots` | A frozen personal record of a *real account's* paid/consumed totals in a group they've left, day-by-day (each day's consumed portion also broken down by category), plus their balance at that moment — see below |
+| `spending_thresholds` | A profile-level (not group-level) monthly budget per category *name* — see [Spending thresholds](#spending-thresholds) |
 
 The bill list on a group's page is grouped under date dividers — a month
 header ("August 2026") for each month present, and inside it a day
@@ -489,34 +543,47 @@ every RLS policy checks to decide access going forward. That person's old
 bills, items, and payments stay exactly as they were; they just lose the
 ability to query that group's live data again.
 
-To keep their personal "Your stats" page accurate anyway, the
-`remove_group_member()` function computes a `departure_snapshots` row for
-them *at the moment of removal* — while they still have access — storing
-their own paid/consumed totals bucketed by calendar day, plus their balance
-right then. Day-level buckets are what let "by week / month / year" views
-stay exactly correct for a departed group forever, without needing to keep
-querying it: any coarser period is just the right days summed together, no
-approximation. If they rejoin later, live data (which was never touched)
-naturally covers everything again, snapshot included, and the account stats
-page prefers live data whenever it's available.
+To keep their personal "Your stats" page accurate anyway, the *client*
+computes a `departure_snapshots` row for them *at the moment of removal* —
+while they still have access — via `computeDailyTotalsForUser()`
+(`src/lib/settlement.js`), then passes it to `remove_group_member()` to
+store. It's their own paid/consumed totals bucketed by calendar day (each
+day's consumed portion also broken down by category name, resolved the
+same way `computeMyCategorySpend()` resolves one — an item's own category,
+falling back to its bill's, falling back to "Uncategorized"), plus their
+balance right then. Day-level buckets are what let "by week / month /
+year" views stay exactly correct for a departed group forever, without
+needing to keep querying it: any coarser period is just the right days
+summed together, no approximation — `sumDailyInRange()` and
+`sumCategoryDailyInRange()` (`src/lib/timeRange.js`) do exactly that
+reconstruction for the plain totals and the category breakdown
+respectively. If they rejoin later, live data (which was never touched)
+naturally covers everything again, snapshot included, and the account
+stats page prefers live data whenever it's available.
+
+Category tracking was added to `daily_totals` after this feature already
+shipped — no migration was needed for that (the column was always a
+flexible `jsonb`), but it does mean a snapshot recorded before that point
+has no category breakdown for its days, only the original paid/consumed
+figures. There's no way to backfill one after the fact: the person who
+left has already lost read access to that group's underlying bills by
+design (that's the whole point of the snapshot), so the data the
+breakdown would need is gone from their side. `mergeCategorySpend()`
+just quietly adds nothing for that gap rather than erroring — the total
+still counts, it's just not attributed to a category.
 
 ## Roadmap
 
 Roughly in the order they're likely to land, though nothing here is
 promised on any particular timeline — this is a personal project, built as
-time and interest allow.
+time and interest allow. Nothing currently sits in an "up next" tier — both
+items that were there (spending thresholds, period-over-period comparison
+on Your Stats) have shipped.
 
-**Up next:**
-- **Spending thresholds** — a passive indicator on the stats page ("€340 of
-  a €400 grocery budget this month"), now that categories exist to measure
-  against
-- **Period-over-period comparison on Your Stats** — the group-level stats
-  page has this today (overall and per-category); the cross-group account
-  stats page doesn't yet, since it means re-running the same comparison
-  across every group plus departed-group snapshots rather than just one
-  group's data
-
-**Later:**
+- Group-level (or shared) spending thresholds, as a variant alongside the
+  personal ones that exist today — very low priority; nothing about
+  `spending_thresholds` being keyed by `user_id` rules this out later, it's
+  just not built
 - A whole-group CSV export (today's export is per-bill only)
 - AI-assisted category suggestions during a scan, since the vision models
   are already looking at the receipt image
@@ -551,11 +618,12 @@ time and interest allow.
 - Deleting a whole group isn't wired up in the UI yet — bills, payment
   records, and individual members can all be removed, the group itself can't
   be deleted yet.
-- A departure snapshot's balance is trusted from the client rather than
-  re-derived in SQL (see the comment above `remove_group_member` in
-  `schema.sql`) — reasonable for a personal-use app since it's a display-only
-  historical record, not the source of truth for any live balance, but worth
-  knowing if this ever needs to hold up to less trusted users.
+- A departure snapshot's balance *and* its day-by-day/category breakdown
+  are all trusted from the client rather than re-derived in SQL (see the
+  comment above `remove_group_member` in `schema.sql`) — reasonable for a
+  personal-use app since it's a display-only historical record, not the
+  source of truth for any live balance, but worth knowing if this ever
+  needs to hold up to less trusted users.
 - The free OCR fallback expects an item's name and price to sit on the same
   line; a receipt that wraps a long item name onto its own line above the
   price won't parse correctly for that item. This is the honest tradeoff of
@@ -597,8 +665,34 @@ time and interest allow.
   raw API call, only the app's own code never does. Reasonable for a
   personal-use app; would need tightening (a trigger, most likely) before
   this held up against untrusted users.
-- No spending thresholds yet (see [Roadmap](#roadmap)) — categories now
-  exist to measure against, but the indicator itself isn't built.
+- Spending thresholds only cover the current calendar month — no
+  weekly/yearly option, and no way to see a past month's budget vs. actual
+  after the fact. Matches the one case the feature was actually built for;
+  a period selector would be a real chunk of extra UI for a need that
+  hasn't shown up yet.
+- A departed group's frozen spending counts toward a spending threshold —
+  `departure_snapshots` keeps a category breakdown per day, not just plain
+  paid/consumed totals (see [Leaving a group and personal
+  stats](#leaving-a-group-and-personal-stats)) — with one honest gap: a
+  snapshot recorded *before* that breakdown existed has nothing to
+  attribute to a category for its days, only the original two numbers.
+  There's no way to backfill it after the fact, since the person who left
+  has already lost read access to that group's data by design.
+- The budget indicator only shows on Your Stats (`/stats`), not on any
+  single group's own stats page — a personal threshold is inherently a
+  cross-group number, and showing "this group's contribution toward your
+  overall budget" on a single-group page would need that page to fetch
+  every other group's data too, for a number that's arguably confusing to
+  see partial.
+- Merging same-named categories across groups is trim + case-insensitive,
+  but only at the moment a threshold is saved or displayed — if a
+  category's exact casing changes in some other group *after* you've set a
+  threshold for it (rare: someone else renaming "Wine" to "wine" in a
+  different group), the merge can silently split into two entries next
+  time you save one of them, leaving a harmless orphaned row behind in
+  `spending_thresholds` under the old casing. Re-saving the threshold once
+  it's showing under the new casing is the fix; nothing is lost, just
+  briefly split.
 - Category totals aren't reflected in recap text, PDFs, or CSV export yet
   — those all still just show items and prices. Easy to add if it turns
   out to matter; skipped here to keep that pass focused.

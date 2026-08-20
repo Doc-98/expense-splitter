@@ -9,6 +9,7 @@ import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
 import { comparePeriods } from '../lib/periodComparison'
 import { useCurrency } from '../context/CurrencyContext'
 import TimeRangeSelector from '../components/TimeRangeSelector'
+import ComparisonBadge from '../components/ComparisonBadge'
 
 function monthKey(dateStr) {
   const d = new Date(dateStr)
@@ -19,30 +20,6 @@ function monthLabel(key) {
   const [year, month] = key.split('-')
   const d = new Date(Number(year), Number(month) - 1, 1)
   return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-}
-
-// Spending less than the previous equivalent period reads as the "good"
-// direction (accent color), spending more as the "worth noticing" one
-// (warn color) — the inverse of how the same two color classes are used
-// for balances elsewhere, since "more spending" and "being owed money"
-// aren't the same kind of good.
-function ComparisonBadge({ comparison }) {
-  const { changePercent, current, previous } = comparison
-  if (previous === 0 && current === 0) return null
-
-  if (changePercent === null) {
-    return <span className="comparison-badge muted">new vs last period</span>
-  }
-  if (changePercent === 0) {
-    return <span className="comparison-badge muted">same as last period</span>
-  }
-
-  const isIncrease = changePercent > 0
-  return (
-    <span className={`comparison-badge ${isIncrease ? 'balance-negative' : 'balance-positive'}`}>
-      {isIncrease ? '▲' : '▼'} {Math.abs(changePercent)}% vs last period
-    </span>
-  )
 }
 
 export default function GroupStats() {

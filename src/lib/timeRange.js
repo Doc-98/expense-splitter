@@ -70,6 +70,32 @@ export function sumDailyInRange(daily, start, end) {
   return { paid: Math.round(paid * 100) / 100, consumed: Math.round(consumed * 100) / 100 }
 }
 
+// Same idea as sumDailyInRange, but for a snapshot's per-day *category*
+// breakdown — returns { normalizedKey: { name, amount } }, the same shape
+// computeMyCategorySpend() returns, so the two can be combined directly
+// (see mergeCategorySpend() in categoryStats.js). A day with no `categories`
+// key at all — every snapshot recorded before this breakdown existed —
+// simply contributes nothing here; its paid/consumed still counts via
+// sumDailyInRange above, just not attributed to any category.
+export function sumCategoryDailyInRange(daily, start, end) {
+  const totals = {}
+  for (const [dateKey, v] of Object.entries(daily || {})) {
+    const [y, m, d] = dateKey.split('-').map(Number)
+    const t = new Date(y, m - 1, d).getTime()
+    if (start && t < start.getTime()) continue
+    if (end && t >= end.getTime()) continue
+    for (const [name, amount] of Object.entries(v.categories || {})) {
+      const key = name.trim().toLowerCase()
+      if (!totals[key]) totals[key] = { name: name.trim(), amount: 0 }
+      totals[key].amount += amount
+    }
+  }
+  for (const key of Object.keys(totals)) {
+    totals[key].amount = Math.round(totals[key].amount * 100) / 100
+  }
+  return totals
+}
+
 // Rolls a departure snapshot's daily totals up into month buckets
 // ('YYYY-MM' -> paid), for merging into a "by month" chart alongside live
 // groups' data.

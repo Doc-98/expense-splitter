@@ -255,10 +255,16 @@ create table payments (
 -- had their own login-gated access to a group in the first place, so
 -- there's no "loss of access" to compensate for, and archiving one is just
 -- a plain update to group_members.active with no snapshot involved.
--- daily_totals is keyed by ISO date ('YYYY-MM-DD') -> {paid, consumed};
--- days nest cleanly into any week/month/year view with no approximation.
--- One row per (group, person) — leaving a second time overwrites it with a
--- fresh, complete recomputation rather than stacking duplicates.
+-- daily_totals is keyed by ISO date ('YYYY-MM-DD') -> {paid, consumed,
+-- categories}; days nest cleanly into any week/month/year view with no
+-- approximation. categories is itself {category name -> consumed amount}
+-- for that day — paid has no category breakdown, nothing else in the app
+-- tracks paid-by-category either. A snapshot written before this breakdown
+-- existed just has no categories key on its days; readers (see
+-- sumCategoryDailyInRange() in src/lib/timeRange.js) treat that as
+-- contributing nothing, not an error. One row per (group, person) —
+-- leaving a second time overwrites it with a fresh, complete recomputation
+-- rather than stacking duplicates.
 -- ---------------------------------------------------------------------------
 create table departure_snapshots (
   id uuid primary key default gen_random_uuid(),
@@ -271,6 +277,29 @@ create table departure_snapshots (
   daily_totals jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   unique (group_id, user_id)
+);
+
+-- ---------------------------------------------------------------------------
+-- spending_thresholds: a personal monthly budget per category *name*, not
+-- per category_id — deliberately. Every group has its own separate
+-- categories row even for the same name ("Groceries" in Group A and
+-- "Groceries" in Group B are two different UUIDs), but a personal budget is
+-- about total spending on "Groceries" everywhere you spend, not any one
+-- group's specific row. The app is what guarantees category_name is always
+-- the deduped, canonical name it already decided on when merging same-named
+-- categories together (see mergeCategoriesByName() in src/lib/categories.js)
+-- — this table itself does no case-folding, so the plain unique constraint
+-- below is enough. One row per (user, category_name); a category with no
+-- row here simply has no budget tracked. Always monthly — see the Thresholds
+-- page for why a single fixed period was chosen over a selector.
+-- ---------------------------------------------------------------------------
+create table spending_thresholds (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  category_name text not null,
+  amount numeric(10,2) not null check (amount > 0),
+  created_at timestamptz not null default now(),
+  unique (user_id, category_name)
 );
 
 -- ============================================================================
@@ -293,6 +322,7 @@ alter table item_shares enable row level security;
 alter table bill_payers enable row level security;
 alter table payments enable row level security;
 alter table departure_snapshots enable row level security;
+alter table spending_thresholds enable row level security;
 
 -- Helper: checks *active* group membership from inside a SECURITY DEFINER
 -- function, so it runs with the function owner's privileges and doesn't
@@ -500,6 +530,23 @@ create policy "users can view their own departure snapshots" on departure_snapsh
 
 create policy "users can update their own departure snapshots" on departure_snapshots
   for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- spending_thresholds: strictly personal, same as departure_snapshots —
+-- nobody but the owner ever reads or writes their own budget figures, and
+-- unlike departure_snapshots there's no "someone else writes it on my
+-- behalf" case, so this is a plain full set of CRUD policies rather than
+-- select+update only.
+create policy "users can view their own thresholds" on spending_thresholds
+  for select using (user_id = auth.uid());
+
+create policy "users can add their own thresholds" on spending_thresholds
+  for insert with check (user_id = auth.uid());
+
+create policy "users can update their own thresholds" on spending_thresholds
+  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create policy "users can delete their own thresholds" on spending_thresholds
+  for delete using (user_id = auth.uid());
 
 -- ============================================================================
 -- remove_group_member: deactivates a *real account's* membership AND writes

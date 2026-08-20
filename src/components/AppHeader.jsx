@@ -56,6 +56,9 @@ export default function AppHeader() {
             <Link to="/stats" className="dropdown-item" onClick={() => setOpen(false)}>
               Your stats
             </Link>
+            <Link to="/thresholds" className="dropdown-item" onClick={() => setOpen(false)}>
+              Spending thresholds
+            </Link>
             <Link to="/scan-settings" className="dropdown-item" onClick={() => setOpen(false)}>
               Scan settings
             </Link>
