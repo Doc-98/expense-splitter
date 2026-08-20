@@ -159,11 +159,20 @@ export default function GroupView() {
 
   async function createBill(e) {
     e.preventDefault()
+    // The bill list below shows title + note with no date of its own, so a
+    // freshly created bill would otherwise be indistinguishable from any
+    // other until opened. Stamping the note with "when" at creation time —
+    // same idea as the Splitwise import notes above — makes the list
+    // scannable at a glance. It's still a plain editable text field
+    // afterward, so typing a real note later replaces it, same tradeoff as
+    // the import notes.
+    const note = new Date().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
     const { data, error: createError } = await supabase
       .from('bills')
       .insert({
         group_id: groupId,
         title: newBillTitle.trim() || 'New bill',
+        note,
         created_by: user.id,
         paid_by: myParticipantId,
       })

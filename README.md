@@ -380,6 +380,18 @@ automatically.
 | `recurring_bills` | A template for a repeating bill (rent, a subscription) — fixed amount, single payer, fixed split, plus a frequency and the next date it's due. Each occurrence created from it is a normal row in `bills`, linked back via `bills.recurring_bill_id` |
 | `departure_snapshots` | A frozen personal record of a *real account's* paid/consumed totals in a group they've left, day-by-day, plus their balance at that moment — see below |
 
+The bill list on a group's page shows each bill's title and `note` side by
+side, but nothing from `created_at` itself — so a freshly started bill would
+otherwise be indistinguishable from any other until you actually open it.
+Starting a new bill from the group page pre-fills its `note` with the exact
+date and time it was created (e.g. "Aug 20, 2026, 3:45 PM"), the same idea
+already used for [Splitwise imports](#importing-from-splitwise), and for
+the same reason. It's still a plain, freely editable text field afterward —
+type a real note over it and the date is gone, same tradeoff the import
+notes already accept. Recurring bill occurrences deliberately keep their
+template's own note as-is instead (see [Recurring bills](#recurring-bills))
+rather than overwriting whatever the template's author actually wrote.
+
 Settlement math lives entirely in `src/lib/settlement.js` — it's plain,
 readable JS with no dependencies, worth a read. It's worth noting that it
 operates on whatever ID it's handed with zero special-casing — it's never
