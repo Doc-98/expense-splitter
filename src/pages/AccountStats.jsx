@@ -4,6 +4,9 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
 import { computeBalances, computeSpendingTotals } from '../lib/settlement'
+import { computeMyCategorySpend } from '../lib/categoryStats'
+import { mergeCategoriesByName } from '../lib/categories'
+import { fetchThresholds } from '../lib/thresholds'
 import { getPeriodRange, filterByDateRange, sumDailyInRange, monthlyFromDaily } from '../lib/timeRange'
 import TimeRangeSelector from '../components/TimeRangeSelector'
 
@@ -31,6 +34,8 @@ export default function AccountStats() {
   const [rawBills, setRawBills] = useState([]) // includes group_id
   const [rawItems, setRawItems] = useState([])
   const [rawShares, setRawShares] = useState([])
+  const [rawCategories, setRawCategories] = useState([]) // every category across all my active groups
+  const [thresholds, setThresholds] = useState([])
   const [snapshots, setSnapshots] = useState([]) // departed groups' frozen records
   const [overallBalance, setOverallBalance] = useState(0)
   const [granularity, setGranularity] = useState('all')
@@ -57,7 +62,7 @@ export default function AccountStats() {
       ? await supabase
           .from('bills')
           .select(
-            'id, group_id, title, created_at, paid_by, items(id, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+            'id, group_id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
           )
           .in('group_id', groupIds)
       : { data: [] }
@@ -67,7 +72,7 @@ export default function AccountStats() {
     const itemShares = []
     for (const bill of list) {
       for (const item of bill.items || []) {
-        items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price })
+        items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price, category_id: item.category_id })
         for (const share of item.item_shares || []) {
           itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
         }
@@ -80,11 +85,24 @@ export default function AccountStats() {
         title: b.title,
         created_at: b.created_at,
         paid_by: b.paid_by,
+        category_id: b.category_id,
         payers: b.payers,
       }))
     )
     setRawItems(items)
     setRawShares(itemShares)
+
+    // For the "Spending thresholds" section below — every category across
+    // every group I'm in (so same-named tags from different groups can be
+    // merged, see mergeCategoriesByName), plus my own saved threshold
+    // amounts. Neither is scoped to whatever period the rest of this page
+    // is showing — thresholds are always compared against the current
+    // calendar month specifically (see Thresholds.jsx for why).
+    const { data: categoriesData } = groupIds.length
+      ? await supabase.from('categories').select('id, name, color').in('group_id', groupIds).order('created_at', { ascending: true })
+      : { data: [] }
+    setRawCategories(categoriesData || [])
+    setThresholds(await fetchThresholds(user.id))
 
     // Departed groups' frozen records — a group you're back in shouldn't
     // also show a stale snapshot, live data already covers it fully.
@@ -131,6 +149,38 @@ export default function AccountStats() {
 
   const { start, end, label } = getPeriodRange(granularity, offset)
   const { bills, items, itemShares } = filterByDateRange(rawBills, rawItems, rawShares, start, end)
+
+  // Spending thresholds are always compared against the current calendar
+  // month specifically, independent of whatever period this page's own
+  // selector is showing above (see Thresholds.jsx for why) — a separate,
+  // fixed date range from the granularity/offset-driven one above.
+  const thisMonth = getPeriodRange('month', 0)
+  const monthFiltered = filterByDateRange(rawBills, rawItems, rawShares, thisMonth.start, thisMonth.end)
+  const myParticipantIds = new Set(myParticipantByGroup.values())
+  const categoryNameById = new Map(rawCategories.map((c) => [c.id, c.name]))
+  const categoryColorByKey = new Map(mergeCategoriesByName(rawCategories).map((c) => [c.name.toLowerCase(), c.color]))
+  const myCategorySpend = computeMyCategorySpend({
+    bills: monthFiltered.bills,
+    items: monthFiltered.items,
+    itemShares: monthFiltered.itemShares,
+    myParticipantIds,
+    categoryNameById,
+  })
+  const thresholdRows = thresholds
+    .map((t) => {
+      const key = t.category_name.trim().toLowerCase()
+      const spent = myCategorySpend[key]?.amount || 0
+      const amount = Number(t.amount)
+      return {
+        key,
+        name: t.category_name,
+        color: categoryColorByKey.get(key) || '#999999',
+        spent,
+        amount,
+        over: spent > amount,
+      }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   const showMonthly = granularity === 'all' || granularity === 'year'
   const monthly = {}
@@ -259,6 +309,39 @@ export default function AccountStats() {
             left. Overall balance is always right-now, not scoped to a time period — including any
             not-yet-settled balance frozen from a group you've left.
           </p>
+
+          {thresholdRows.length > 0 && (
+            <>
+              <h2 className="settings-section-title">Spending thresholds</h2>
+              <div className="stats-bars">
+                {thresholdRows.map((t) => (
+                  <div key={t.key} className="stats-bar-row">
+                    <span className="stats-bar-label">
+                      <span className="category-dot" style={{ background: t.color }} />
+                      {t.name}
+                    </span>
+                    <div className="stats-bar-track">
+                      <div
+                        className={`stats-bar-fill ${t.over ? 'over-budget' : ''}`}
+                        style={{
+                          width: `${Math.min(100, (t.spent / t.amount) * 100)}%`,
+                          background: t.over ? undefined : t.color,
+                        }}
+                      />
+                    </div>
+                    <span className={`mono threshold-bar-value ${t.over ? 'balance-negative' : ''}`}>
+                      {format(t.spent)} / {format(t.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="muted stats-note">
+                Always this calendar month, and always your own share — not scoped to the period
+                selected above.{' '}
+                <Link to="/thresholds">Manage thresholds →</Link>
+              </p>
+            </>
+          )}
 
           <h2 className="settings-section-title">By group</h2>
           <table className="stats-table">

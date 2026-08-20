@@ -17,6 +17,7 @@ import GroupSettings from './pages/GroupSettings'
 import GroupStats from './pages/GroupStats'
 import AccountStats from './pages/AccountStats'
 import ScanSettings from './pages/ScanSettings'
+import Thresholds from './pages/Thresholds'
 
 // A one-time-use flow for most people — kept out of the main bundle
 // entirely (same reasoning as lazy-loading Tesseract.js) so its code, and
@@ -69,6 +70,7 @@ function Shell() {
       <Route path="/guide" element={<RequireAuth><Guide /></RequireAuth>} />
       <Route path="/stats" element={<RequireAuth><AccountStats /></RequireAuth>} />
       <Route path="/scan-settings" element={<RequireAuth><ScanSettings /></RequireAuth>} />
+      <Route path="/thresholds" element={<RequireAuth><Thresholds /></RequireAuth>} />
       <Route path="/" element={<RequireAuth><Groups /></RequireAuth>} />
       <Route path="/groups/:groupId" element={<RequireAuth><GroupView /></RequireAuth>} />
       <Route path="/groups/:groupId/settings" element={<RequireAuth><GroupSettings /></RequireAuth>} />

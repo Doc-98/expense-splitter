@@ -13,7 +13,7 @@ required.
   account at all
 - Front a bill with more than one payer, each with their own amount
 - Tag bills and items by category to see not just how much you spend, but
-  on what
+  on what — and set your own personal monthly budget per category
 - Share a recap as text, a PDF, or a CSV — or import your whole spending
   history straight from Splitwise
 - Track your own stats across every group you're in, even ones you've left
@@ -30,6 +30,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Receipt scanning](#receipt-scanning)
 - [Currency](#currency)
 - [Categories](#categories)
+- [Spending thresholds](#spending-thresholds)
 - [Period-over-period comparison](#period-over-period-comparison)
 - [Recurring bills](#recurring-bills)
 - [Inviting people](#inviting-people)
@@ -252,6 +253,42 @@ This lives entirely separate from `settlement.js` — category totals are a
 "where did the money go" question, nothing to do with who owes whom, so
 there was no reason to entangle the two.
 
+## Spending thresholds
+
+A personal monthly budget per category, set at **account menu → Spending
+thresholds** — deliberately a *profile*-level setting, not a group one: it's
+a measure of your own spending, and you're very possibly in more than one
+group. (A group-level or shared variant is a plausible future addition, but
+low priority — nothing about the data model rules it out later.)
+
+The page shows one amount field for each of the seven default categories
+(always available, even before you've joined a group) plus one for every
+custom category across every group you're currently in. **Categories with
+the same name are treated as one and the same budget** — trimmed and
+case-insensitive, so a "Wine" tag in one group and a "wine" tag in another
+merge into a single threshold, and a category named the same as one of the
+defaults (in any group) counts toward that default's budget rather than
+getting its own separate row. This is the one piece of behavior here worth
+internalizing, since it's not obvious from the UI alone — it's called out
+again on the Thresholds page itself, and in [the in-app
+guide](#the-in-app-guide).
+
+Once set, a threshold shows up as a progress bar on [Your
+Stats](#how-the-data-model-works) (`/stats`) — always compared against the
+*current calendar month* specifically, regardless of whatever period Your
+Stats' own selector is showing for its other numbers, and always your own
+proportional share of what's been spent (`item_shares`-weighted, via
+`computeMyCategorySpend()` in `src/lib/categoryStats.js`), not what you've
+fronted for anyone else. A bill you paid for the whole group only counts
+your own portion toward your budget, the same "fronted vs. share" split the
+rest of the app already draws everywhere else.
+
+`spending_thresholds` is keyed by `(user_id, category_name)` rather than
+`category_id` — a category name has a different UUID in every group's own
+`categories` table, so matching by name is what makes the "same tag across
+groups" merging in the paragraph above actually work; see the table's own
+comment in `schema.sql` for the full reasoning.
+
 ## Period-over-period comparison
 
 Group Stats compares whatever period you're looking at (week/month/year,
@@ -377,6 +414,7 @@ automatically.
 | `categories`   | A group's own list of spending categories, seeded with a starter set on group creation, freely editable afterward |
 | `recurring_bills` | A template for a repeating bill (rent, a subscription) — fixed amount, single payer, fixed split, plus a frequency and the next date it's due. Each occurrence created from it is a normal row in `bills`, linked back via `bills.recurring_bill_id` |
 | `departure_snapshots` | A frozen personal record of a *real account's* paid/consumed totals in a group they've left, day-by-day, plus their balance at that moment — see below |
+| `spending_thresholds` | A profile-level (not group-level) monthly budget per category *name* — see [Spending thresholds](#spending-thresholds) |
 
 The bill list on a group's page is grouped under date dividers — a month
 header ("August 2026") for each month present, and inside it a day
@@ -507,9 +545,6 @@ promised on any particular timeline — this is a personal project, built as
 time and interest allow.
 
 **Up next:**
-- **Spending thresholds** — a passive indicator on the stats page ("€340 of
-  a €400 grocery budget this month"), now that categories exist to measure
-  against
 - **Period-over-period comparison on Your Stats** — the group-level stats
   page has this today (overall and per-category); the cross-group account
   stats page doesn't yet, since it means re-running the same comparison
@@ -517,6 +552,10 @@ time and interest allow.
   group's data
 
 **Later:**
+- Group-level (or shared) spending thresholds, as a variant alongside the
+  personal ones that exist today — very low priority; nothing about
+  `spending_thresholds` being keyed by `user_id` rules this out later, it's
+  just not built
 - A whole-group CSV export (today's export is per-bill only)
 - AI-assisted category suggestions during a scan, since the vision models
   are already looking at the receipt image
@@ -597,8 +636,31 @@ time and interest allow.
   raw API call, only the app's own code never does. Reasonable for a
   personal-use app; would need tightening (a trigger, most likely) before
   this held up against untrusted users.
-- No spending thresholds yet (see [Roadmap](#roadmap)) — categories now
-  exist to measure against, but the indicator itself isn't built.
+- Spending thresholds only cover the current calendar month — no
+  weekly/yearly option, and no way to see a past month's budget vs. actual
+  after the fact. Matches the one case the feature was actually built for;
+  a period selector would be a real chunk of extra UI for a need that
+  hasn't shown up yet.
+- A departed group's frozen spending (`departure_snapshots`) never counts
+  toward a spending threshold — snapshots only ever stored day-by-day
+  paid/consumed totals, with no category breakdown, so there's nothing to
+  attribute to a category after the fact. Only honest for spending in
+  groups you're still an active member of.
+- The budget indicator only shows on Your Stats (`/stats`), not on any
+  single group's own stats page — a personal threshold is inherently a
+  cross-group number, and showing "this group's contribution toward your
+  overall budget" on a single-group page would need that page to fetch
+  every other group's data too, for a number that's arguably confusing to
+  see partial.
+- Merging same-named categories across groups is trim + case-insensitive,
+  but only at the moment a threshold is saved or displayed — if a
+  category's exact casing changes in some other group *after* you've set a
+  threshold for it (rare: someone else renaming "Wine" to "wine" in a
+  different group), the merge can silently split into two entries next
+  time you save one of them, leaving a harmless orphaned row behind in
+  `spending_thresholds` under the old casing. Re-saving the threshold once
+  it's showing under the new casing is the fix; nothing is lost, just
+  briefly split.
 - Category totals aren't reflected in recap text, PDFs, or CSV export yet
   — those all still just show items and prices. Easy to add if it turns
   out to matter; skipped here to keep that pass focused.

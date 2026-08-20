@@ -252,6 +252,34 @@ const GROUPS = [
           </>
         ),
       },
+      {
+        id: 'thresholds',
+        title: 'Spending thresholds: personal monthly budgets',
+        keywords: 'threshold budget limit spending cap groceries monthly',
+        body: (
+          <>
+            <p>
+              Set a monthly budget per category from <strong>account menu → Spending
+              thresholds</strong> — a personal setting, not a group one, since it's tracking your
+              own spending across every group you're in, not any one group's total. There's one
+              amount field for each of the seven default categories, plus one for every custom
+              category across your groups.
+            </p>
+            <p>
+              <strong>A category with the same name is one and the same budget</strong>, even
+              across different groups — "Wine" in one group and "wine" in another (or the same
+              name as one of the defaults) share a single threshold rather than getting their own
+              separate one. Worth knowing before you're confused about why a category you swear
+              you didn't set a budget for already has one.
+            </p>
+            <p>
+              Once set, it shows up as a progress bar on Your Stats — always compared against the
+              current calendar month, and always just your own share of what's been spent, not
+              anything you've fronted for the rest of the group.
+            </p>
+          </>
+        ),
+      },
     ],
   },
   {
@@ -291,7 +319,8 @@ const GROUPS = [
           <p>
             The account menu (top right) has a currency picker (which symbol is shown throughout
             the app — a display preference only, not real currency conversion), a dark/light mode
-            toggle, a link back to this guide, Your stats, and Scan settings — all in one place.
+            toggle, and links back to this guide, Your stats, Spending thresholds, and Scan
+            settings — all in one place.
           </p>
         ),
       },
