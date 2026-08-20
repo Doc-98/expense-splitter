@@ -255,10 +255,16 @@ create table payments (
 -- had their own login-gated access to a group in the first place, so
 -- there's no "loss of access" to compensate for, and archiving one is just
 -- a plain update to group_members.active with no snapshot involved.
--- daily_totals is keyed by ISO date ('YYYY-MM-DD') -> {paid, consumed};
--- days nest cleanly into any week/month/year view with no approximation.
--- One row per (group, person) — leaving a second time overwrites it with a
--- fresh, complete recomputation rather than stacking duplicates.
+-- daily_totals is keyed by ISO date ('YYYY-MM-DD') -> {paid, consumed,
+-- categories}; days nest cleanly into any week/month/year view with no
+-- approximation. categories is itself {category name -> consumed amount}
+-- for that day — paid has no category breakdown, nothing else in the app
+-- tracks paid-by-category either. A snapshot written before this breakdown
+-- existed just has no categories key on its days; readers (see
+-- sumCategoryDailyInRange() in src/lib/timeRange.js) treat that as
+-- contributing nothing, not an error. One row per (group, person) —
+-- leaving a second time overwrites it with a fresh, complete recomputation
+-- rather than stacking duplicates.
 -- ---------------------------------------------------------------------------
 create table departure_snapshots (
   id uuid primary key default gen_random_uuid(),

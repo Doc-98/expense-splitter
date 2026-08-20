@@ -128,10 +128,21 @@ export function computeSpendingTotals({ bills, items, itemShares }) {
 // years with no fuzzy splitting, so summing the right days later correctly
 // reconstructs a total for any of those coarser views, forever, without
 // needing to keep the group's underlying data queryable.
-export function computeDailyTotalsForUser(userId, { bills, items, itemShares }) {
+//
+// Each day's consumed total is also broken down by category name (trimmed,
+// keyed by the name itself rather than category_id — same reasoning as
+// computeMyCategorySpend: a category_id only means something inside its own
+// group's categories table, but a frozen snapshot needs to keep meaning
+// something after that access is gone). "Paid" doesn't get a category
+// breakdown — nothing else in the app tracks paid-by-category either, a
+// payer fronts a whole bill regardless of what's in it. categoryNameById is
+// optional; omit it (or pass an empty Map) and every item's consumed
+// portion is bucketed under 'Uncategorized' instead, which is also exactly
+// what happens for an item that genuinely has no category resolved.
+export function computeDailyTotalsForUser(userId, { bills, items, itemShares, categoryNameById = new Map() }) {
   const daily = {}
   const ensure = (key) => {
-    if (!daily[key]) daily[key] = { paid: 0, consumed: 0 }
+    if (!daily[key]) daily[key] = { paid: 0, consumed: 0, categories: {} }
     return daily[key]
   }
   // Local calendar day, not UTC — has to match how getPeriodRange() builds
@@ -166,12 +177,21 @@ export function computeDailyTotalsForUser(userId, { bills, items, itemShares }) 
     const bill = billById.get(item.bill_id)
     if (!bill) continue
     const portion = (Number(item.total_price) * Number(myShare.shares)) / totalShares
-    ensure(dayKey(bill.created_at)).consumed += portion
+    const bucket = ensure(dayKey(bill.created_at))
+    bucket.consumed += portion
+
+    const categoryId = item.category_id || bill.category_id || null
+    const rawName = categoryId ? categoryNameById.get(categoryId) : null
+    const categoryName = rawName ? rawName.trim() : 'Uncategorized'
+    bucket.categories[categoryName] = (bucket.categories[categoryName] || 0) + portion
   }
 
   for (const key of Object.keys(daily)) {
     daily[key].paid = round2(daily[key].paid)
     daily[key].consumed = round2(daily[key].consumed)
+    for (const categoryName of Object.keys(daily[key].categories)) {
+      daily[key].categories[categoryName] = round2(daily[key].categories[categoryName])
+    }
   }
 
   return daily

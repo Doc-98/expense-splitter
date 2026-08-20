@@ -77,3 +77,29 @@ export function computeMyCategorySpend({ bills, items, itemShares, myParticipant
 
   return totals
 }
+
+// Combines two { normalizedKey: { name, amount } } maps into one — the
+// shape both computeMyCategorySpend() (live groups) and
+// sumCategoryDailyInRange() (departed groups' snapshots, see
+// src/lib/timeRange.js) return, so a personal category total can include
+// both without either function needing to know the other exists. Where a
+// key exists in both, amounts are summed and the *first* map's name wins
+// (callers should pass live data first) — live data's current casing/color
+// lookup is preferable to a snapshot's frozen name when both are available,
+// but a snapshot-only category (one you left before you had any live
+// spending on it this period) still needs a name to display, hence falling
+// back to its own.
+export function mergeCategorySpend(first, second) {
+  const merged = {}
+  for (const [key, v] of Object.entries(first)) {
+    merged[key] = { name: v.name, amount: v.amount }
+  }
+  for (const [key, v] of Object.entries(second)) {
+    if (merged[key]) {
+      merged[key].amount = Math.round((merged[key].amount + v.amount) * 100) / 100
+    } else {
+      merged[key] = { name: v.name, amount: v.amount }
+    }
+  }
+  return merged
+}

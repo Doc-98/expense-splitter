@@ -4,10 +4,10 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
 import { computeBalances, computeSpendingTotals } from '../lib/settlement'
-import { computeMyCategorySpend } from '../lib/categoryStats'
+import { computeMyCategorySpend, mergeCategorySpend } from '../lib/categoryStats'
 import { mergeCategoriesByName } from '../lib/categories'
 import { fetchThresholds } from '../lib/thresholds'
-import { getPeriodRange, filterByDateRange, sumDailyInRange, monthlyFromDaily } from '../lib/timeRange'
+import { getPeriodRange, filterByDateRange, sumDailyInRange, sumCategoryDailyInRange, monthlyFromDaily } from '../lib/timeRange'
 import { comparePeriods } from '../lib/periodComparison'
 import TimeRangeSelector from '../components/TimeRangeSelector'
 import ComparisonBadge from '../components/ComparisonBadge'
@@ -161,13 +161,29 @@ export default function AccountStats() {
   const myParticipantIds = new Set(myParticipantByGroup.values())
   const categoryNameById = new Map(rawCategories.map((c) => [c.id, c.name]))
   const categoryColorByKey = new Map(mergeCategoriesByName(rawCategories).map((c) => [c.name.toLowerCase(), c.color]))
-  const myCategorySpend = computeMyCategorySpend({
-    bills: monthFiltered.bills,
-    items: monthFiltered.items,
-    itemShares: monthFiltered.itemShares,
-    myParticipantIds,
-    categoryNameById,
-  })
+
+  // A departed group's category spend for a given range, combined across
+  // every snapshot — a snapshot recorded before category tracking existed
+  // simply has no `categories` key on any of its days and contributes
+  // nothing here (see sumCategoryDailyInRange), so this stays correct for a
+  // mix of old and new snapshots without any special-casing.
+  function snapshotCategorySpendForRange(rangeStart, rangeEnd) {
+    return snapshots.reduce(
+      (acc, s) => mergeCategorySpend(acc, sumCategoryDailyInRange(s.daily_totals, rangeStart, rangeEnd)),
+      {}
+    )
+  }
+
+  const myCategorySpend = mergeCategorySpend(
+    computeMyCategorySpend({
+      bills: monthFiltered.bills,
+      items: monthFiltered.items,
+      itemShares: monthFiltered.itemShares,
+      myParticipantIds,
+      categoryNameById,
+    }),
+    snapshotCategorySpendForRange(thisMonth.start, thisMonth.end)
+  )
   const thresholdRows = thresholds
     .map((t) => {
       const key = t.category_name.trim().toLowerCase()
@@ -287,16 +303,16 @@ export default function AccountStats() {
   // Category spend for whatever period is currently selected (independent
   // of the fixed-to-this-month threshold spend computed above) — always
   // shown, same as GroupStats' own "By category" section, whether or not
-  // there's a previous period to compare against.
-  const currentCategorySpend = computeMyCategorySpend({ bills, items, itemShares, myParticipantIds, categoryNameById })
+  // there's a previous period to compare against. Includes departed
+  // groups' snapshots, same as the threshold spend above.
+  const currentCategorySpend = mergeCategorySpend(
+    computeMyCategorySpend({ bills, items, itemShares, myParticipantIds, categoryNameById }),
+    snapshotCategorySpendForRange(start, end)
+  )
 
   // "Previous period" only means something for week/month/year — there's no
   // period before "all time" to compare against, same reasoning as
-  // GroupStats. Category comparison only ever covers live groups: a
-  // departure snapshot has no category breakdown to draw from (just
-  // day-by-day paid/consumed totals), so a departed group's spending is
-  // included in the overall paid/consumed comparison below but can't be
-  // attributed to any category here.
+  // GroupStats.
   const canCompare = granularity !== 'all'
   let paidComparison = null
   let consumedComparison = null
@@ -308,13 +324,16 @@ export default function AccountStats() {
     consumedComparison = comparePeriods(myTotals.consumed, previousTotals.consumed)
 
     const previousFiltered = filterByDateRange(rawBills, rawItems, rawShares, previousRange.start, previousRange.end)
-    previousCategorySpend = computeMyCategorySpend({
-      bills: previousFiltered.bills,
-      items: previousFiltered.items,
-      itemShares: previousFiltered.itemShares,
-      myParticipantIds,
-      categoryNameById,
-    })
+    previousCategorySpend = mergeCategorySpend(
+      computeMyCategorySpend({
+        bills: previousFiltered.bills,
+        items: previousFiltered.items,
+        itemShares: previousFiltered.itemShares,
+        myParticipantIds,
+        categoryNameById,
+      }),
+      snapshotCategorySpendForRange(previousRange.start, previousRange.end)
+    )
   }
 
   const categoryRows = Object.entries(currentCategorySpend)
@@ -444,8 +463,9 @@ export default function AccountStats() {
               </div>
               <p className="muted stats-note">
                 For the period selected above, and your own share only — same as the summary
-                numbers. Departed groups aren't included: a departure snapshot keeps day-by-day
-                paid/consumed totals but no category breakdown to draw from.
+                numbers, including departed groups. The one exception is a group left before this
+                breakdown existed: its snapshot has no category data for that period to draw from,
+                so it's missing here even though its total still counts in the summary above.
               </p>
             </>
           )}

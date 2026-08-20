@@ -252,9 +252,10 @@ const GROUPS = [
               Both let you switch between week, month, year, and all-time views, and both show a
               "▲/▼ vs last period" badge next to the total and each category when you're looking
               at a week, month, or year (there's no previous period to compare "all time" against).
-              On Your Stats specifically, that top comparison includes any group you've since left;
-              the category breakdown underneath doesn't, since a departed group only keeps a
-              day-by-day paid/consumed record, not a category-level one.
+              On Your Stats specifically, both the top comparison and the category breakdown
+              underneath include any group you've since left — the one exception is a group left
+              before this app tracked category-level history, whose frozen record only has the
+              plain totals, not a category breakdown.
             </p>
           </>
         ),

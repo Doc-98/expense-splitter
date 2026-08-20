@@ -304,15 +304,19 @@ period" instead of a nonsensical percentage. `ComparisonBadge`
 renders the result identically on both pages.
 
 Your Stats compares two different things, since it's a personal,
-cross-group view: the "you fronted" / "your share" totals at the top
-compare against every group you're in *plus* departed groups' frozen
-snapshots (they still track day-by-day paid/consumed totals, so a previous
-period's sum is recoverable from them same as the current period's). The
-"By category" breakdown below that only ever covers groups you're
-currently still a member of — a departure snapshot has no category
-breakdown to draw from, only the two plain paid/consumed numbers per day,
-so a departed group's spending counts toward the top totals but can't be
-attributed to any specific category.
+cross-group view: the "you fronted" / "your share" totals at the top, and
+the "By category" breakdown below that. Both include departed groups —
+each departure snapshot's `daily_totals` keeps a day-by-day paid/consumed
+figure *and* a category breakdown of that day's consumed portion (see
+[Leaving a group and personal stats](#leaving-a-group-and-personal-stats)),
+so a previous period's sum is recoverable from either the same way the
+current period's already was. The one gap is a snapshot recorded before
+that category breakdown existed: its days simply have no category data to
+draw from, so that group's spending still counts toward the top totals for
+whatever period it falls in, just not toward any specific category —
+`mergeCategorySpend()` (`src/lib/categoryStats.js`) is what combines live
+and snapshot-derived category totals, and it degrades to exactly this for
+an old snapshot without anything needing to special-case it.
 
 ## Recurring bills
 
@@ -425,7 +429,7 @@ automatically.
 | `payments`     | A recorded cash transfer between two participants (`from_member`/`to_member`, both `group_members.id`) |
 | `categories`   | A group's own list of spending categories, seeded with a starter set on group creation, freely editable afterward |
 | `recurring_bills` | A template for a repeating bill (rent, a subscription) — fixed amount, single payer, fixed split, plus a frequency and the next date it's due. Each occurrence created from it is a normal row in `bills`, linked back via `bills.recurring_bill_id` |
-| `departure_snapshots` | A frozen personal record of a *real account's* paid/consumed totals in a group they've left, day-by-day, plus their balance at that moment — see below |
+| `departure_snapshots` | A frozen personal record of a *real account's* paid/consumed totals in a group they've left, day-by-day (each day's consumed portion also broken down by category), plus their balance at that moment — see below |
 | `spending_thresholds` | A profile-level (not group-level) monthly budget per category *name* — see [Spending thresholds](#spending-thresholds) |
 
 The bill list on a group's page is grouped under date dividers — a month
@@ -539,16 +543,34 @@ every RLS policy checks to decide access going forward. That person's old
 bills, items, and payments stay exactly as they were; they just lose the
 ability to query that group's live data again.
 
-To keep their personal "Your stats" page accurate anyway, the
-`remove_group_member()` function computes a `departure_snapshots` row for
-them *at the moment of removal* — while they still have access — storing
-their own paid/consumed totals bucketed by calendar day, plus their balance
-right then. Day-level buckets are what let "by week / month / year" views
-stay exactly correct for a departed group forever, without needing to keep
-querying it: any coarser period is just the right days summed together, no
-approximation. If they rejoin later, live data (which was never touched)
-naturally covers everything again, snapshot included, and the account stats
-page prefers live data whenever it's available.
+To keep their personal "Your stats" page accurate anyway, the *client*
+computes a `departure_snapshots` row for them *at the moment of removal* —
+while they still have access — via `computeDailyTotalsForUser()`
+(`src/lib/settlement.js`), then passes it to `remove_group_member()` to
+store. It's their own paid/consumed totals bucketed by calendar day (each
+day's consumed portion also broken down by category name, resolved the
+same way `computeMyCategorySpend()` resolves one — an item's own category,
+falling back to its bill's, falling back to "Uncategorized"), plus their
+balance right then. Day-level buckets are what let "by week / month /
+year" views stay exactly correct for a departed group forever, without
+needing to keep querying it: any coarser period is just the right days
+summed together, no approximation — `sumDailyInRange()` and
+`sumCategoryDailyInRange()` (`src/lib/timeRange.js`) do exactly that
+reconstruction for the plain totals and the category breakdown
+respectively. If they rejoin later, live data (which was never touched)
+naturally covers everything again, snapshot included, and the account
+stats page prefers live data whenever it's available.
+
+Category tracking was added to `daily_totals` after this feature already
+shipped — no migration was needed for that (the column was always a
+flexible `jsonb`), but it does mean a snapshot recorded before that point
+has no category breakdown for its days, only the original paid/consumed
+figures. There's no way to backfill one after the fact: the person who
+left has already lost read access to that group's underlying bills by
+design (that's the whole point of the snapshot), so the data the
+breakdown would need is gone from their side. `mergeCategorySpend()`
+just quietly adds nothing for that gap rather than erroring — the total
+still counts, it's just not attributed to a category.
 
 ## Roadmap
 
@@ -596,11 +618,12 @@ on Your Stats) have shipped.
 - Deleting a whole group isn't wired up in the UI yet — bills, payment
   records, and individual members can all be removed, the group itself can't
   be deleted yet.
-- A departure snapshot's balance is trusted from the client rather than
-  re-derived in SQL (see the comment above `remove_group_member` in
-  `schema.sql`) — reasonable for a personal-use app since it's a display-only
-  historical record, not the source of truth for any live balance, but worth
-  knowing if this ever needs to hold up to less trusted users.
+- A departure snapshot's balance *and* its day-by-day/category breakdown
+  are all trusted from the client rather than re-derived in SQL (see the
+  comment above `remove_group_member` in `schema.sql`) — reasonable for a
+  personal-use app since it's a display-only historical record, not the
+  source of truth for any live balance, but worth knowing if this ever
+  needs to hold up to less trusted users.
 - The free OCR fallback expects an item's name and price to sit on the same
   line; a receipt that wraps a long item name onto its own line above the
   price won't parse correctly for that item. This is the honest tradeoff of
@@ -647,11 +670,14 @@ on Your Stats) have shipped.
   after the fact. Matches the one case the feature was actually built for;
   a period selector would be a real chunk of extra UI for a need that
   hasn't shown up yet.
-- A departed group's frozen spending (`departure_snapshots`) never counts
-  toward a spending threshold — snapshots only ever stored day-by-day
-  paid/consumed totals, with no category breakdown, so there's nothing to
-  attribute to a category after the fact. Only honest for spending in
-  groups you're still an active member of.
+- A departed group's frozen spending counts toward a spending threshold —
+  `departure_snapshots` keeps a category breakdown per day, not just plain
+  paid/consumed totals (see [Leaving a group and personal
+  stats](#leaving-a-group-and-personal-stats)) — with one honest gap: a
+  snapshot recorded *before* that breakdown existed has nothing to
+  attribute to a category for its days, only the original two numbers.
+  There's no way to backfill it after the fact, since the person who left
+  has already lost read access to that group's data by design.
 - The budget indicator only shows on Your Stats (`/stats`), not on any
   single group's own stats page — a personal threshold is inherently a
   cross-group number, and showing "this group's contribution toward your
