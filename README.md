@@ -291,16 +291,28 @@ comment in `schema.sql` for the full reasoning.
 
 ## Period-over-period comparison
 
-Group Stats compares whatever period you're looking at (week/month/year,
-not "all time" — there's no period before that to compare against) with
-the equivalent previous one, both overall and per category — "▲ 15% vs
-last period" next to the total, and the same next to each category's bar.
-`comparePeriods()` (`src/lib/periodComparison.js`) is a small pure
-function; the one thing worth knowing is that a percentage change *from*
-zero isn't mathematically meaningful, so a category with nothing spent in
-the previous period shows "new vs last period" instead of a nonsensical
-percentage. Account Stats (the cross-group view) doesn't have this yet —
-see [Roadmap](#roadmap).
+Both Group Stats and Your Stats compare whatever period you're looking at
+(week/month/year, not "all time" — there's no period before that to
+compare against) with the equivalent previous one — "▲ 15% vs last period"
+next to a total, and the same next to each category's bar in a "By
+category" breakdown. `comparePeriods()` (`src/lib/periodComparison.js`) is
+a small pure function shared by both pages; the one thing worth knowing is
+that a percentage change *from* zero isn't mathematically meaningful, so a
+category with nothing spent in the previous period shows "new vs last
+period" instead of a nonsensical percentage. `ComparisonBadge`
+(`src/components/ComparisonBadge.jsx`) is the one shared component that
+renders the result identically on both pages.
+
+Your Stats compares two different things, since it's a personal,
+cross-group view: the "you fronted" / "your share" totals at the top
+compare against every group you're in *plus* departed groups' frozen
+snapshots (they still track day-by-day paid/consumed totals, so a previous
+period's sum is recoverable from them same as the current period's). The
+"By category" breakdown below that only ever covers groups you're
+currently still a member of — a departure snapshot has no category
+breakdown to draw from, only the two plain paid/consumed numbers per day,
+so a departed group's spending counts toward the top totals but can't be
+attributed to any specific category.
 
 ## Recurring bills
 
@@ -542,16 +554,10 @@ page prefers live data whenever it's available.
 
 Roughly in the order they're likely to land, though nothing here is
 promised on any particular timeline — this is a personal project, built as
-time and interest allow.
+time and interest allow. Nothing currently sits in an "up next" tier — both
+items that were there (spending thresholds, period-over-period comparison
+on Your Stats) have shipped.
 
-**Up next:**
-- **Period-over-period comparison on Your Stats** — the group-level stats
-  page has this today (overall and per-category); the cross-group account
-  stats page doesn't yet, since it means re-running the same comparison
-  across every group plus departed-group snapshots rather than just one
-  group's data
-
-**Later:**
 - Group-level (or shared) spending thresholds, as a variant alongside the
   personal ones that exist today — very low priority; nothing about
   `spending_thresholds` being keyed by `user_id` rules this out later, it's

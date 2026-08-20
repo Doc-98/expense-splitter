@@ -8,7 +8,9 @@ import { computeMyCategorySpend } from '../lib/categoryStats'
 import { mergeCategoriesByName } from '../lib/categories'
 import { fetchThresholds } from '../lib/thresholds'
 import { getPeriodRange, filterByDateRange, sumDailyInRange, monthlyFromDaily } from '../lib/timeRange'
+import { comparePeriods } from '../lib/periodComparison'
 import TimeRangeSelector from '../components/TimeRangeSelector'
+import ComparisonBadge from '../components/ComparisonBadge'
 
 function monthKey(dateStr) {
   const d = new Date(dateStr)
@@ -254,6 +256,78 @@ export default function AccountStats() {
   myTotals.paid = Math.round(myTotals.paid * 100) / 100
   myTotals.consumed = Math.round(myTotals.consumed * 100) / 100
 
+  // Same paid/consumed aggregation as byGroup/myTotals above (live groups'
+  // computeSpendingTotals plus departed groups' sumDailyInRange), just for
+  // an arbitrary range with no per-group rows kept around — only used below
+  // to get the *previous* period's totals to compare the current ones
+  // against, so there's nothing here that needs its own table.
+  function computeMyPaidConsumedForRange(rangeStart, rangeEnd) {
+    const filtered = filterByDateRange(rawBills, rawItems, rawShares, rangeStart, rangeEnd)
+    let paid = 0
+    let consumed = 0
+    for (const g of groups) {
+      const myId = myParticipantByGroup.get(g.id)
+      const groupBills = filtered.bills.filter((b) => b.group_id === g.id)
+      const groupBillIds = new Set(groupBills.map((b) => b.id))
+      const groupItems = filtered.items.filter((it) => groupBillIds.has(it.bill_id))
+      const groupItemIds = new Set(groupItems.map((it) => it.id))
+      const groupShares = filtered.itemShares.filter((s) => groupItemIds.has(s.item_id))
+      const totals = computeSpendingTotals({ bills: groupBills, items: groupItems, itemShares: groupShares })[myId]
+      paid += totals?.paid || 0
+      consumed += totals?.consumed || 0
+    }
+    for (const s of snapshots) {
+      const t = sumDailyInRange(s.daily_totals, rangeStart, rangeEnd)
+      paid += t.paid
+      consumed += t.consumed
+    }
+    return { paid: Math.round(paid * 100) / 100, consumed: Math.round(consumed * 100) / 100 }
+  }
+
+  // Category spend for whatever period is currently selected (independent
+  // of the fixed-to-this-month threshold spend computed above) — always
+  // shown, same as GroupStats' own "By category" section, whether or not
+  // there's a previous period to compare against.
+  const currentCategorySpend = computeMyCategorySpend({ bills, items, itemShares, myParticipantIds, categoryNameById })
+
+  // "Previous period" only means something for week/month/year — there's no
+  // period before "all time" to compare against, same reasoning as
+  // GroupStats. Category comparison only ever covers live groups: a
+  // departure snapshot has no category breakdown to draw from (just
+  // day-by-day paid/consumed totals), so a departed group's spending is
+  // included in the overall paid/consumed comparison below but can't be
+  // attributed to any category here.
+  const canCompare = granularity !== 'all'
+  let paidComparison = null
+  let consumedComparison = null
+  let previousCategorySpend = {}
+  if (canCompare) {
+    const previousRange = getPeriodRange(granularity, offset - 1)
+    const previousTotals = computeMyPaidConsumedForRange(previousRange.start, previousRange.end)
+    paidComparison = comparePeriods(myTotals.paid, previousTotals.paid)
+    consumedComparison = comparePeriods(myTotals.consumed, previousTotals.consumed)
+
+    const previousFiltered = filterByDateRange(rawBills, rawItems, rawShares, previousRange.start, previousRange.end)
+    previousCategorySpend = computeMyCategorySpend({
+      bills: previousFiltered.bills,
+      items: previousFiltered.items,
+      itemShares: previousFiltered.itemShares,
+      myParticipantIds,
+      categoryNameById,
+    })
+  }
+
+  const categoryRows = Object.entries(currentCategorySpend)
+    .map(([key, { name, amount }]) => ({
+      key,
+      name,
+      color: categoryColorByKey.get(key) || '#999999',
+      amount,
+      comparison: canCompare ? comparePeriods(amount, previousCategorySpend[key]?.amount || 0) : null,
+    }))
+    .sort((a, b) => b.amount - a.amount)
+  const maxCategoryAmount = Math.max(1, ...categoryRows.map((c) => c.amount))
+
   async function markSettled(snapshotId) {
     const { error: settleError } = await supabase
       .from('departure_snapshots')
@@ -291,10 +365,12 @@ export default function AccountStats() {
             <div className="stats-summary-item">
               <span className="stats-summary-value mono">{format(myTotals.paid)}</span>
               <span className="muted">you fronted</span>
+              {paidComparison && <ComparisonBadge comparison={paidComparison} />}
             </div>
             <div className="stats-summary-item">
               <span className="stats-summary-value mono">{format(myTotals.consumed)}</span>
               <span className="muted">your share</span>
+              {consumedComparison && <ComparisonBadge comparison={consumedComparison} />}
             </div>
             <div className="stats-summary-item">
               <span className={`stats-summary-value mono ${overallBalance < 0 ? 'balance-negative' : 'balance-positive'}`}>
@@ -339,6 +415,37 @@ export default function AccountStats() {
                 Always this calendar month, and always your own share — not scoped to the period
                 selected above.{' '}
                 <Link to="/thresholds">Manage thresholds →</Link>
+              </p>
+            </>
+          )}
+
+          {categoryRows.length > 0 && (
+            <>
+              <h2 className="settings-section-title">By category</h2>
+              <div className="stats-bars">
+                {categoryRows.map((c) => (
+                  <div key={c.key} className="stats-bar-group">
+                    <div className="stats-bar-row">
+                      <span className="stats-bar-label">
+                        <span className="category-dot" style={{ background: c.color }} />
+                        {c.name}
+                      </span>
+                      <div className="stats-bar-track">
+                        <div
+                          className="stats-bar-fill"
+                          style={{ width: `${(c.amount / maxCategoryAmount) * 100}%`, background: c.color }}
+                        />
+                      </div>
+                      <span className="mono stats-bar-value">{format(c.amount)}</span>
+                    </div>
+                    {c.comparison && <ComparisonBadge comparison={c.comparison} />}
+                  </div>
+                ))}
+              </div>
+              <p className="muted stats-note">
+                For the period selected above, and your own share only — same as the summary
+                numbers. Departed groups aren't included: a departure snapshot keeps day-by-day
+                paid/consumed totals but no category breakdown to draw from.
               </p>
             </>
           )}

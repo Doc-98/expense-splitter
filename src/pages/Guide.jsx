@@ -248,7 +248,14 @@ const GROUPS = [
               (account menu) does the same across every group you're in, plus your overall
               balance — including a frozen record for any group you've since left.
             </p>
-            <p>Both let you switch between week, month, year, and all-time views.</p>
+            <p>
+              Both let you switch between week, month, year, and all-time views, and both show a
+              "▲/▼ vs last period" badge next to the total and each category when you're looking
+              at a week, month, or year (there's no previous period to compare "all time" against).
+              On Your Stats specifically, that top comparison includes any group you've since left;
+              the category breakdown underneath doesn't, since a departed group only keeps a
+              day-by-day paid/consumed record, not a category-level one.
+            </p>
           </>
         ),
       },
