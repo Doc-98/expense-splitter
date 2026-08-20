@@ -352,6 +352,12 @@ person's actual share (`cost - theirNet` for the payer, `-theirNet` for
 everyone else) from that. Since Splitwise doesn't track individual line
 items the way this app does, each imported expense becomes one bill with a
 single item covering the whole cost, dated to match the original expense.
+Since the bill list itself doesn't display each bill's date, every imported
+bill's note leads with that original date (falling back to the raw CSV
+value on the rare row that doesn't parse as a real date), followed by
+"Imported from Splitwise" and its original category if it had one — so
+that context stays visible at a glance instead of being buried in
+`created_at`.
 
 Before importing, you're asked to match each name Splitwise exported
 against an existing member of the group (real or guest) or create a new

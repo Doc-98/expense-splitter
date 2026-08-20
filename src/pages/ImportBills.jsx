@@ -79,7 +79,14 @@ export default function ImportBills() {
         const payerId = resolvedIds[expense.payerName]
         if (!payerId) continue
 
-        const note = expense.category ? `Imported from Splitwise (${expense.category})` : 'Imported from Splitwise'
+        // The date leads because it's the one piece of context nothing else
+        // in the UI shows — the bill list doesn't display created_at, so
+        // without this an imported expense's original date is invisible
+        // unless you know to check it. "Imported from Splitwise" stays right
+        // after it since that provenance is still worth knowing at a glance.
+        const dateLabel = expense.date ? new Date(expense.date).toLocaleDateString() : expense.rawDate
+        const importLabel = expense.category ? `Imported from Splitwise (${expense.category})` : 'Imported from Splitwise'
+        const note = dateLabel ? `${dateLabel} — ${importLabel}` : importLabel
 
         const { data: bill, error: billError } = await supabase
           .from('bills')
