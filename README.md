@@ -351,7 +351,11 @@ reconstructs who paid (whoever has the largest positive net) and each
 person's actual share (`cost - theirNet` for the payer, `-theirNet` for
 everyone else) from that. Since Splitwise doesn't track individual line
 items the way this app does, each imported expense becomes one bill with a
-single item covering the whole cost, dated to match the original expense.
+single item covering the whole cost, dated to match the original expense —
+that date is what the bill list's own date dividers group it under (see
+[How the data model works](#how-the-data-model-works)), so an import lands
+exactly where it belongs in the timeline without anything special needed
+here for that.
 
 Before importing, you're asked to match each name Splitwise exported
 against an existing member of the group (real or guest) or create a new
@@ -373,6 +377,21 @@ automatically.
 | `categories`   | A group's own list of spending categories, seeded with a starter set on group creation, freely editable afterward |
 | `recurring_bills` | A template for a repeating bill (rent, a subscription) — fixed amount, single payer, fixed split, plus a frequency and the next date it's due. Each occurrence created from it is a normal row in `bills`, linked back via `bills.recurring_bill_id` |
 | `departure_snapshots` | A frozen personal record of a *real account's* paid/consumed totals in a group they've left, day-by-day, plus their balance at that moment — see below |
+
+The bill list on a group's page is grouped under date dividers — a month
+header ("August 2026") for each month present, and inside it a day
+sub-header (just the day number, "20") for each day within that month —
+styled after how Splitwise groups its own activity feed. `groupItemsByDate()`
+(`src/lib/dateGroups.js`) is the plain, pure function behind it: it walks
+an already-sorted list once and starts a new month/day group whenever the
+calendar month/day actually changes, rather than resorting anything itself
+— the bill list's own `created_at` descending order is what the group page
+already fetches, so newest-month-first and newest-day-first fall out of
+that for free. It groups within whatever's on the current page of results,
+same as before date dividers existed — a day's bills can in principle
+still be split across two pages of the (paginated) list, showing that day's
+header again at the top of the next page, which is a reasonable tradeoff
+against re-fetching everything just to group first and paginate second.
 
 Settlement math lives entirely in `src/lib/settlement.js` — it's plain,
 readable JS with no dependencies, worth a read. It's worth noting that it
