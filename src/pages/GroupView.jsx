@@ -9,6 +9,7 @@ import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
 import { useClickOutside } from '../lib/useClickOutside'
 import { useCurrency } from '../context/CurrencyContext'
 import { processDueRecurringBills } from '../lib/recurringBills'
+import { groupItemsByDate } from '../lib/dateGroups'
 import SettlementSummary from '../components/SettlementSummary'
 import ShareButton from '../components/ShareButton'
 import InviteMenu from '../components/InviteMenu'
@@ -37,6 +38,10 @@ export default function GroupView() {
   const [error, setError] = useState(null)
 
   const activeMembers = allMembers.filter((m) => m.active)
+  // Grouped by month/day for the date dividers — only the current page's
+  // worth of bills, same slice the flat list used before dividers existed.
+  const visibleBills = bills?.slice(billsPage * BILLS_PAGE_SIZE, (billsPage + 1) * BILLS_PAGE_SIZE) || []
+  const billGroups = groupItemsByDate(visibleBills)
   // My own participant row in this group — bills/items/payments reference
   // group_members.id now, not the raw account ID, so anything I create
   // needs this resolved first (e.g. defaulting a new bill's payer to me).
@@ -159,20 +164,11 @@ export default function GroupView() {
 
   async function createBill(e) {
     e.preventDefault()
-    // The bill list below shows title + note with no date of its own, so a
-    // freshly created bill would otherwise be indistinguishable from any
-    // other until opened. Stamping the note with "when" at creation time —
-    // same idea as the Splitwise import notes above — makes the list
-    // scannable at a glance. It's still a plain editable text field
-    // afterward, so typing a real note later replaces it, same tradeoff as
-    // the import notes.
-    const note = new Date().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
     const { data, error: createError } = await supabase
       .from('bills')
       .insert({
         group_id: groupId,
         title: newBillTitle.trim() || 'New bill',
-        note,
         created_by: user.id,
         paid_by: myParticipantId,
       })
@@ -280,27 +276,37 @@ export default function GroupView() {
         <p className="empty-state">No bills yet. Start one above, then scan or add a receipt.</p>
       )}
 
-      <ul className="card-list">
-        {bills?.slice(billsPage * BILLS_PAGE_SIZE, (billsPage + 1) * BILLS_PAGE_SIZE).map((bill) => (
-          <li key={bill.id} className="bill-list-item">
-            <Link to={`/groups/${groupId}/bills/${bill.id}`} className="card-list-item">
-              <span className="card-list-item-main">
-                <span>{bill.title}</span>
-                {bill.note && <span className="card-list-item-note">{bill.note}</span>}
-              </span>
-              <span className="chevron">→</span>
-            </Link>
-            <button
-              type="button"
-              className="btn-icon"
-              onClick={() => deleteBill(bill)}
-              aria-label={`Delete ${bill.title}`}
-            >
-              ×
-            </button>
-          </li>
-        ))}
-      </ul>
+      {billGroups.map((monthGroup) => (
+        <div key={monthGroup.key}>
+          <h3 className="bill-month-divider">{monthGroup.label}</h3>
+          {monthGroup.days.map((dayGroup) => (
+            <div key={dayGroup.key}>
+              <div className="bill-day-divider">{dayGroup.label}</div>
+              <ul className="card-list">
+                {dayGroup.items.map((bill) => (
+                  <li key={bill.id} className="bill-list-item">
+                    <Link to={`/groups/${groupId}/bills/${bill.id}`} className="card-list-item">
+                      <span className="card-list-item-main">
+                        <span>{bill.title}</span>
+                        {bill.note && <span className="card-list-item-note">{bill.note}</span>}
+                      </span>
+                      <span className="chevron">→</span>
+                    </Link>
+                    <button
+                      type="button"
+                      className="btn-icon"
+                      onClick={() => deleteBill(bill)}
+                      aria-label={`Delete ${bill.title}`}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ))}
       <Pagination page={billsPage} setPage={setBillsPage} totalItems={bills?.length || 0} pageSize={BILLS_PAGE_SIZE} />
 
       {error && <p className="status-error">{error}</p>}

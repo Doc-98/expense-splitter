@@ -120,7 +120,6 @@ export function parseSplitwiseCsv(text) {
     const parsedDate = new Date(row[dateIdx])
     expenses.push({
       date: Number.isNaN(parsedDate.getTime()) ? null : parsedDate.toISOString(),
-      rawDate: row[dateIdx],
       description,
       category: categoryIdx !== -1 ? row[categoryIdx]?.trim() : '',
       cost,
