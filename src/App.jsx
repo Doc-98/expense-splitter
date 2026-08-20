@@ -2,6 +2,7 @@ import { useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
+import { CurrencyProvider } from './context/CurrencyContext'
 import AppHeader from './components/AppHeader'
 import Login from './pages/Login'
 import Groups from './pages/Groups'
@@ -88,11 +89,13 @@ function Shell() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <Shell />
-        </BrowserRouter>
-      </AuthProvider>
+      <CurrencyProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <Shell />
+          </BrowserRouter>
+        </AuthProvider>
+      </CurrencyProvider>
     </ThemeProvider>
   )
 }

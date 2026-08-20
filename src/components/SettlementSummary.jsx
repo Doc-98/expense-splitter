@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { parseNumber } from '../lib/parseNumber'
+import { useCurrency } from '../context/CurrencyContext'
 
 function RecordPaymentForm({ members, onRecordPayment }) {
   const [from, setFrom] = useState('')
@@ -48,6 +49,7 @@ function RecordPaymentForm({ members, onRecordPayment }) {
 }
 
 export default function SettlementSummary({ transactions, members, payments, onRecordPayment, onDeletePayment }) {
+  const { format } = useCurrency()
   const nameOf = (id) => members?.find((m) => m.id === id)?.name || 'Someone'
 
   if (!transactions) return null
@@ -64,7 +66,7 @@ export default function SettlementSummary({ transactions, members, payments, onR
               <span className="debtor">{nameOf(t.from)}</span>
               <span className="settlement-verb">owes</span>
               <span className="creditor">{nameOf(t.to)}</span>
-              <span className="mono amount">€{t.amount.toFixed(2)}</span>
+              <span className="mono amount">{format(t.amount)}</span>
               <button
                 type="button"
                 className="btn-secondary mark-paid-btn"
@@ -89,7 +91,7 @@ export default function SettlementSummary({ transactions, members, payments, onR
                 <span className="debtor">{nameOf(p.from_member)}</span>
                 <span className="settlement-verb">paid</span>
                 <span className="creditor">{nameOf(p.to_member)}</span>
-                <span className="mono amount">€{Number(p.amount).toFixed(2)}</span>
+                <span className="mono amount">{format(p.amount)}</span>
                 <button
                   type="button"
                   className="btn-icon"

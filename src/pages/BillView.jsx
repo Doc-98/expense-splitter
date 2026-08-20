@@ -2,32 +2,41 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { fetchAllGroupMembers } from '../lib/members'
+import { fetchCategories } from '../lib/categories'
 import { parseNumber } from '../lib/parseNumber'
 import { formatBillRecap } from '../lib/recapText'
 import { buildBillCsvRows, toCsv, downloadCsv } from '../lib/csv'
 import ItemRow from '../components/ItemRow'
 import ScanReceiptButton from '../components/ScanReceiptButton'
 import ShareButton from '../components/ShareButton'
+import MultiPayerModal from '../components/MultiPayerModal'
 import { PrintableBillRecap } from '../components/PrintableRecap'
+import { useCurrency } from '../context/CurrencyContext'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
   const navigate = useNavigate()
+  const { format } = useCurrency()
 
   const [bill, setBill] = useState(null)
+  const [billPayers, setBillPayers] = useState([]) // the last CONFIRMED multi-payer split, [] if this bill has a single payer
+  const [payerModalOpen, setPayerModalOpen] = useState(false)
   const [allMembers, setAllMembers] = useState([])
+  const [categories, setCategories] = useState([])
   const [items, setItems] = useState([])
   const [newItem, setNewItem] = useState({ name: '', price: '', quantity: '1' })
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState(null)
   const [noteDraft, setNoteDraft] = useState('')
   const [noteSaved, setNoteSaved] = useState(false)
+  const [error, setError] = useState(null)
 
   const nameRef = useRef(null)
   const priceRef = useRef(null)
   const qtyRef = useRef(null)
 
   const activeMembers = allMembers.filter((m) => m.active)
+  const nameOf = (id) => allMembers.find((m) => m.id === id)?.name || 'Someone'
 
   // Who a brand-new item defaults to being split with: the bill's own
   // "default split" setting if one's been chosen, otherwise everyone
@@ -47,12 +56,31 @@ export default function BillView() {
     setItems(data || [])
   }, [billId])
 
+  const loadBill = useCallback(async () => {
+    // Used for realtime updates only — deliberately doesn't touch
+    // noteDraft, or a bill_payers change from elsewhere would clobber
+    // whatever note text is currently being typed.
+    const { data: billData } = await supabase
+      .from('bills')
+      .select('*, bill_payers(member_id, amount)')
+      .eq('id', billId)
+      .single()
+    setBill(billData)
+    setBillPayers(billData?.bill_payers || [])
+  }, [billId])
+
   useEffect(() => {
     async function loadBillAndMembers() {
-      const { data: billData } = await supabase.from('bills').select('*').eq('id', billId).single()
+      const { data: billData } = await supabase
+        .from('bills')
+        .select('*, bill_payers(member_id, amount)')
+        .eq('id', billId)
+        .single()
       setBill(billData)
+      setBillPayers(billData?.bill_payers || [])
       setNoteDraft(billData?.note || '')
       setAllMembers(await fetchAllGroupMembers(groupId))
+      setCategories(await fetchCategories(groupId))
     }
     loadBillAndMembers()
     loadItems()
@@ -61,12 +89,16 @@ export default function BillView() {
       .channel(`bill-${billId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, loadItems)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, loadItems)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bill_payers' }, loadBill)
       .subscribe()
 
     return () => supabase.removeChannel(channel)
-  }, [billId, groupId, loadItems])
+  }, [billId, groupId, loadItems, loadBill])
 
   const total = items.reduce((sum, it) => sum + Number(it.total_price), 0)
+  const isMultiPayer = billPayers.length > 0
+  const payerSum = billPayers.reduce((sum, p) => sum + Number(p.amount), 0)
+  const payerMismatch = isMultiPayer && Math.abs(payerSum - total) > 0.01
 
   async function insertItemWithShares(name, unitPrice, quantity, buyerIds) {
     const { data: inserted } = await supabase
@@ -133,9 +165,43 @@ export default function BillView() {
     loadItems()
   }
 
-  async function setPaidBy(memberId) {
-    await supabase.from('bills').update({ paid_by: memberId }).eq('id', billId)
-    setBill((b) => ({ ...b, paid_by: memberId }))
+  // Choosing a specific person switches (or stays) on the simple
+  // single-payer path — any existing multi-payer split gets cleared, since
+  // bill_payers having rows is what signals "this bill uses multiple
+  // payers" everywhere else that reads it.
+  async function handlePaidBySelect(value) {
+    if (value === '__multiple__') {
+      setPayerModalOpen(true)
+      return
+    }
+    setError(null)
+    const { error: shareError } = await supabase.from('bill_payers').delete().eq('bill_id', billId)
+    if (shareError) return setError(shareError.message)
+    const { error: billError } = await supabase.from('bills').update({ paid_by: value }).eq('id', billId)
+    if (billError) return setError(billError.message)
+    setBill((b) => ({ ...b, paid_by: value }))
+    setBillPayers([])
+  }
+
+  // Called only once the modal's own validation has already confirmed the
+  // amounts sum exactly to the bill total — nothing here needs to
+  // re-validate that. Delete-then-insert rather than diffing old vs new
+  // rows: the whole payer set can change shape between edits (someone
+  // added, someone removed), and this data is small enough that the extra
+  // round-trip cost doesn't matter.
+  async function handleConfirmPayers(payers) {
+    setError(null)
+    const { error: deleteError } = await supabase.from('bill_payers').delete().eq('bill_id', billId)
+    if (deleteError) return setError(deleteError.message)
+    const { error: insertError } = await supabase
+      .from('bill_payers')
+      .insert(payers.map((p) => ({ bill_id: billId, member_id: p.member_id, amount: p.amount })))
+    if (insertError) return setError(insertError.message)
+    const { error: billError } = await supabase.from('bills').update({ paid_by: null }).eq('id', billId)
+    if (billError) return setError(billError.message)
+    setBill((b) => ({ ...b, paid_by: null }))
+    setBillPayers(payers.map((p) => ({ member_id: p.member_id, amount: p.amount })))
+    setPayerModalOpen(false)
   }
 
   async function saveNote() {
@@ -151,6 +217,22 @@ export default function BillView() {
       : [...current, memberId]
     await supabase.from('bills').update({ default_buyer_ids: next }).eq('id', billId)
     setBill((b) => ({ ...b, default_buyer_ids: next }))
+  }
+
+  async function setBillCategory(categoryId) {
+    await supabase
+      .from('bills')
+      .update({ category_id: categoryId || null })
+      .eq('id', billId)
+    setBill((b) => ({ ...b, category_id: categoryId || null }))
+  }
+
+  async function setItemCategory(itemId, categoryId) {
+    await supabase
+      .from('items')
+      .update({ category_id: categoryId || null })
+      .eq('id', itemId)
+    loadItems()
   }
 
   async function handleScanned(parsedItems) {
@@ -211,16 +293,45 @@ export default function BillView() {
 
       <div className="paid-by-row">
         <span className="muted">Paid by</span>
-        <select value={bill?.paid_by || ''} onChange={(e) => setPaidBy(e.target.value)}>
-          {paidByOptions.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-              {m.isGuest ? ' (guest)' : ''}
-              {!m.active ? ' (left)' : ''}
+        {isMultiPayer ? (
+          <button type="button" className="btn-link" onClick={() => setPayerModalOpen(true)}>
+            {billPayers.map((p) => nameOf(p.member_id)).join(', ')} (split)
+          </button>
+        ) : (
+          <select value={bill?.paid_by || ''} onChange={(e) => handlePaidBySelect(e.target.value)}>
+            {paidByOptions.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+                {m.isGuest ? ' (guest)' : ''}
+                {!m.active ? ' (left)' : ''}
+              </option>
+            ))}
+            <option value="__multiple__">Multiple payers…</option>
+          </select>
+        )}
+      </div>
+
+      <div className="paid-by-row">
+        <span className="muted">Category</span>
+        <select value={bill?.category_id || ''} onChange={(e) => setBillCategory(e.target.value)}>
+          <option value="">Uncategorized</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
             </option>
           ))}
         </select>
       </div>
+      {payerMismatch && (
+        <p className="status-error">
+          Payer amounts ({format(payerSum)}) don't match the bill total ({format(total)}) — the
+          bill's items changed since this split was set.{' '}
+          <button type="button" className="btn-link" onClick={() => setPayerModalOpen(true)}>
+            Fix it
+          </button>
+        </p>
+      )}
+      {error && <p className="status-error">{error}</p>}
 
       <div className="default-buyers-row">
         <span className="muted">New items split with:</span>
@@ -244,14 +355,17 @@ export default function BillView() {
             key={item.id}
             item={item}
             members={allMembers}
+            categories={categories}
+            billCategoryId={bill?.category_id}
             onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
             onDelete={() => deleteItem(item.id)}
+            onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}
           />
         ))}
         {items.length === 0 && <p className="empty-state">No items yet — scan a receipt or add one below.</p>}
         <div className="receipt-total-row">
           <span>Total</span>
-          <span className="mono">€{total.toFixed(2)}</span>
+          <span className="mono">{format(total)}</span>
         </div>
       </div>
 
@@ -298,7 +412,7 @@ export default function BillView() {
         <ShareButton
           label="Share recap"
           title={bill?.title}
-          getText={() => formatBillRecap(bill, items, allMembers)}
+          getText={() => formatBillRecap({ ...bill, payers: billPayers }, items, allMembers, format)}
         />
         <button type="button" className="btn-secondary" onClick={() => window.print()}>
           Download PDF
@@ -307,11 +421,21 @@ export default function BillView() {
           Export CSV
         </button>
       </div>
-      <PrintableBillRecap bill={bill} items={items} members={allMembers} />
+      <PrintableBillRecap bill={{ ...bill, payers: billPayers }} items={items} members={allMembers} />
 
       <button type="button" className="btn-primary confirm-btn" onClick={() => navigate(`/groups/${groupId}`)}>
         Confirm
       </button>
+
+      {payerModalOpen && (
+        <MultiPayerModal
+          members={activeMembers}
+          billTotal={total}
+          currentPayers={billPayers}
+          onConfirm={handleConfirmPayers}
+          onCancel={() => setPayerModalOpen(false)}
+        />
+      )}
     </div>
   )
 }

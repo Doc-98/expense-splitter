@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
+import { useCurrency, CURRENCIES } from '../context/CurrencyContext'
 import { useClickOutside } from '../lib/useClickOutside'
 
 export default function AppHeader() {
   const { user } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const { code, setCurrency } = useCurrency()
   const [displayName, setDisplayName] = useState('')
   const [open, setOpen] = useState(false)
   const menuRef = useRef(null)
@@ -60,6 +62,16 @@ export default function AppHeader() {
             <button type="button" className="dropdown-item" onClick={toggleTheme}>
               {theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             </button>
+            <div className="dropdown-item dropdown-item-currency">
+              <span>Currency</span>
+              <select value={code} onChange={(e) => setCurrency(e.target.value)}>
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.symbol} {c.code}
+                  </option>
+                ))}
+              </select>
+            </div>
             <Link to="/about" className="dropdown-item" onClick={() => setOpen(false)}>
               About
             </Link>

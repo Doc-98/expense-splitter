@@ -1,7 +1,9 @@
 // Turns a group's bills/items/shares into "who owes whom, how much".
 //
 // Model:
-// - Each bill has one payer (paid_by) who fronted the money.
+// - Each bill was fronted by either one person (paid_by) or several
+//   (bill.payers, each with their own contributed amount) — see
+//   creditPayers() below, the one place that distinction is handled.
 // - Each item's total_price is split among its item_shares, proportional to
 //   each person's `shares` value (so someone buying 2 of 3 units owes double).
 // - A person's net balance = (money they fronted) - (their share of costs).
@@ -20,6 +22,22 @@ function groupBy(list, key) {
   }, {})
 }
 
+// Credits whoever fronted a bill's money. A bill either has a single
+// paid_by, or — once switched to "multiple payers" in the UI — a
+// bill.payers array of {member_id, amount}, in which case paid_by is
+// ignored entirely and each payer is credited their own contributed
+// amount instead of the whole bill total. This is the one place that
+// distinction lives, so every caller below stays oblivious to it.
+function creditPayers(bill, billTotal, credit) {
+  if (bill.payers && bill.payers.length > 0) {
+    for (const payer of bill.payers) {
+      credit(payer.member_id, Number(payer.amount))
+    }
+  } else if (bill.paid_by) {
+    credit(bill.paid_by, billTotal)
+  }
+}
+
 export function computeBalances({ bills, items, itemShares, payments = [] }) {
   const balances = {}
   // Accumulate in full floating-point precision; round only once, at the
@@ -35,7 +53,7 @@ export function computeBalances({ bills, items, itemShares, payments = [] }) {
   for (const bill of bills) {
     const billItems = itemsByBill[bill.id] || []
     const billTotal = billItems.reduce((sum, it) => sum + Number(it.total_price), 0)
-    add(bill.paid_by, billTotal)
+    creditPayers(bill, billTotal, add)
   }
 
   const sharesByItem = groupBy(itemShares, 'item_id')
@@ -66,7 +84,8 @@ export function computeBalances({ bills, items, itemShares, payments = [] }) {
 // Raw spending totals per person, for a stats view — deliberately separate
 // from computeBalances/payments, since "how much have I spent" and "who
 // owes whom right now" are different questions. Returns, per user:
-// - paid: total money they've fronted (sum of bills where they're paid_by)
+// - paid: total money they've fronted (sum of bills where they're paid_by,
+//   or their own contribution on a multi-payer bill)
 // - consumed: total value of their own share of items, across all bills
 export function computeSpendingTotals({ bills, items, itemShares }) {
   const totals = {}
@@ -77,10 +96,11 @@ export function computeSpendingTotals({ bills, items, itemShares }) {
 
   const itemsByBill = groupBy(items, 'bill_id')
   for (const bill of bills) {
-    if (!bill.paid_by) continue
     const billItems = itemsByBill[bill.id] || []
     const billTotal = billItems.reduce((sum, it) => sum + Number(it.total_price), 0)
-    ensure(bill.paid_by).paid += billTotal
+    creditPayers(bill, billTotal, (userId, amount) => {
+      ensure(userId).paid += amount
+    })
   }
 
   const sharesByItem = groupBy(itemShares, 'item_id')
@@ -128,10 +148,12 @@ export function computeDailyTotalsForUser(userId, { bills, items, itemShares }) 
 
   const itemsByBill = groupBy(items, 'bill_id')
   for (const bill of bills) {
-    if (bill.paid_by !== userId) continue
     const billItems = itemsByBill[bill.id] || []
     const billTotal = billItems.reduce((sum, it) => sum + Number(it.total_price), 0)
-    ensure(dayKey(bill.created_at)).paid += billTotal
+    creditPayers(bill, billTotal, (payerId, amount) => {
+      if (payerId !== userId) return
+      ensure(dayKey(bill.created_at)).paid += amount
+    })
   }
 
   const sharesByItem = groupBy(itemShares, 'item_id')

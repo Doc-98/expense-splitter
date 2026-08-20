@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
+import { useCurrency } from '../context/CurrencyContext'
 import { computeBalances, computeSpendingTotals } from '../lib/settlement'
 import { getPeriodRange, filterByDateRange, sumDailyInRange, monthlyFromDaily } from '../lib/timeRange'
 import TimeRangeSelector from '../components/TimeRangeSelector'
@@ -19,6 +20,7 @@ function monthLabel(key) {
 
 export default function AccountStats() {
   const { user } = useAuth()
+  const { format } = useCurrency()
 
   const [groups, setGroups] = useState([]) // currently active groups: [{ id, name }]
   // My own participant ID is a *different* group_members.id in every group
@@ -51,14 +53,16 @@ export default function AccountStats() {
       : { data: [] }
     setGroups(groupsData || [])
 
-    const { data: billsData } = groupIds.length
+    const { data: rawBillsData } = groupIds.length
       ? await supabase
           .from('bills')
-          .select('id, group_id, title, created_at, paid_by, items(id, total_price, item_shares(member_id, shares))')
+          .select(
+            'id, group_id, title, created_at, paid_by, items(id, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+          )
           .in('group_id', groupIds)
       : { data: [] }
 
-    const list = billsData || []
+    const list = (rawBillsData || []).map((b) => ({ ...b, payers: b.bill_payers || [] }))
     const items = []
     const itemShares = []
     for (const bill of list) {
@@ -70,7 +74,14 @@ export default function AccountStats() {
       }
     }
     setRawBills(
-      list.map((b) => ({ id: b.id, group_id: b.group_id, title: b.title, created_at: b.created_at, paid_by: b.paid_by }))
+      list.map((b) => ({
+        id: b.id,
+        group_id: b.group_id,
+        title: b.title,
+        created_at: b.created_at,
+        paid_by: b.paid_by,
+        payers: b.payers,
+      }))
     )
     setRawItems(items)
     setRawShares(itemShares)
@@ -128,10 +139,20 @@ export default function AccountStats() {
     // group's snapshot can supply below (just your own portion, by design),
     // or the chart would silently mix "everyone's spending" with "just my
     // spending" depending on whether a group happens to still be live.
-    if (b.paid_by !== myParticipantByGroup.get(b.group_id)) continue
-    const billTotal = items.filter((it) => it.bill_id === b.id).reduce((sum, it) => sum + Number(it.total_price), 0)
+    // On a multi-payer bill, "you fronted" means your own entry in
+    // b.payers, not the bill's paid_by (which is null once a bill has any
+    // payers rows at all).
+    const myId = myParticipantByGroup.get(b.group_id)
+    let myContribution = 0
+    if (b.payers && b.payers.length > 0) {
+      const mine = b.payers.find((p) => p.member_id === myId)
+      if (mine) myContribution = Number(mine.amount)
+    } else if (b.paid_by === myId) {
+      myContribution = items.filter((it) => it.bill_id === b.id).reduce((sum, it) => sum + Number(it.total_price), 0)
+    }
+    if (myContribution <= 0) continue
     const key = monthKey(b.created_at)
-    monthly[key] = (monthly[key] || 0) + billTotal
+    monthly[key] = (monthly[key] || 0) + myContribution
   }
   for (const s of snapshots) {
     for (const [key, value] of Object.entries(monthlyFromDaily(s.daily_totals))) {
@@ -218,17 +239,17 @@ export default function AccountStats() {
 
           <div className="stats-summary">
             <div className="stats-summary-item">
-              <span className="stats-summary-value mono">€{myTotals.paid.toFixed(2)}</span>
+              <span className="stats-summary-value mono">{format(myTotals.paid)}</span>
               <span className="muted">you fronted</span>
             </div>
             <div className="stats-summary-item">
-              <span className="stats-summary-value mono">€{myTotals.consumed.toFixed(2)}</span>
+              <span className="stats-summary-value mono">{format(myTotals.consumed)}</span>
               <span className="muted">your share</span>
             </div>
             <div className="stats-summary-item">
               <span className={`stats-summary-value mono ${overallBalance < 0 ? 'balance-negative' : 'balance-positive'}`}>
                 {overallBalance >= 0 ? '+' : ''}
-                €{overallBalance.toFixed(2)}
+                {format(overallBalance)}
               </span>
               <span className="muted">overall balance (now)</span>
             </div>
@@ -261,7 +282,7 @@ export default function AccountStats() {
                       <>
                         <span className={`stale-balance mono ${g.balance < 0 ? 'balance-negative' : 'balance-positive'}`}>
                           {g.balance >= 0 ? '+' : ''}
-                          €{g.balance.toFixed(2)} left unsettled
+                          {format(g.balance)} left unsettled
                         </span>
                         <button type="button" className="btn-link" onClick={() => markSettled(g.snapshotId)}>
                           Mark settled
@@ -269,8 +290,8 @@ export default function AccountStats() {
                       </>
                     )}
                   </td>
-                  <td className="mono">€{g.paid.toFixed(2)}</td>
-                  <td className="mono">€{g.consumed.toFixed(2)}</td>
+                  <td className="mono">{format(g.paid)}</td>
+                  <td className="mono">{format(g.consumed)}</td>
                 </tr>
               ))}
             </tbody>
@@ -288,7 +309,7 @@ export default function AccountStats() {
                     <div className="stats-bar-track">
                       <div className="stats-bar-fill" style={{ width: `${(value / maxMonthly) * 100}%` }} />
                     </div>
-                    <span className="mono stats-bar-value">€{value.toFixed(2)}</span>
+                    <span className="mono stats-bar-value">{format(value)}</span>
                   </div>
                 ))}
               </div>

@@ -95,12 +95,33 @@ create table group_members (
 alter table groups add column admin_id uuid references group_members(id);
 
 -- ---------------------------------------------------------------------------
+-- categories: a small, per-group list of spending categories (Groceries,
+-- Eating out, etc), seeded with a starter set the moment a group is
+-- created (see create_group() below) so tagging is useful immediately
+-- without any setup. Scoped per-group rather than shared globally, same
+-- reasoning as everything else here — a household's categories shouldn't
+-- leak into an unrelated trip group.
+-- ---------------------------------------------------------------------------
+create table categories (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references groups(id) on delete cascade,
+  name text not null,
+  color text,
+  created_at timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
 -- bills: one receipt / expense event. paid_by is whoever fronted the money
 -- — a group_members.id, so a guest can front the money just as well as a
 -- real member can. default_buyer_ids is who new items on *this* bill get
 -- split with by default (null/empty means "everyone currently active") —
 -- lets a household set it to just the two people actually shopping today
--- instead of unchecking everyone else on every single item.
+-- instead of unchecking everyone else on every single item. category_id is
+-- the bill-level default category — the common case, one tap categorizes
+-- the whole receipt; individual items can override it (see items.category_id
+-- below). "on delete set null" on both category columns is deliberate:
+-- deleting a category should just uncategorize whatever used it, never
+-- block the deletion or (far worse) cascade into deleting actual bills.
 -- ---------------------------------------------------------------------------
 create table bills (
   id uuid primary key default gen_random_uuid(),
@@ -109,6 +130,7 @@ create table bills (
   note text,
   paid_by uuid references group_members(id),
   default_buyer_ids uuid[],
+  category_id uuid references categories(id) on delete set null,
   created_by uuid references auth.users(id),
   settled boolean not null default false,
   created_at timestamptz not null default now()
@@ -116,7 +138,9 @@ create table bills (
 
 -- ---------------------------------------------------------------------------
 -- items: one line on a bill, either typed manually or extracted by a
--- receipt scan.
+-- receipt scan. category_id is null by default, meaning "inherit the
+-- bill's category" — only set when a specific item genuinely belongs
+-- somewhere else (a gift bought during a grocery run).
 -- ---------------------------------------------------------------------------
 create table items (
   id uuid primary key default gen_random_uuid(),
@@ -125,6 +149,7 @@ create table items (
   unit_price numeric(10,2) not null default 0,
   quantity numeric(10,2) not null default 1,
   total_price numeric(10,2) not null default 0,
+  category_id uuid references categories(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
@@ -139,6 +164,24 @@ create table item_shares (
   member_id uuid not null references group_members(id) on delete cascade,
   shares numeric(10,2) not null default 1,
   primary key (item_id, member_id)
+);
+
+-- ---------------------------------------------------------------------------
+-- bill_payers: when a bill was fronted by more than one person, one row per
+-- payer with exactly how much *they* contributed. bills.paid_by covers the
+-- common single-payer case on its own; a bill only has rows here once it's
+-- been switched to "multiple payers" in the UI, at which point paid_by is
+-- cleared and this table becomes the source of truth for who fronted the
+-- money. Amounts here are expected to sum to the bill's total — enforced in
+-- the app (a red validation error blocks saving otherwise), not by a
+-- database constraint, since the total itself lives on items that can
+-- change after the fact.
+-- ---------------------------------------------------------------------------
+create table bill_payers (
+  bill_id uuid not null references bills(id) on delete cascade,
+  member_id uuid not null references group_members(id),
+  amount numeric(10,2) not null,
+  primary key (bill_id, member_id)
 );
 
 -- ---------------------------------------------------------------------------
@@ -195,9 +238,11 @@ create table departure_snapshots (
 alter table profiles enable row level security;
 alter table groups enable row level security;
 alter table group_members enable row level security;
+alter table categories enable row level security;
 alter table bills enable row level security;
 alter table items enable row level security;
 alter table item_shares enable row level security;
+alter table bill_payers enable row level security;
 alter table payments enable row level security;
 alter table departure_snapshots enable row level security;
 
@@ -286,6 +331,14 @@ create policy "members can add guests to their group" on group_members
 create policy "members can update group rosters" on group_members
   for update using (public.is_group_member(group_id)) with check (public.is_group_member(group_id));
 
+-- categories: open to any active member, same as guest management — this
+-- is shared group configuration, not the "only the admin can remove a
+-- person" concern that real-member removal is specifically about.
+create policy "members can view categories" on categories
+  for select using (public.is_group_member(group_id));
+create policy "members can manage categories" on categories
+  for all using (public.is_group_member(group_id));
+
 -- bills / items / item_shares: gated on *active* group membership, walking
 -- the chain down. Untouched by guests existing — these checks are about
 -- who's asking (always a real account), never about who a row is *about*.
@@ -349,6 +402,23 @@ create policy "members can manage item shares" on item_shares
       join bills b on b.id = i.bill_id
       join group_members gm on gm.group_id = b.group_id
       where i.id = item_shares.item_id and gm.user_id = auth.uid() and gm.active = true
+    )
+  );
+
+create policy "members can view bill payers" on bill_payers
+  for select using (
+    exists (
+      select 1 from bills b
+      join group_members gm on gm.group_id = b.group_id
+      where b.id = bill_payers.bill_id and gm.user_id = auth.uid() and gm.active = true
+    )
+  );
+create policy "members can manage bill payers" on bill_payers
+  for all using (
+    exists (
+      select 1 from bills b
+      join group_members gm on gm.group_id = b.group_id
+      where b.id = bill_payers.bill_id and gm.user_id = auth.uid() and gm.active = true
     )
   );
 
@@ -500,11 +570,15 @@ end;
 $$;
 
 -- ============================================================================
--- create_group: creates a group AND adds the creator as its first member in
--- one atomic step. Doing this as two separate client-side inserts caused a
--- race against the "members can view their groups" policy above — the group
--- row existed but wasn't readable yet, since the membership row that grants
--- read access hadn't been written. This sidesteps that entirely.
+-- create_group: creates a group, adds the creator as its first member, and
+-- seeds a starter set of categories, all in one atomic step. Doing the
+-- group/membership part as two separate client-side inserts caused a race
+-- against the "members can view their groups" policy above — the group row
+-- existed but wasn't readable yet, since the membership row that grants
+-- read access hadn't been written. This sidesteps that entirely. The
+-- starter categories exist so tagging is useful the moment a group exists,
+-- with no setup required — someone can rename, delete, or add to them
+-- freely afterward from Group Settings; nothing here is fixed in place.
 -- ============================================================================
 create function public.create_group(name text)
 returns groups
@@ -520,6 +594,16 @@ begin
   insert into group_members (group_id, user_id) values (g.id, auth.uid()) returning id into new_member_id;
   update groups set admin_id = new_member_id where id = g.id;
   g.admin_id := new_member_id;
+
+  insert into categories (group_id, name, color) values
+    (g.id, 'Groceries', '#4a86e8'),
+    (g.id, 'Eating out', '#e69138'),
+    (g.id, 'Household', '#6aa84f'),
+    (g.id, 'Bills & utilities', '#a479e2'),
+    (g.id, 'Transport', '#45818e'),
+    (g.id, 'Health', '#cc4125'),
+    (g.id, 'Other', '#999999');
+
   return g;
 end;
 $$;
@@ -567,6 +651,7 @@ $$;
 -- ============================================================================
 -- Realtime: after running this file, go to
 -- Database -> Replication -> supabase_realtime in the Supabase dashboard and
--- turn on replication for: bills, items, item_shares, payments, group_members.
+-- turn on replication for: bills, items, item_shares, bill_payers, payments,
+-- group_members.
 -- That's what makes changes show up live on everyone's phone.
 -- ============================================================================

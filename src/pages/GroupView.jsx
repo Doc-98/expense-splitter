@@ -7,6 +7,7 @@ import { computeBalances, simplifyDebts } from '../lib/settlement'
 import { formatSettlementRecap } from '../lib/recapText'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
 import { useClickOutside } from '../lib/useClickOutside'
+import { useCurrency } from '../context/CurrencyContext'
 import SettlementSummary from '../components/SettlementSummary'
 import ShareButton from '../components/ShareButton'
 import InviteMenu from '../components/InviteMenu'
@@ -18,6 +19,7 @@ const BILLS_PAGE_SIZE = 15
 export default function GroupView() {
   const { groupId } = useParams()
   const { user } = useAuth()
+  const { format } = useCurrency()
 
   const [group, setGroup] = useState(null)
   const [allMembers, setAllMembers] = useState([])
@@ -58,9 +60,9 @@ export default function GroupView() {
   }, [groupId])
 
   const loadSettlement = useCallback(async () => {
-    const { data: billsData } = await supabase
+    const { data: rawBillsData } = await supabase
       .from('bills')
-      .select('id, paid_by, created_at, items(id, total_price, item_shares(member_id, shares))')
+      .select('id, paid_by, created_at, items(id, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)')
       .eq('group_id', groupId)
 
     const { data: paymentsData } = await supabase
@@ -71,7 +73,13 @@ export default function GroupView() {
 
     setPayments(paymentsData || [])
 
-    if (!billsData) return
+    if (!rawBillsData) return
+
+    // computeBalances/computeSpendingTotals expect a bill's multi-payer
+    // split (if any) as .payers — renamed from Supabase's nested
+    // bill_payers here at the query boundary, same spirit as the
+    // item_shares -> user_id remap just below.
+    const billsData = rawBillsData.map((b) => ({ ...b, payers: b.bill_payers || [] }))
 
     const items = []
     const itemShares = []
@@ -286,7 +294,7 @@ export default function GroupView() {
           <ShareButton
             label="Share settle-up"
             title={`Settle up — ${group?.name}`}
-            getText={() => formatSettlementRecap(group?.name, settlement, allMembers)}
+            getText={() => formatSettlementRecap(group?.name, settlement, allMembers, format)}
           />
           <button type="button" className="btn-secondary" onClick={() => window.print()}>
             Download PDF
@@ -298,11 +306,11 @@ export default function GroupView() {
       <h2 className="settings-section-title group-stats-preview-title">Quick stats</h2>
       <div className="stats-summary">
         <div className="stats-summary-item">
-          <span className="stats-summary-value mono">€{weekTotal.toFixed(2)}</span>
+          <span className="stats-summary-value mono">{format(weekTotal)}</span>
           <span className="muted">this week</span>
         </div>
         <div className="stats-summary-item">
-          <span className="stats-summary-value mono">€{monthTotal.toFixed(2)}</span>
+          <span className="stats-summary-value mono">{format(monthTotal)}</span>
           <span className="muted">this month</span>
         </div>
       </div>

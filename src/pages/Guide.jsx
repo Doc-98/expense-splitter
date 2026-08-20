@@ -1,16 +1,329 @@
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-function Section({ title, children, defaultOpen = false }) {
+// Each section carries its own plain-text `keywords` separate from the JSX
+// body it renders — searching rendered JSX at runtime would be fragile;
+// this way the search has exact, deliberate control over what a query like
+// "qr" or "budget" actually matches, independent of the prose wording.
+const GROUPS = [
+  {
+    label: 'Getting started',
+    sections: [
+      {
+        id: 'groups',
+        title: 'Groups: creating, joining, inviting',
+        keywords: 'group household trip create join invite qr code share link',
+        defaultOpen: true,
+        body: (
+          <>
+            <p>
+              A <strong>group</strong> is a household, trip, or any set of people who share
+              expenses. Create one from the groups list, or join an existing one via an invite
+              link.
+            </p>
+            <p>
+              On a group's page, the <strong>Invite</strong> button opens a QR code (great for
+              someone standing right next to you) and a <strong>Share invite link</strong> option
+              that uses your phone's normal share menu — straight into WhatsApp, Messages,
+              wherever, or copies the link if sharing isn't available.
+            </p>
+          </>
+        ),
+      },
+      {
+        id: 'guests',
+        title: 'Guests — people without an account',
+        keywords: 'guest no account party archive restore',
+        body: (
+          <>
+            <p>
+              Not everyone splitting a bill wants to install an app and sign up. From{' '}
+              <strong>Group settings → Guests</strong>, add
+              anyone by name — they can be assigned to items, front a bill, and owe or be owed
+              money exactly like a real account, with no login of their own. One person can run
+              the whole group for a party of guests if needed.
+            </p>
+            <p>
+              Removing a guest just archives them — their history stays on old bills, and they
+              can be restored any time.
+            </p>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    label: 'Bills & splitting',
+    sections: [
+      {
+        id: 'adding-a-bill',
+        title: 'Adding a bill and splitting items',
+        keywords: 'bill item add scan type manual paid by default split pagination page',
+        body: (
+          <>
+            <p>
+              Inside a group, <strong>Start</strong> a new bill, then add items either by typing
+              them in by hand or by scanning a receipt photo.
+            </p>
+            <p>
+              Every item has a row of name chips underneath it — <strong>tap a person's chip to
+              include or exclude them</strong> from that specific item's split. New items default
+              to splitting with everyone currently in the group, unless you've changed the{' '}
+              <strong>"New items split with"</strong> row near the top of the bill — handy when
+              only some of the group actually did that particular shop.
+            </p>
+            <p>
+              <strong>Paid by</strong> controls who fronted the money — usually one person, but
+              see <strong>Multiple payers</strong> below if more than one person chipped in.
+            </p>
+            <p>
+              A group with a lot of bills shows 15 at a time with a page selector at the bottom,
+              newest first — handy after importing a big batch from Splitwise.
+            </p>
+          </>
+        ),
+      },
+      {
+        id: 'scanning',
+        title: 'Scanning a receipt',
+        keywords: 'scan ocr gemini claude ollama photo camera api key',
+        body: (
+          <>
+            <p>Three ways to get items onto a bill without typing them all in:</p>
+            <ul>
+              <li>
+                <strong>Free OCR</strong> — works immediately, no setup, entirely on your phone.
+                Best on a clear, well-lit photo.
+              </li>
+              <li>
+                <strong>Google Gemini / Anthropic Claude</strong> — more accurate, needs your own
+                API key, set up once in <strong>Scan settings</strong> (account menu, top right).
+              </li>
+              <li>
+                <strong>A local Ollama model</strong> — private, runs on your own computer, also
+                set up in Scan settings.
+              </li>
+            </ul>
+            <p>
+              Whichever you pick is remembered on that device going forward — everyone in a group
+              can use a different method if they want.
+            </p>
+          </>
+        ),
+      },
+      {
+        id: 'multiple-payers',
+        title: 'Multiple payers',
+        keywords: 'multiple payers split front money paid by several people confirm cancel',
+        body: (
+          <>
+            <p>
+              If more than one person fronted a bill, choose <strong>Multiple payers…</strong>{' '}
+              from the "Paid by" list. A small window opens where you can check off anyone who
+              contributed and type in exactly how much each of them paid.
+            </p>
+            <p>
+              Nothing is saved until the amounts add up to <em>exactly</em> the bill's total — a
+              red message explains the gap until they do, and Confirm stays disabled. Closing the
+              window without confirming discards whatever you were typing; the last saved split is
+              untouched either way.
+            </p>
+            <p>
+              If you add another item after confirming a split, changing the total, a red warning
+              appears right on the bill until the split is fixed to match again — the bill still
+              works normally in the meantime.
+            </p>
+          </>
+        ),
+      },
+      {
+        id: 'categories',
+        title: 'Categories: tracking how you spend, not just how much',
+        keywords: 'category categories tag tagging budget groceries stats',
+        body: (
+          <>
+            <p>
+              Every group starts with a small set of categories already set up — Groceries,
+              Eating out, Household, Bills & utilities, Transport, Health, Other — add, rename, or
+              delete your own from Group Settings any time.
+            </p>
+            <p>
+              Tagging a bill's <strong>Category</strong> (right next to "Paid by") covers the
+              whole receipt in one tap — the common case, since most shopping trips are mostly one
+              thing. If one specific item genuinely belongs somewhere else (a gift picked up
+              during a grocery run), tap the small colored dot on that item to override it just for
+              that one line.
+            </p>
+            <p>
+              Group Stats then breaks down spending by category, so you can see not just what you
+              spent, but on what.
+            </p>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    label: 'Settling up',
+    sections: [
+      {
+        id: 'settling-up',
+        title: 'Settling up',
+        keywords: 'settle up owe balance mark paid record payment delete',
+        body: (
+          <p>
+            Every group page shows a live <strong>Settle up</strong> section — who owes whom,
+            already simplified to the fewest payments needed. When money actually changes hands,
+            hit <strong>Mark paid</strong> on a suggested payment, or record one manually (handy
+            for a partial payment, or one that doesn't match a suggestion). Made a mistake? Any
+            payment can be deleted from the history.
+          </p>
+        ),
+      },
+    ],
+  },
+  {
+    label: 'Sharing & importing your data',
+    sections: [
+      {
+        id: 'recaps',
+        title: 'Recaps: sharing, PDF, and CSV',
+        keywords: 'recap share text pdf csv export download print',
+        body: (
+          <>
+            <p>Both a single bill and a group's settle-up have the same export options:</p>
+            <ul>
+              <li>
+                <strong>Share recap</strong> — quick, plain text formatted for pasting straight
+                into a chat.
+              </li>
+              <li>
+                <strong>Download PDF</strong> — opens your browser's print dialog; choose "Save as
+                PDF."
+              </li>
+              <li>
+                <strong>Export CSV</strong> — a spreadsheet-friendly file, bills only.
+              </li>
+            </ul>
+          </>
+        ),
+      },
+      {
+        id: 'splitwise',
+        title: 'Importing from Splitwise',
+        keywords: 'splitwise import migrate csv expense net balance',
+        body: (
+          <>
+            <p>
+              Already tracking expenses in Splitwise? Export your group from Splitwise as a CSV,
+              then use <strong>Import bills from Splitwise</strong> on the group page to bring
+              them in. Each Splitwise expense becomes one bill, dated to match the original.
+              You'll be asked to match each Splitwise name to an existing member or guest before
+              importing.
+            </p>
+            <p>
+              Splitwise only exports each person's net balance per expense, not each payer's exact
+              contribution — so an expense that genuinely had multiple payers in Splitwise imports
+              with one payer credited the full amount, flagged with a warning naming that specific
+              bill. Go fix that one bill's "Paid by" afterward using Multiple payers, above.
+            </p>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    label: 'Stats',
+    sections: [
+      {
+        id: 'stats',
+        title: 'Stats',
+        keywords: 'stats statistics spending week month year category person',
+        body: (
+          <>
+            <p>
+              A group's page shows a quick "this week / this month" total near the bottom.{' '}
+              <strong>Group stats</strong> (from a group's page) goes further — spending by
+              person, by category, by month, and the biggest bills. <strong>Your stats</strong>{' '}
+              (account menu) does the same across every group you're in, plus your overall
+              balance — including a frozen record for any group you've since left.
+            </p>
+            <p>Both let you switch between week, month, year, and all-time views.</p>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    label: 'Group management',
+    sections: [
+      {
+        id: 'admin',
+        title: 'Group settings and permissions',
+        keywords: 'admin permission remove kick leave transfer make owner',
+        body: (
+          <>
+            <p>
+              Each group has one <strong>admin</strong> — whoever created it, marked with an
+              "(admin)" label in the member list — unless the role's been handed to someone else
+              via <strong>Make admin</strong> next to their name. Only the admin can remove
+              another real member; anyone can leave a group themselves any time. If the admin
+              leaves, the role passes automatically to whoever's been in the group the longest.
+            </p>
+            <p>
+              Guests and categories are different — any active member can add, rename, or remove
+              either, since that's managing shared group data rather than removing a person
+              against their will.
+            </p>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    label: 'Your account',
+    sections: [
+      {
+        id: 'account-settings',
+        title: 'Currency, dark mode, and other account settings',
+        keywords: 'currency dollar euro pound symbol dark mode light theme account menu',
+        body: (
+          <p>
+            The account menu (top right) has a currency picker (which symbol is shown throughout
+            the app — a display preference only, not real currency conversion), a dark/light mode
+            toggle, a link back to this guide, Your stats, and Scan settings — all in one place.
+          </p>
+        ),
+      },
+    ],
+  },
+]
+
+function Section({ section, forceOpen }) {
   return (
-    <details className="guide-section" open={defaultOpen}>
-      <summary>{title}</summary>
-      <div className="guide-section-body">{children}</div>
+    <details className="guide-section" open={forceOpen || section.defaultOpen}>
+      <summary>{section.title}</summary>
+      <div className="guide-section-body">{section.body}</div>
     </details>
   )
 }
 
 export default function Guide() {
   const navigate = useNavigate()
+  const [query, setQuery] = useState('')
+
+  const normalizedQuery = query.trim().toLowerCase()
+  const isSearching = normalizedQuery.length > 0
+
+  const visibleGroups = useMemo(() => {
+    if (!isSearching) return GROUPS
+    return GROUPS.map((group) => ({
+      ...group,
+      sections: group.sections.filter((s) =>
+        `${s.title} ${s.keywords}`.toLowerCase().includes(normalizedQuery)
+      ),
+    })).filter((group) => group.sections.length > 0)
+  }, [normalizedQuery, isSearching])
 
   return (
     <div className="page">
@@ -21,141 +334,32 @@ export default function Guide() {
         <h1>How to use Spesa</h1>
       </header>
 
-      <p className="muted">
-        Tap a section to expand it. This covers everything from the basics to the newer, less
-        obvious features.
-      </p>
+      <div className="receipt-tape guide-search-tape">
+        <input
+          type="text"
+          className="guide-search-input"
+          placeholder="Search the guide…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search the guide"
+        />
+      </div>
 
-      <Section title="Groups: creating, joining, inviting" defaultOpen>
-        <p>
-          A <strong>group</strong> is a household, trip, or any set of people who share expenses.
-          Create one from the groups list, or join an existing one via an invite link.
+      {isSearching && visibleGroups.length === 0 && (
+        <p className="empty-state">
+          Nothing matches "{query}" — try a different word, or clear the search to browse
+          everything.
         </p>
-        <p>
-          On a group's page, the <strong>Invite</strong> button opens a QR code (great for someone
-          standing right next to you) and a <strong>Share invite link</strong> option that uses your
-          phone's normal share menu — straight into WhatsApp, Messages, wherever, or copies the link
-          if sharing isn't available.
-        </p>
-      </Section>
+      )}
 
-      <Section title="Adding a bill and splitting items">
-        <p>
-          Inside a group, <strong>Start</strong> a new bill, then add items either by typing them in
-          by hand or by scanning a receipt photo.
-        </p>
-        <p>
-          Every item has a row of name chips underneath it — <strong>tap a person's chip to
-          include or exclude them</strong> from that specific item's split. New items default to
-          splitting with everyone currently in the group, unless you've changed the
-          <strong> "New items split with"</strong> row near the top of the bill — handy when only
-          some of the group actually did that particular shop.
-        </p>
-        <p>
-          <strong>Paid by</strong> controls who fronted the money for the whole bill — this is what
-          the settle-up math is built on.
-        </p>
-      </Section>
-
-      <Section title="Scanning a receipt">
-        <p>Three ways to get items onto a bill without typing them all in:</p>
-        <ul>
-          <li>
-            <strong>Free OCR</strong> — works immediately, no setup, entirely on your phone. Best on
-            a clear, well-lit photo.
-          </li>
-          <li>
-            <strong>Google Gemini / Anthropic Claude</strong> — more accurate, needs your own API
-            key, set up once in <strong>Scan settings</strong> (from the account menu, top right).
-          </li>
-          <li>
-            <strong>A local Ollama model</strong> — private, runs on your own computer, also set up
-            in Scan settings.
-          </li>
-        </ul>
-        <p>
-          Whichever you pick is remembered on that device going forward — everyone in a group can
-          use a different method if they want.
-        </p>
-      </Section>
-
-      <Section title="Guests — people without an account">
-        <p>
-          Not everyone splitting a bill wants to install an app and sign up. From{' '}
-          <strong>Group settings → Guests</strong>, add anyone by name — they can be assigned to
-          items, front a bill, and owe or be owed money exactly like a real account, with no login
-          of their own. One person can run the whole group for a party of guests if needed.
-        </p>
-        <p>
-          Removing a guest just archives them — their history stays on old bills, and they can be
-          restored any time.
-        </p>
-      </Section>
-
-      <Section title="Settling up">
-        <p>
-          Every group page shows a live <strong>Settle up</strong> section — who owes whom, already
-          simplified to the fewest payments needed. When money actually changes hands, hit{' '}
-          <strong>Mark paid</strong> on a suggested payment, or record one manually (handy for a
-          partial payment, or one that doesn't match a suggestion). Made a mistake? Any payment can
-          be deleted from the history.
-        </p>
-      </Section>
-
-      <Section title="Recaps: sharing, PDF, and CSV">
-        <p>Both a single bill and a group's settle-up have the same three export options:</p>
-        <ul>
-          <li>
-            <strong>Share recap</strong> — quick, plain text formatted for pasting straight into a
-            chat.
-          </li>
-          <li>
-            <strong>Download PDF</strong> — opens your browser's print dialog; choose "Save as PDF."
-          </li>
-          <li>
-            <strong>Export CSV</strong> — a spreadsheet-friendly file, bills only.
-          </li>
-        </ul>
-      </Section>
-
-      <Section title="Importing from Splitwise">
-        <p>
-          Already tracking expenses in Splitwise? Export your group from Splitwise as a CSV, then
-          use <strong>Import bills from Splitwise</strong> on the group page to bring them in. Each
-          Splitwise expense becomes one bill, dated to match the original. You'll be asked to match
-          each Splitwise name to an existing member or guest before importing.
-        </p>
-      </Section>
-
-      <Section title="Stats">
-        <p>
-          <strong>Group stats</strong> (from a group's page) breaks down that group's spending by
-          person, by month, and shows the biggest bills. <strong>Your stats</strong> (account menu)
-          does the same across every group you're in, plus your overall balance — including a frozen
-          record for any group you've since left.
-        </p>
-        <p>Both let you switch between week, month, year, and all-time views.</p>
-      </Section>
-
-      <Section title="Group settings and permissions">
-        <p>
-          Each group has one <strong>admin</strong> — whoever created it, unless the role's been
-          handed to someone else. Only the admin can remove another real member; anyone can leave a
-          group themselves any time. If the admin leaves, the role passes automatically to whoever's
-          been in the group the longest.
-        </p>
-        <p>
-          Guests are different — any active member can add, rename, or remove a guest, since that's
-          managing shared group data rather than removing a person against their will.
-        </p>
-      </Section>
-
-      <Section title="Dark mode and other account settings">
-        <p>
-          The account menu (top right) has a dark/light mode toggle, a link back to this guide, Your
-          stats, and Scan settings — all in one place.
-        </p>
-      </Section>
+      {visibleGroups.map((group) => (
+        <div key={group.label} className="guide-group">
+          <h2 className="guide-group-label">{group.label}</h2>
+          {group.sections.map((section) => (
+            <Section key={section.id} section={section} forceOpen={isSearching} />
+          ))}
+        </div>
+      ))}
     </div>
   )
 }

@@ -70,12 +70,19 @@ export function parseSplitwiseCsv(text) {
 
     // The person with the largest positive net fronted the money. This is
     // the one place a single-payer assumption gets made — Splitwise's
-    // export only gives net balance per expense, not a separate "who
-    // actually paid" field. True multi-payer expenses (uncommon) would
-    // import with only the biggest contributor credited as payer.
+    // export only gives net balance per expense, not each payer's actual
+    // contributed amount, so there's no way to precisely reconstruct
+    // multiple payers' individual amounts from this file alone (that's a
+    // gap in the source data, not something parsing harder can fix). When
+    // more than one person shows a positive net on the same row — a real
+    // sign of multiple payers — this still imports using the biggest
+    // contributor, but flags it so it can be corrected by hand afterward,
+    // now that the app itself supports multiple payers on a bill.
     let payerName = null
     let payerNet = 0
+    let payersWithPositiveNet = 0
     for (const [name, net] of Object.entries(netByPerson)) {
+      if (net > 0.001) payersWithPositiveNet++
       if (net > payerNet) {
         payerName = name
         payerNet = net
@@ -85,6 +92,12 @@ export function parseSplitwiseCsv(text) {
     if (!payerName) {
       warnings.push(`Skipped "${description}" — couldn't tell who paid.`)
       continue
+    }
+
+    if (payersWithPositiveNet > 1) {
+      warnings.push(
+        `"${description}" looks like it had multiple payers in Splitwise — imported with ${payerName} credited the full amount. Edit this bill's "Paid by" to split it properly.`
+      )
     }
 
     // Reconstruct each person's actual share of the cost (not their net

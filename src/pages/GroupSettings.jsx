@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { fetchAllGroupMembers, addGuest, setGuestActive, renameGuest } from '../lib/members'
+import { fetchCategories, addCategory, renameCategory, deleteCategory, CATEGORY_COLORS } from '../lib/categories'
 import { computeBalances, computeDailyTotalsForUser } from '../lib/settlement'
 
 export default function GroupSettings() {
@@ -18,6 +19,11 @@ export default function GroupSettings() {
   const [guestName, setGuestName] = useState('')
   const [editingGuestId, setEditingGuestId] = useState(null)
   const [editingGuestName, setEditingGuestName] = useState('')
+  const [categories, setCategories] = useState([])
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryColor, setNewCategoryColor] = useState(CATEGORY_COLORS[0])
+  const [editingCategoryId, setEditingCategoryId] = useState(null)
+  const [editingCategoryName, setEditingCategoryName] = useState('')
 
   const myParticipantId = members.find((m) => m.userId === user.id)?.id
   const isAdmin = myParticipantId && myParticipantId === adminId
@@ -32,10 +38,15 @@ export default function GroupSettings() {
     setMembers(await fetchAllGroupMembers(groupId))
   }, [groupId])
 
+  const loadCategories = useCallback(async () => {
+    setCategories(await fetchCategories(groupId))
+  }, [groupId])
+
   useEffect(() => {
     loadGroup()
     loadMembers()
-  }, [loadGroup, loadMembers])
+    loadCategories()
+  }, [loadGroup, loadMembers, loadCategories])
 
   async function saveName(e) {
     e.preventDefault()
@@ -87,6 +98,48 @@ export default function GroupSettings() {
     }
   }
 
+  async function submitAddCategory(e) {
+    e.preventDefault()
+    if (!newCategoryName.trim()) return
+    setError(null)
+    try {
+      await addCategory(groupId, newCategoryName.trim(), newCategoryColor)
+      setNewCategoryName('')
+      loadCategories()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function saveCategoryRename(categoryId) {
+    if (!editingCategoryName.trim()) return
+    setError(null)
+    try {
+      await renameCategory(categoryId, editingCategoryName.trim())
+      setEditingCategoryId(null)
+      loadCategories()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function handleDeleteCategory(category) {
+    if (
+      !window.confirm(
+        `Delete "${category.name}"? Any bills or items tagged with it will become uncategorized — nothing about them is deleted.`
+      )
+    ) {
+      return
+    }
+    setError(null)
+    try {
+      await deleteCategory(category.id)
+      loadCategories()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   async function makeAdmin(member) {
     if (!window.confirm(`Make ${member.name} the admin of this group? You'll no longer be able to remove other members yourself.`)) {
       return
@@ -128,7 +181,7 @@ export default function GroupSettings() {
 
     const { data: billsData, error: billsError } = await supabase
       .from('bills')
-      .select('id, paid_by, created_at, items(id, total_price, item_shares(member_id, shares))')
+      .select('id, paid_by, created_at, items(id, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)')
       .eq('group_id', groupId)
 
     if (billsError) {
@@ -136,7 +189,12 @@ export default function GroupSettings() {
       return
     }
 
-    const bills = (billsData || []).map((b) => ({ id: b.id, paid_by: b.paid_by, created_at: b.created_at }))
+    const bills = (billsData || []).map((b) => ({
+      id: b.id,
+      paid_by: b.paid_by,
+      created_at: b.created_at,
+      payers: b.bill_payers || [],
+    }))
     const items = []
     const itemShares = []
     for (const bill of billsData || []) {
@@ -313,6 +371,88 @@ export default function GroupSettings() {
         />
         <button type="submit" className="btn-primary">
           Add guest
+        </button>
+      </form>
+
+      <h2 className="settings-section-title">Categories</h2>
+      <p className="muted">
+        Tag a bill (or an individual item, if it belongs somewhere else) with one of these to see
+        how you spend, not just how much, on the group's stats page.
+      </p>
+      <ul className="member-list">
+        {categories.map((cat) => (
+          <li key={cat.id} className="member-list-item">
+            {editingCategoryId === cat.id ? (
+              <form
+                className="guest-rename-form"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  saveCategoryRename(cat.id)
+                }}
+              >
+                <span className="category-dot" style={{ background: cat.color }} />
+                <input
+                  value={editingCategoryName}
+                  onChange={(e) => setEditingCategoryName(e.target.value)}
+                  autoFocus
+                />
+                <button type="submit" className="btn-link">
+                  Save
+                </button>
+                <button type="button" className="btn-link" onClick={() => setEditingCategoryId(null)}>
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <>
+                <span className="category-label">
+                  <span className="category-dot" style={{ background: cat.color }} />
+                  {cat.name}
+                </span>
+                <span className="member-list-actions">
+                  <button
+                    type="button"
+                    className="btn-link"
+                    onClick={() => {
+                      setEditingCategoryId(cat.id)
+                      setEditingCategoryName(cat.name)
+                    }}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-link dropdown-item-warn"
+                    onClick={() => handleDeleteCategory(cat)}
+                  >
+                    Delete
+                  </button>
+                </span>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={submitAddCategory} className="inline-form category-add-form">
+        <input
+          value={newCategoryName}
+          onChange={(e) => setNewCategoryName(e.target.value)}
+          placeholder="New category"
+        />
+        <div className="color-swatch-row">
+          {CATEGORY_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              className={`color-swatch ${newCategoryColor === c ? 'selected' : ''}`}
+              style={{ background: c }}
+              onClick={() => setNewCategoryColor(c)}
+              aria-label={`Choose color ${c}`}
+            />
+          ))}
+        </div>
+        <button type="submit" className="btn-primary">
+          Add category
         </button>
       </form>
 
