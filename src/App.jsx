@@ -9,6 +9,8 @@ import Groups from './pages/Groups'
 import GroupView from './pages/GroupView'
 import BillView from './pages/BillView'
 import JoinGroup from './pages/JoinGroup'
+import ClaimGuest from './pages/ClaimGuest'
+import RecurringBills from './pages/RecurringBills'
 import About from './pages/About'
 import Guide from './pages/Guide'
 import GroupSettings from './pages/GroupSettings'
@@ -62,6 +64,7 @@ function Shell() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/join/:code" element={<RequireAuth><JoinGroup /></RequireAuth>} />
+      <Route path="/claim/:token" element={<RequireAuth><ClaimGuest /></RequireAuth>} />
       <Route path="/about" element={<RequireAuth><About /></RequireAuth>} />
       <Route path="/guide" element={<RequireAuth><Guide /></RequireAuth>} />
       <Route path="/stats" element={<RequireAuth><AccountStats /></RequireAuth>} />
@@ -81,6 +84,7 @@ function Shell() {
         }
       />
       <Route path="/groups/:groupId/bills/:billId" element={<RequireAuth><BillView /></RequireAuth>} />
+      <Route path="/groups/:groupId/recurring" element={<RequireAuth><RecurringBills /></RequireAuth>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

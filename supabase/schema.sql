@@ -69,12 +69,17 @@ create table groups (
 -- what leaves room for a future "claim this guest profile" flow: someone
 -- signing up for real later would just be this same row gaining a user_id,
 -- not a fresh identity that needs their old history relinked to it.
+-- claim_token is that flow's actual mechanism — generated lazily (see
+-- get_claim_preview/claim_guest_profile below) only when someone actually
+-- requests a claim link for a specific guest, cleared the moment it's
+-- used so it can't be replayed.
 create table group_members (
   id uuid primary key default gen_random_uuid(),
   group_id uuid not null references groups(id) on delete cascade,
   user_id uuid references auth.users(id) on delete cascade,
   display_name text,
   active boolean not null default true,
+  claim_token uuid,
   created_by uuid references auth.users(id),
   joined_at timestamptz not null default now(),
   constraint group_members_person_shape check (
@@ -111,6 +116,47 @@ create table categories (
 );
 
 -- ---------------------------------------------------------------------------
+-- recurring_bills: a template for a bill that repeats (rent, a
+-- subscription, a recurring utility) — one fixed amount per occurrence,
+-- covering the common "same amount every time" case rather than trying to
+-- templatize a fully itemized receipt. A template represents a single
+-- payer and a fixed set of people splitting it each time; a specific
+-- occurrence can always be edited normally afterward (including switching
+-- it to multiple payers) since once created it's just an ordinary bill.
+--
+-- next_due_date advances every time an occurrence is generated (see
+-- processDueRecurringBills() in recurringBills.js) — this happens
+-- client-side, opportunistically, whenever someone opens the group, rather
+-- than via a server-side scheduled job. That's a deliberate choice: this
+-- app has no scheduled/background infrastructure anywhere else, and
+-- introducing one (a cron job, an Edge Function) just for this would be a
+-- meaningfully bigger commitment than the feature calls for. The tradeoff
+-- is worth naming plainly: if a group goes quiet for a while, its overdue
+-- bills simply catch up — all of them, in order — the next time anyone
+-- opens it, rather than appearing exactly on schedule in the background.
+-- day_of_month is only meaningful for 'monthly'/'yearly' frequency, and is
+-- clamped against each landing month's actual length rather than drifting
+-- permanently short after a month like February (see advanceDate() in
+-- recurringBills.js, and its tests, for exactly how).
+-- ---------------------------------------------------------------------------
+create table recurring_bills (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references groups(id) on delete cascade,
+  title text not null,
+  note text,
+  amount numeric(10,2) not null,
+  category_id uuid references categories(id) on delete set null,
+  paid_by uuid references group_members(id),
+  split_member_ids uuid[],
+  frequency text not null check (frequency in ('weekly', 'monthly', 'yearly')),
+  day_of_month integer,
+  next_due_date date not null,
+  active boolean not null default true,
+  created_by uuid references auth.users(id),
+  created_at timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
 -- bills: one receipt / expense event. paid_by is whoever fronted the money
 -- — a group_members.id, so a guest can front the money just as well as a
 -- real member can. default_buyer_ids is who new items on *this* bill get
@@ -131,6 +177,7 @@ create table bills (
   paid_by uuid references group_members(id),
   default_buyer_ids uuid[],
   category_id uuid references categories(id) on delete set null,
+  recurring_bill_id uuid references recurring_bills(id) on delete set null,
   created_by uuid references auth.users(id),
   settled boolean not null default false,
   created_at timestamptz not null default now()
@@ -239,6 +286,7 @@ alter table profiles enable row level security;
 alter table groups enable row level security;
 alter table group_members enable row level security;
 alter table categories enable row level security;
+alter table recurring_bills enable row level security;
 alter table bills enable row level security;
 alter table items enable row level security;
 alter table item_shares enable row level security;
@@ -337,6 +385,14 @@ create policy "members can update group rosters" on group_members
 create policy "members can view categories" on categories
   for select using (public.is_group_member(group_id));
 create policy "members can manage categories" on categories
+  for all using (public.is_group_member(group_id));
+
+-- recurring_bills: same reasoning as categories — shared group
+-- configuration any active member can set up or adjust, not a
+-- removing-a-person concern.
+create policy "members can view recurring bills" on recurring_bills
+  for select using (public.is_group_member(group_id));
+create policy "members can manage recurring bills" on recurring_bills
   for all using (public.is_group_member(group_id));
 
 -- bills / items / item_shares: gated on *active* group membership, walking
@@ -644,6 +700,70 @@ begin
     g.admin_id := participant_id;
   end if;
 
+  return g;
+end;
+$$;
+
+-- ============================================================================
+-- get_claim_preview / claim_guest_profile: the "claim this guest profile"
+-- flow — a guest's row already has everything a real member's row has
+-- except a user_id (see the comment above group_members), so claiming is
+-- just that row gaining one, not a migration of history from one identity
+-- to another.
+--
+-- A claim link is generated per-guest, on request, from Group Settings
+-- (see requestClaimLink() in members.js) — never shown to the whole group
+-- the way the general invite link is, specifically so claiming someone
+-- else's guest identity requires having been sent *that specific* link,
+-- not just being in the group. get_claim_preview lets the claim page show
+-- who/which group *before* signing in commits to anything, without needing
+-- the caller to already be a member (the normal group_members SELECT
+-- policy requires that, which is exactly why this needs to be its own
+-- SECURITY DEFINER function rather than a plain client-side query).
+-- claim_guest_profile clears the token the moment it's used, so a claim
+-- link only ever works once.
+-- ============================================================================
+create function public.get_claim_preview(token uuid)
+returns table(guest_name text, group_name text)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select gm.display_name, g.name
+  from group_members gm
+  join groups g on g.id = gm.group_id
+  where gm.claim_token = token and gm.user_id is null;
+$$;
+
+create function public.claim_guest_profile(token uuid)
+returns groups
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_member group_members;
+  g groups;
+begin
+  select * into target_member from group_members where claim_token = token and user_id is null;
+
+  if target_member.id is null then
+    raise exception 'That claim link is invalid or has already been used.';
+  end if;
+
+  if exists (
+    select 1 from group_members
+    where group_id = target_member.group_id and user_id = auth.uid()
+  ) then
+    raise exception 'You are already a member of this group.';
+  end if;
+
+  update group_members
+  set user_id = auth.uid(), display_name = null, claim_token = null, active = true
+  where id = target_member.id;
+
+  select * into g from groups where id = target_member.group_id;
   return g;
 end;
 $$;

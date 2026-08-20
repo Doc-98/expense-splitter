@@ -670,6 +670,8 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .stats-bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
 .stats-bar-value { width: 70px; text-align: right; flex-shrink: 0; }
+.stats-bar-group { margin-bottom: 8px; }
+.comparison-badge { display: block; text-align: right; font-size: 11px; margin-top: 2px; }
 
 .time-range { margin-bottom: var(--space-lg); }
 .time-range-tabs { margin-bottom: var(--space-sm); }
@@ -876,3 +878,16 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   padding: 0;
 }
 .color-swatch.selected { border-color: var(--ink); }
+
+/* ---------- Recurring bills ---------- */
+.recurring-form { display: flex; flex-direction: column; gap: var(--space-sm); align-items: stretch; }
+.recurring-form-row { display: flex; gap: var(--space-md); }
+.recurring-form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  flex: 1;
+}
+.recurring-form-row select,
+.recurring-form-row input[type='date'] { font-size: 14px; }

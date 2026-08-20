@@ -85,3 +85,27 @@ export async function renameGuest(participantId, displayName) {
     .eq('id', participantId)
   if (error) throw error
 }
+
+// Returns a one-time claim link for a specific guest, letting them sign up
+// for a real account later without losing their existing history — the
+// row just gains a user_id, it never gets relinked. Reuses an
+// already-generated, not-yet-used token rather than minting a new one on
+// every click, so re-opening this doesn't silently invalidate a link that
+// was already sent to someone.
+export async function requestClaimLink(memberId) {
+  const { data: existing, error: fetchError } = await supabase
+    .from('group_members')
+    .select('claim_token')
+    .eq('id', memberId)
+    .single()
+  if (fetchError) throw fetchError
+  if (existing?.claim_token) return existing.claim_token
+
+  const token = crypto.randomUUID()
+  const { error: updateError } = await supabase
+    .from('group_members')
+    .update({ claim_token: token })
+    .eq('id', memberId)
+  if (updateError) throw updateError
+  return token
+}

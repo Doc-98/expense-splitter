@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
-import { fetchAllGroupMembers, addGuest, setGuestActive, renameGuest } from '../lib/members'
+import { fetchAllGroupMembers, addGuest, setGuestActive, renameGuest, requestClaimLink } from '../lib/members'
 import { fetchCategories, addCategory, renameCategory, deleteCategory, CATEGORY_COLORS } from '../lib/categories'
+import { shareOrCopyText } from '../lib/shareText'
 import { computeBalances, computeDailyTotalsForUser } from '../lib/settlement'
 
 export default function GroupSettings() {
@@ -19,6 +20,7 @@ export default function GroupSettings() {
   const [guestName, setGuestName] = useState('')
   const [editingGuestId, setEditingGuestId] = useState(null)
   const [editingGuestName, setEditingGuestName] = useState('')
+  const [claimStatus, setClaimStatus] = useState(null)
   const [categories, setCategories] = useState([])
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newCategoryColor, setNewCategoryColor] = useState(CATEGORY_COLORS[0])
@@ -93,6 +95,21 @@ export default function GroupSettings() {
     try {
       await setGuestActive(member.id, active)
       loadMembers()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function getClaimLink(member) {
+    setError(null)
+    try {
+      const token = await requestClaimLink(member.id)
+      const url = `${window.location.origin}/claim/${token}`
+      const result = await shareOrCopyText(url, `Claim your history in ${name}`)
+      if (result === 'copied') {
+        setClaimStatus(`Claim link for ${member.name} copied — send it to them directly.`)
+        setTimeout(() => setClaimStatus(null), 3000)
+      }
     } catch (err) {
       setError(err.message)
     }
@@ -309,8 +326,12 @@ export default function GroupSettings() {
       <h2 className="settings-section-title">Guests ({activeGuests.length})</h2>
       <p className="muted">
         People without an account of their own — add anyone who's splitting a bill but doesn't want to
-        sign up. They can be assigned to items and settled up with exactly like anyone else.
+        sign up. They can be assigned to items and settled up with exactly like anyone else. If one
+        of them decides to sign up for real later, "Get claim link" gives you a private link that
+        hands them this exact history under their own account — send it directly to them, not to
+        the whole group.
       </p>
+      {claimStatus && <p className="status-success">{claimStatus}</p>}
       <ul className="member-list">
         {activeGuests.map((m) => (
           <li key={m.id} className="member-list-item">
@@ -349,6 +370,9 @@ export default function GroupSettings() {
                     }}
                   >
                     Rename
+                  </button>
+                  <button type="button" className="btn-link" onClick={() => getClaimLink(m)}>
+                    Get claim link
                   </button>
                   <button
                     type="button"

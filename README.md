@@ -30,6 +30,8 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Receipt scanning](#receipt-scanning)
 - [Currency](#currency)
 - [Categories](#categories)
+- [Period-over-period comparison](#period-over-period-comparison)
+- [Recurring bills](#recurring-bills)
 - [Inviting people](#inviting-people)
 - [The in-app guide](#the-in-app-guide)
 - [Recaps, PDFs, and CSV](#recaps-pdfs-and-csv)
@@ -250,6 +252,51 @@ This lives entirely separate from `settlement.js` — category totals are a
 "where did the money go" question, nothing to do with who owes whom, so
 there was no reason to entangle the two.
 
+## Period-over-period comparison
+
+Group Stats compares whatever period you're looking at (week/month/year,
+not "all time" — there's no period before that to compare against) with
+the equivalent previous one, both overall and per category — "▲ 15% vs
+last period" next to the total, and the same next to each category's bar.
+`comparePeriods()` (`src/lib/periodComparison.js`) is a small pure
+function; the one thing worth knowing is that a percentage change *from*
+zero isn't mathematically meaningful, so a category with nothing spent in
+the previous period shows "new vs last period" instead of a nonsensical
+percentage. Account Stats (the cross-group view) doesn't have this yet —
+see [Roadmap](#roadmap).
+
+## Recurring bills
+
+A template for something that repeats — rent, a subscription, a recurring
+utility bill — set up per-group at `/groups/:groupId/recurring`. A
+template covers a fixed amount, one payer, and a fixed set of people
+splitting it each time; it deliberately doesn't try to templatize a fully
+itemized receipt, since the motivating cases (rent, utilities) are lump
+sums, not baskets of individual items. A specific occurrence, once
+created, is just an ordinary bill — including switchable to multiple
+payers, same as any other.
+
+**How occurrences actually get created is worth understanding clearly**:
+there's no scheduled job or background process anywhere in this app.
+Instead, `processDueRecurringBills()` runs the moment anyone opens the
+group, checks every active template's `next_due_date` against today, and
+creates whatever's due — *every* missed occurrence in order if the group's
+gone quiet for a while, not just the most recent one, since rent still
+happened each of those months even if nobody opened the app to record it.
+This is a deliberate tradeoff: this app has no cron/background
+infrastructure anywhere else, and adding one just for this would be a
+meaningfully bigger commitment than the feature calls for. The honest cost
+is that a bill appears exactly when it's generated (the next time someone
+opens the group), not exactly on its due date.
+
+The date math itself (`src/lib/recurringBills.js`) is the one genuinely
+fiddly part of this feature — clamping "the 31st" to the last day of a
+shorter month, and correctly *recovering* back to the 31st the next time a
+long-enough month comes around rather than drifting permanently shorter,
+plus the equivalent for leap years. It's kept as a small set of pure,
+heavily-tested functions separate from the database-writing code around
+it, for exactly that reason.
+
 ## Inviting people
 
 The **Invite** button on a group's page opens a QR code (for someone
@@ -317,6 +364,7 @@ automatically.
 | `item_shares`  | Who's responsible for how much of each item (`member_id` is a `group_members.id`; `shares` = weight, so someone taking 2 of 3 units owes double) |
 | `payments`     | A recorded cash transfer between two participants (`from_member`/`to_member`, both `group_members.id`) |
 | `categories`   | A group's own list of spending categories, seeded with a starter set on group creation, freely editable afterward |
+| `recurring_bills` | A template for a repeating bill (rent, a subscription) — fixed amount, single payer, fixed split, plus a frequency and the next date it's due. Each occurrence created from it is a normal row in `bills`, linked back via `bills.recurring_bill_id` |
 | `departure_snapshots` | A frozen personal record of a *real account's* paid/consumed totals in a group they've left, day-by-day, plus their balance at that moment — see below |
 
 Settlement math lives entirely in `src/lib/settlement.js` — it's plain,
@@ -346,6 +394,22 @@ fundamentally different kind of row, is deliberate: it leaves room for a
 future "claim this profile" flow, where a guest who decides to actually
 sign up would just have their existing row gain a `user_id`, rather than
 needing their history relinked from a separate identity.
+
+### Claiming a guest profile
+
+That "future flow" from the paragraph above now exists. From Group
+Settings, "Get claim link" next to a guest generates a one-time link
+(`group_members.claim_token`) and shares it — deliberately sent directly
+to that one person, not posted anywhere the whole group can see, since
+possessing the link is what authorizes claiming that specific identity.
+Opening it (`/claim/:token`) shows who and which group before committing to
+anything (`get_claim_preview()`, a SECURITY DEFINER function, since the
+normal `group_members` SELECT policy requires prior membership that a
+brand-new claimant doesn't have yet); confirming calls
+`claim_guest_profile()`, which attaches the caller's `user_id` to that
+existing row and clears the token so the link can't be reused. Every bill,
+item, and payment that guest was ever part of is now simply theirs — there
+was never a separate identity to migrate data *from*.
 
 ### Multiple payers
 
@@ -417,23 +481,19 @@ promised on any particular timeline — this is a personal project, built as
 time and interest allow.
 
 **Up next:**
-- **Recurring bills** — a repeat-monthly template for rent/utilities, so
-  the same amount, category, and split doesn't need re-entering every time
-- **Period-over-period comparison** — "+15% on groceries vs last month,"
-  which falls out almost automatically now that category totals exist over
-  time
 - **Spending thresholds** — a passive indicator on the stats page ("€340 of
   a €400 grocery budget this month"), now that categories exist to measure
   against
+- **Period-over-period comparison on Your Stats** — the group-level stats
+  page has this today (overall and per-category); the cross-group account
+  stats page doesn't yet, since it means re-running the same comparison
+  across every group plus departed-group snapshots rather than just one
+  group's data
 
 **Later:**
 - A whole-group CSV export (today's export is per-bill only)
 - AI-assisted category suggestions during a scan, since the vision models
   are already looking at the receipt image
-- A "claim this guest profile" flow, letting a guest sign up for a real
-  account later without losing their existing history — the schema
-  (`group_members.user_id` is nullable) was deliberately built to leave this
-  open
 - Push notifications, once the app is used consistently enough for that to
   make sense rather than adding noise
 - Item price tracking across visits ("has milk gotten more expensive at
@@ -446,6 +506,10 @@ time and interest allow.
   that exists today — low priority; the display picker covers the common
   case of "I'd rather see $ than €" without the complexity of real exchange
   rates
+- A scheduled/background job for recurring bills (see below) rather than
+  the current opportunistic, open-the-app-to-trigger-it approach — only
+  worth the added infrastructure if the current tradeoff ever actually
+  becomes a problem in practice
 
 ## What's intentionally left simple (v1)
 
@@ -473,8 +537,19 @@ time and interest allow.
   guessing wrong, but it does mean occasionally missing a line entirely.
 - OpenAI and other providers aren't built yet, but would follow the exact
   same `ReceiptParserStrategy` shape as the four that already exist.
-- No "claim this guest profile" flow yet — a guest stays a guest
-  permanently for now (see [Roadmap](#roadmap)).
+- A recurring bill template covers a single payer and a fixed set of
+  people — no multi-payer templates. If a recurring expense genuinely needs
+  multiple payers, switch that specific generated occurrence to Multiple
+  payers by hand afterward; the template itself stays simple.
+- Recurring bills generate on open, not on a schedule — see
+  [Recurring bills](#recurring-bills) for the full reasoning. In practice
+  this means a bill can appear "late" (whenever someone next opens the
+  group) rather than exactly on its due date.
+- The claim-guest-profile flow has one intentionally loose edge: possessing
+  the link is what authorizes claiming, the same trust model the general
+  group invite link already uses — there's no additional verification that
+  the person opening it is actually who they claim to be. Reasonable given
+  it's meant to be sent directly and privately, not posted publicly.
 - PDF export goes through the browser's print dialog rather than a
   one-tap download — deliberate, to avoid a new dependency, but it is an
   extra step compared to Share recap.

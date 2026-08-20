@@ -8,6 +8,7 @@ import { formatSettlementRecap } from '../lib/recapText'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
 import { useClickOutside } from '../lib/useClickOutside'
 import { useCurrency } from '../context/CurrencyContext'
+import { processDueRecurringBills } from '../lib/recurringBills'
 import SettlementSummary from '../components/SettlementSummary'
 import ShareButton from '../components/ShareButton'
 import InviteMenu from '../components/InviteMenu'
@@ -132,6 +133,17 @@ export default function GroupView() {
     loadMembers()
     reloadAll()
 
+    // Opportunistic, not scheduled — this is what actually generates due
+    // recurring bills, running the moment anyone opens the group rather
+    // than in the background on their exact due date. A failure here
+    // shouldn't break the rest of the page, so it's logged rather than
+    // surfaced as a blocking error.
+    processDueRecurringBills(supabase, groupId, user.id)
+      .then((result) => {
+        if (result.created > 0) reloadAll()
+      })
+      .catch((err) => console.error('Failed to process recurring bills:', err))
+
     const channel = supabase
       .channel(`group-${groupId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bills' }, reloadAll)
@@ -248,6 +260,9 @@ export default function GroupView() {
           Start
         </button>
       </form>
+      <Link to={`/groups/${groupId}/recurring`} className="btn-link import-link">
+        Recurring bills
+      </Link>
       <Link to={`/groups/${groupId}/import`} className="btn-link import-link">
         Import bills from Splitwise (CSV)
       </Link>

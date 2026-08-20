@@ -6,6 +6,7 @@ import { fetchCategories } from '../lib/categories'
 import { computeSpendingTotals } from '../lib/settlement'
 import { computeCategoryTotals } from '../lib/categoryStats'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
+import { comparePeriods } from '../lib/periodComparison'
 import { useCurrency } from '../context/CurrencyContext'
 import TimeRangeSelector from '../components/TimeRangeSelector'
 
@@ -18,6 +19,30 @@ function monthLabel(key) {
   const [year, month] = key.split('-')
   const d = new Date(Number(year), Number(month) - 1, 1)
   return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+}
+
+// Spending less than the previous equivalent period reads as the "good"
+// direction (accent color), spending more as the "worth noticing" one
+// (warn color) — the inverse of how the same two color classes are used
+// for balances elsewhere, since "more spending" and "being owed money"
+// aren't the same kind of good.
+function ComparisonBadge({ comparison }) {
+  const { changePercent, current, previous } = comparison
+  if (previous === 0 && current === 0) return null
+
+  if (changePercent === null) {
+    return <span className="comparison-badge muted">new vs last period</span>
+  }
+  if (changePercent === 0) {
+    return <span className="comparison-badge muted">same as last period</span>
+  }
+
+  const isIncrease = changePercent > 0
+  return (
+    <span className={`comparison-badge ${isIncrease ? 'balance-negative' : 'balance-positive'}`}>
+      {isIncrease ? '▲' : '▼'} {Math.abs(changePercent)}% vs last period
+    </span>
+  )
 }
 
 export default function GroupStats() {
@@ -80,16 +105,6 @@ export default function GroupStats() {
   const totals = computeSpendingTotals({ bills, items, itemShares })
   const categoryTotals = computeCategoryTotals({ bills, items })
 
-  const categoryRows = Object.entries(categoryTotals)
-    .map(([categoryId, amount]) => ({
-      id: categoryId,
-      name: categoryId === 'uncategorized' ? 'Uncategorized' : categories.find((c) => c.id === categoryId)?.name || 'Uncategorized',
-      color: categories.find((c) => c.id === categoryId)?.color || '#999999',
-      amount,
-    }))
-    .sort((a, b) => b.amount - a.amount)
-  const maxCategoryAmount = Math.max(1, ...categoryRows.map((c) => c.amount))
-
   const billTotals = bills.map((b) => ({
     id: b.id,
     title: b.title,
@@ -102,6 +117,32 @@ export default function GroupStats() {
   const groupTotal = billTotals.reduce((sum, b) => sum + b.total, 0)
   const billCount = billTotals.length
   const avgBill = billCount ? groupTotal / billCount : 0
+
+  // "Previous period" only means something for week/month/year — there's
+  // no period before "all time" to compare against, so the comparison
+  // simply doesn't appear in that view rather than showing something
+  // meaningless.
+  const canCompare = granularity !== 'all'
+  let overallComparison = null
+  let previousCategoryTotals = {}
+  if (canCompare) {
+    const previousRange = getPeriodRange(granularity, offset - 1)
+    const previousFiltered = filterByDateRange(rawBills, rawItems, rawShares, previousRange.start, previousRange.end)
+    const previousGroupTotal = previousFiltered.items.reduce((sum, it) => sum + Number(it.total_price), 0)
+    overallComparison = comparePeriods(groupTotal, previousGroupTotal)
+    previousCategoryTotals = computeCategoryTotals({ bills: previousFiltered.bills, items: previousFiltered.items })
+  }
+
+  const categoryRows = Object.entries(categoryTotals)
+    .map(([categoryId, amount]) => ({
+      id: categoryId,
+      name: categoryId === 'uncategorized' ? 'Uncategorized' : categories.find((c) => c.id === categoryId)?.name || 'Uncategorized',
+      color: categories.find((c) => c.id === categoryId)?.color || '#999999',
+      amount,
+      comparison: canCompare ? comparePeriods(amount, previousCategoryTotals[categoryId] || 0) : null,
+    }))
+    .sort((a, b) => b.amount - a.amount)
+  const maxCategoryAmount = Math.max(1, ...categoryRows.map((c) => c.amount))
 
   // A month-by-month breakdown only makes sense when the view already spans
   // multiple months — showing it while already looking at a single week or
@@ -140,6 +181,7 @@ export default function GroupStats() {
         <div className="stats-summary-item">
           <span className="stats-summary-value mono">{format(groupTotal)}</span>
           <span className="muted">total spent</span>
+          {overallComparison && <ComparisonBadge comparison={overallComparison} />}
         </div>
         <div className="stats-summary-item">
           <span className="stats-summary-value mono">{billCount}</span>
@@ -187,18 +229,21 @@ export default function GroupStats() {
           <h2 className="settings-section-title">By category</h2>
           <div className="stats-bars">
             {categoryRows.map((c) => (
-              <div key={c.id} className="stats-bar-row">
-                <span className="stats-bar-label">
-                  <span className="category-dot" style={{ background: c.color }} />
-                  {c.name}
-                </span>
-                <div className="stats-bar-track">
-                  <div
-                    className="stats-bar-fill"
-                    style={{ width: `${(c.amount / maxCategoryAmount) * 100}%`, background: c.color }}
-                  />
+              <div key={c.id} className="stats-bar-group">
+                <div className="stats-bar-row">
+                  <span className="stats-bar-label">
+                    <span className="category-dot" style={{ background: c.color }} />
+                    {c.name}
+                  </span>
+                  <div className="stats-bar-track">
+                    <div
+                      className="stats-bar-fill"
+                      style={{ width: `${(c.amount / maxCategoryAmount) * 100}%`, background: c.color }}
+                    />
+                  </div>
+                  <span className="mono stats-bar-value">{format(c.amount)}</span>
                 </div>
-                <span className="mono stats-bar-value">{format(c.amount)}</span>
+                {c.comparison && <ComparisonBadge comparison={c.comparison} />}
               </div>
             ))}
           </div>
