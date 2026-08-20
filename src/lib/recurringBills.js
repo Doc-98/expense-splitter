@@ -193,7 +193,34 @@ export async function setRecurringBillActive(supabase, templateId, active) {
   if (error) throw error
 }
 
-export async function deleteRecurringBill(supabase, templateId) {
+// What's actually at stake if this template's generated bills get deleted
+// along with it — shown in the delete confirmation so that choice is made
+// with real numbers in front of it, not blind.
+export async function countRecurringBillOccurrences(supabase, templateId) {
+  const { data, error } = await supabase
+    .from('bills')
+    .select('id, items(total_price)')
+    .eq('recurring_bill_id', templateId)
+  if (error) throw error
+  const bills = data || []
+  const total = bills.reduce((sum, b) => sum + (b.items || []).reduce((s, it) => s + Number(it.total_price), 0), 0)
+  return { count: bills.length, total }
+}
+
+// Deleting just the template (deleteOccurrences=false, the default) leaves
+// every bill it already generated exactly as it was — bills.recurring_bill_id
+// is "on delete set null", so they just stop being linked to a template
+// that no longer exists. deleteOccurrences=true is an explicit, separately
+// confirmed choice to actually remove those bills too (which cascades to
+// their items/item_shares/bill_payers via the existing FK cascades on
+// those tables) — for undoing a template that turned out to be wrong
+// entirely, rather than quietly leaving a pile of incorrect bills behind
+// for someone to clean up by hand.
+export async function deleteRecurringBill(supabase, templateId, deleteOccurrences = false) {
+  if (deleteOccurrences) {
+    const { error: billsError } = await supabase.from('bills').delete().eq('recurring_bill_id', templateId)
+    if (billsError) throw billsError
+  }
   const { error } = await supabase.from('recurring_bills').delete().eq('id', templateId)
   if (error) throw error
 }

@@ -207,7 +207,7 @@ code {
 }
 
 /* ---------- Buttons & inputs ---------- */
-.btn-primary, .btn-secondary {
+.btn-primary, .btn-secondary, .btn-danger {
   border: none;
   border-radius: var(--radius);
   padding: 12px 18px;
@@ -216,11 +216,12 @@ code {
   cursor: pointer;
   transition: transform 0.05s ease, opacity 0.15s ease;
 }
-.btn-primary:active, .btn-secondary:active { transform: scale(0.98); }
-.btn-primary:disabled, .btn-secondary:disabled { opacity: 0.55; cursor: default; }
+.btn-primary:active, .btn-secondary:active, .btn-danger:active { transform: scale(0.98); }
+.btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled { opacity: 0.55; cursor: default; }
 
 .btn-primary { background: var(--accent); color: white; }
 .btn-secondary { background: var(--accent-light); color: var(--accent-dark); }
+.btn-danger { background: var(--warn); color: white; }
 
 .btn-link {
   background: none;

@@ -9,6 +9,7 @@ import {
   addRecurringBill,
   setRecurringBillActive,
   deleteRecurringBill,
+  countRecurringBillOccurrences,
 } from '../lib/recurringBills'
 import { useCurrency } from '../context/CurrencyContext'
 import { parseNumber } from '../lib/parseNumber'
@@ -29,6 +30,8 @@ export default function RecurringBills() {
   const [categories, setCategories] = useState([])
   const [templates, setTemplates] = useState([])
   const [error, setError] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null) // { template, count, total } | null
+  const [deleting, setDeleting] = useState(false)
 
   const [title, setTitle] = useState('')
   const [amount, setAmount] = useState('')
@@ -95,14 +98,28 @@ export default function RecurringBills() {
     }
   }
 
-  async function handleDelete(template) {
-    if (!window.confirm(`Delete the recurring "${template.title}"? Bills already created from it are kept.`)) return
+  async function openDeleteConfirm(template) {
     setError(null)
     try {
-      await deleteRecurringBill(supabase, template.id)
+      const { count, total } = await countRecurringBillOccurrences(supabase, template.id)
+      setDeleteTarget({ template, count, total })
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function confirmDelete(deleteOccurrences) {
+    if (!deleteTarget) return
+    setDeleting(true)
+    setError(null)
+    try {
+      await deleteRecurringBill(supabase, deleteTarget.template.id, deleteOccurrences)
+      setDeleteTarget(null)
       load()
     } catch (err) {
       setError(err.message)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -150,7 +167,7 @@ export default function RecurringBills() {
                 <button type="button" className="btn-link" onClick={() => togglePause(t)}>
                   {t.active ? 'Pause' : 'Resume'}
                 </button>
-                <button type="button" className="btn-link dropdown-item-warn" onClick={() => handleDelete(t)}>
+                <button type="button" className="btn-link dropdown-item-warn" onClick={() => openDeleteConfirm(t)}>
                   Delete
                 </button>
               </span>
@@ -226,6 +243,52 @@ export default function RecurringBills() {
           Add recurring bill
         </button>
       </form>
+
+      {deleteTarget && (
+        <div className="modal-backdrop" onClick={() => !deleting && setDeleteTarget(null)}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+            <h2>Delete "{deleteTarget.template.title}"?</h2>
+            {deleteTarget.count > 0 ? (
+              <p>
+                This template has already created {deleteTarget.count}{' '}
+                {deleteTarget.count === 1 ? 'bill' : 'bills'} (totaling {format(deleteTarget.total)}).
+                Deleting just the template leaves those bills exactly as they are — pick "Delete the
+                bills too" only if this template was a mistake you want undone entirely, not kept.
+              </p>
+            ) : (
+              <p>This template hasn't created any bills yet.</p>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-link"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => confirmDelete(false)}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting…' : 'Keep the bills'}
+              </button>
+              {deleteTarget.count > 0 && (
+                <button
+                  type="button"
+                  className="btn-danger"
+                  onClick={() => confirmDelete(true)}
+                  disabled={deleting}
+                >
+                  {deleting ? 'Deleting…' : 'Delete the bills too'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

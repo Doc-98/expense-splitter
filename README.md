@@ -297,6 +297,13 @@ plus the equivalent for leap years. It's kept as a small set of pure,
 heavily-tested functions separate from the database-writing code around
 it, for exactly that reason.
 
+Deleting a template asks what to do with the bills it's already
+generated — shown with a real count and total, not a vague warning. The
+default, "Keep the bills," just detaches them (`bills.recurring_bill_id`
+goes back to null); "Delete the bills too" is a separate, explicit choice,
+for undoing a template that turned out to be a mistake entirely rather
+than manually deleting each wrongly-generated bill by hand.
+
 ## Inviting people
 
 The **Invite** button on a group's page opens a QR code (for someone
