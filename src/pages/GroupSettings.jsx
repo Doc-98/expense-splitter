@@ -6,6 +6,7 @@ import { fetchAllGroupMembers, addGuest, setGuestActive, renameGuest, requestCla
 import { fetchCategories, addCategory, renameCategory, deleteCategory, CATEGORY_COLORS } from '../lib/categories'
 import { shareOrCopyText } from '../lib/shareText'
 import { computeBalances, computeDailyTotalsForUser } from '../lib/settlement'
+import TypedConfirmModal from '../components/TypedConfirmModal'
 
 export default function GroupSettings() {
   const { groupId } = useParams()
@@ -26,6 +27,8 @@ export default function GroupSettings() {
   const [newCategoryColor, setNewCategoryColor] = useState(CATEGORY_COLORS[0])
   const [editingCategoryId, setEditingCategoryId] = useState(null)
   const [editingCategoryName, setEditingCategoryName] = useState('')
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false)
+  const [deletingAllBills, setDeletingAllBills] = useState(false)
 
   const myParticipantId = members.find((m) => m.userId === user.id)?.id
   const isAdmin = myParticipantId && myParticipantId === adminId
@@ -154,6 +157,23 @@ export default function GroupSettings() {
       loadCategories()
     } catch (err) {
       setError(err.message)
+    }
+  }
+
+  // Deletes bills only — items, item_shares, and bill_payers cascade with
+  // them via their own FK constraints, same as a single bill delete. Payment
+  // (settle-up) records aren't tied to any bill and are deliberately left
+  // alone: they're a separate ledger of cash that's already changed hands,
+  // not part of "this group's bills."
+  async function handleDeleteAllBills() {
+    setDeletingAllBills(true)
+    setError(null)
+    const { error: deleteError } = await supabase.from('bills').delete().eq('group_id', groupId)
+    setDeletingAllBills(false)
+    if (deleteError) {
+      setError(deleteError.message)
+    } else {
+      setShowDeleteAllModal(false)
     }
   }
 
@@ -534,6 +554,37 @@ export default function GroupSettings() {
             ))}
           </ul>
         </>
+      )}
+
+      <h2 className="settings-section-title">Danger zone</h2>
+      <p className="muted">
+        Permanently deletes every bill in this group, along with their items and payer splits.
+        Members, categories, and settle-up payment records are untouched. This can't be undone.
+      </p>
+      <button
+        type="button"
+        className="btn-danger"
+        disabled={!name.trim()}
+        onClick={() => setShowDeleteAllModal(true)}
+      >
+        Delete all bills
+      </button>
+      {showDeleteAllModal && (
+        <TypedConfirmModal
+          title="Delete all bills"
+          body={
+            <p>
+              This permanently deletes every bill in <strong>{name}</strong> — all their items and
+              payer splits go with them. Settle-up payment records and members stay untouched.
+              This can't be undone.
+            </p>
+          }
+          confirmWord={name}
+          confirmLabel="Delete all bills"
+          pending={deletingAllBills}
+          onConfirm={handleDeleteAllBills}
+          onCancel={() => setShowDeleteAllModal(false)}
+        />
       )}
 
       {error && <p className="status-error">{error}</p>}

@@ -37,6 +37,8 @@ export default function GroupView() {
   const [monthTotal, setMonthTotal] = useState(0)
   const [payments, setPayments] = useState([])
   const [error, setError] = useState(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
 
   const activeMembers = allMembers.filter((m) => m.active)
   // Grouped by month/day for the date dividers — only the current page's
@@ -214,6 +216,39 @@ export default function GroupView() {
     reloadAll()
   }
 
+  // Selection is independent of pagination on purpose — picking bills on
+  // page 1, paging over, and picking more on page 2 before deleting all of
+  // them together is a reasonable thing to want, so selectedIds isn't reset
+  // on page change, only when selection mode itself is toggled off.
+  function toggleSelectMode() {
+    setSelectMode((v) => !v)
+    setSelectedIds(new Set())
+  }
+
+  function toggleSelected(billId) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(billId)) next.delete(billId)
+      else next.add(billId)
+      return next
+    })
+  }
+
+  async function deleteSelectedBills() {
+    const count = selectedIds.size
+    if (count === 0) return
+    if (!window.confirm(`Delete ${count} bill${count === 1 ? '' : 's'}? This removes all their items too.`)) return
+    setError(null)
+    const { error: deleteError } = await supabase.from('bills').delete().in('id', Array.from(selectedIds))
+    if (deleteError) {
+      setError(deleteError.message)
+      return
+    }
+    setSelectedIds(new Set())
+    setSelectMode(false)
+    reloadAll()
+  }
+
   // Fetched fresh on demand rather than kept in page state permanently —
   // the bill list above only ever needs lightweight rows (no items/shares),
   // and an export is infrequent enough that a dedicated round-trip when it's
@@ -296,9 +331,30 @@ export default function GroupView() {
           Start
         </button>
       </form>
-      <Link to={`/groups/${groupId}/recurring`} className="btn-link import-link">
-        Recurring bills
-      </Link>
+      <div className="bill-list-controls">
+        <Link to={`/groups/${groupId}/recurring`} className="btn-link import-link">
+          Recurring bills
+        </Link>
+        {bills && bills.length > 0 && (
+          <button type="button" className="btn-link" onClick={toggleSelectMode}>
+            {selectMode ? 'Cancel' : 'Select'}
+          </button>
+        )}
+      </div>
+
+      {selectMode && (
+        <div className="bulk-select-bar">
+          <span>{selectedIds.size} selected</span>
+          <button
+            type="button"
+            className="btn-danger"
+            disabled={selectedIds.size === 0}
+            onClick={deleteSelectedBills}
+          >
+            Delete selected
+          </button>
+        </div>
+      )}
 
       {bills?.length === 0 && (
         <p className="empty-state">No bills yet. Start one above, then scan or add a receipt.</p>
@@ -311,25 +367,43 @@ export default function GroupView() {
             <div key={dayGroup.key}>
               <div className="bill-day-divider">{dayGroup.label}</div>
               <ul className="card-list">
-                {dayGroup.items.map((bill) => (
-                  <li key={bill.id} className="bill-list-item">
-                    <Link to={`/groups/${groupId}/bills/${bill.id}`} className="card-list-item">
-                      <span className="card-list-item-main">
-                        <span>{bill.title}</span>
-                        {bill.note && <span className="card-list-item-note">{bill.note}</span>}
-                      </span>
-                      <span className="chevron">→</span>
-                    </Link>
-                    <button
-                      type="button"
-                      className="btn-icon"
-                      onClick={() => deleteBill(bill)}
-                      aria-label={`Delete ${bill.title}`}
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
+                {dayGroup.items.map((bill) => {
+                  const billLabel = (
+                    <span className="card-list-item-main">
+                      <span>{bill.title}</span>
+                      {bill.note && <span className="card-list-item-note">{bill.note}</span>}
+                    </span>
+                  )
+                  return (
+                    <li key={bill.id} className="bill-list-item">
+                      {selectMode ? (
+                        <label className="card-list-item bill-select-row">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(bill.id)}
+                            onChange={() => toggleSelected(bill.id)}
+                          />
+                          {billLabel}
+                        </label>
+                      ) : (
+                        <>
+                          <Link to={`/groups/${groupId}/bills/${bill.id}`} className="card-list-item">
+                            {billLabel}
+                            <span className="chevron">→</span>
+                          </Link>
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={() => deleteBill(bill)}
+                            aria-label={`Delete ${bill.title}`}
+                          >
+                            ×
+                          </button>
+                        </>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           ))}

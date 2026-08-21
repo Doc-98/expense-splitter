@@ -58,7 +58,7 @@ const GROUPS = [
       {
         id: 'adding-a-bill',
         title: 'Adding a bill and splitting items',
-        keywords: 'bill item add scan type manual paid by default split pagination page',
+        keywords: 'bill item add scan type manual paid by default split pagination page delete select',
         body: (
           <>
             <p>
@@ -79,6 +79,13 @@ const GROUPS = [
             <p>
               A group with a lot of bills shows 15 at a time with a page selector at the bottom,
               newest first — handy after importing a big batch from Splitwise.
+            </p>
+            <p>
+              The <strong>×</strong> next to any bill deletes just that one. To remove several at
+              once, tap <strong>Select</strong> above the list — every row gets a checkbox and a
+              small bar tracks how many you've picked, across pages if you page through the list,
+              with a <strong>Delete selected</strong> button to finish. For clearing out a group's
+              entire history in one go, see <strong>Delete all bills</strong> in Group settings.
             </p>
           </>
         ),
@@ -316,7 +323,7 @@ const GROUPS = [
       {
         id: 'admin',
         title: 'Group settings and permissions',
-        keywords: 'admin permission remove kick leave transfer make owner',
+        keywords: 'admin permission remove kick leave transfer make owner delete all bills danger zone',
         body: (
           <>
             <p>
@@ -330,6 +337,13 @@ const GROUPS = [
               Guests and categories are different — any active member can add, rename, or remove
               either, since that's managing shared group data rather than removing a person
               against their will.
+            </p>
+            <p>
+              <strong>Danger zone</strong>, at the bottom, has <strong>Delete all bills</strong> —
+              every bill in the group at once, items and payer splits included. Members,
+              categories, and settle-up payment records are untouched. Since this can erase a
+              group's entire history in one click, it doesn't take a plain "are you sure": you
+              have to type the group's exact name before the button even enables.
             </p>
           </>
         ),

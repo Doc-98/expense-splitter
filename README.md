@@ -34,6 +34,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Period-over-period comparison](#period-over-period-comparison)
 - [Time period controls](#time-period-controls)
 - [Recurring bills](#recurring-bills)
+- [Deleting bills](#deleting-bills)
 - [Inviting people](#inviting-people)
 - [The in-app guide](#the-in-app-guide)
 - [Recaps, PDFs, and CSV](#recaps-pdfs-and-csv)
@@ -415,6 +416,44 @@ goes back to null); "Delete the bills too" is a separate, explicit choice,
 for undoing a template that turned out to be a mistake entirely rather
 than manually deleting each wrongly-generated bill by hand.
 
+## Deleting bills
+
+Three ways to remove a bill, each sized to how much it's actually about to
+throw away:
+
+- **One bill** — the `×` next to any bill in the group's list, same as
+  it's always worked. A plain `window.confirm()` is enough here: undoing a
+  single accidental click is cheap.
+- **Several at once** — **Select** above the bill list swaps every row's
+  `×` for a checkbox and shows a small bar with a running count and a
+  **Delete selected** button. Selection persists across pages of the list
+  (it's a plain `Set` of bill IDs, independent of which page is currently
+  rendered), so picking a few bills, paging over, and picking a few more
+  before deleting them all together works as expected. **Cancel** (or
+  finishing the delete) clears it and drops back to the normal list.
+- **Every bill in the group** — Group Settings' **Danger zone** has a
+  **Delete all bills** button, for clearing out a group's entire history in
+  one shot (starting over, or undoing a bulk import gone wrong) rather than
+  selecting hundreds of rows by hand. Because this one action can erase
+  everything a group has ever recorded, it doesn't take a plain confirm
+  dialog: `TypedConfirmModal` (`src/components/TypedConfirmModal.jsx`)
+  requires typing the group's exact name before the confirm button even
+  enables, on the theory that a click is reversible-feeling in a way that
+  typing the group's name deliberately isn't. It's a small generic
+  component — any other action that's this destructive can reuse it rather
+  than rolling its own typed-confirmation flow.
+
+All three ultimately do the same `delete from bills`, relying on `items`,
+`item_shares`, and `bill_payers` all being `on delete cascade` from
+`bills.id` — nothing bespoke needed for items to disappear along with the
+bill that owns them. **Payment (settle-up) records are deliberately left
+alone by all three** — they're a separate ledger of cash that's already
+changed hands between two people, not data that belongs to any particular
+bill, so wiping a group's bills (even all of them) doesn't touch its
+settle-up history. Any active member can delete bills this way, same as
+today's single-bill delete — it isn't admin-gated, matching the existing
+`bills` row-level security policy.
+
 ## Inviting people
 
 The **Invite** button on a group's page opens a QR code (for someone
@@ -670,6 +709,13 @@ on Your Stats) have shipped.
   personal ones that exist today — very low priority; nothing about
   `spending_thresholds` being keyed by `user_id` rules this out later, it's
   just not built
+- A per-bill actions menu — a three-dot button on each row in the group's
+  bill list, centered on the right edge, opening a small popup with actions
+  like Select, Delete, and Share for that one bill. [Deleting
+  bills](#deleting-bills) already covers single-bill and bulk delete today
+  (via the row's own `×` and the **Select** toggle) without this menu; when
+  it's built, those actions (starting select mode, deleting one bill) are
+  the natural fit to move into it rather than staying as separate controls
 - AI-assisted category suggestions during a scan, since the vision models
   are already looking at the receipt image
 - Push notifications, once the app is used consistently enough for that to

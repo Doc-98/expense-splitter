@@ -369,6 +369,29 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .bill-list-item .card-list-item { flex: 1; }
 
+.bill-list-controls { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); margin-bottom: var(--space-lg); }
+.bill-list-controls .import-link { margin-bottom: 0; }
+
+.bulk-select-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+}
+
+/* A checkbox row reuses .card-list-item's card look but needs its content
+   left-aligned (checkbox, then title) rather than .card-list-item's own
+   space-between, which assumes exactly two children pinned to each edge
+   (title on the left, a chevron on the right). */
+.bill-select-row { justify-content: flex-start; gap: 12px; cursor: pointer; }
+.bill-select-row input[type='checkbox'] { flex-shrink: 0; width: 18px; height: 18px; }
+
 .member-count-wrap { position: relative; }
 .member-count-btn {
   background: none;
@@ -920,6 +943,9 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .payer-row input[type='text']:disabled { opacity: 0.4; }
 .payer-total-row { margin-top: var(--space-md); font-size: 14px; font-weight: 600; text-align: center; }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--space-md); margin-top: var(--space-lg); }
+
+/* ---------- Typed-confirm modal (delete all bills, etc.) ---------- */
+.typed-confirm-prompt { margin: var(--space-md) 0 6px; font-size: 14px; }
 
 /* ---------- Currency selector (account dropdown) ---------- */
 .dropdown-item-currency {
