@@ -32,6 +32,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Categories](#categories)
 - [Spending thresholds](#spending-thresholds)
 - [Period-over-period comparison](#period-over-period-comparison)
+- [Time period controls](#time-period-controls)
 - [Recurring bills](#recurring-bills)
 - [Inviting people](#inviting-people)
 - [The in-app guide](#the-in-app-guide)
@@ -317,6 +318,54 @@ whatever period it falls in, just not toward any specific category —
 `mergeCategorySpend()` (`src/lib/categoryStats.js`) is what combines live
 and snapshot-derived category totals, and it degrades to exactly this for
 an old snapshot without anything needing to special-case it.
+
+## Time period controls
+
+`TimeRangeSelector` (`src/components/TimeRangeSelector.jsx`) is the
+week/month/year/all-time picker shared by Group Stats and Your Stats, with
+three things worth knowing:
+
+- **Jumping across long spans** — alongside the ordinary ‹ / › single-step
+  arrows, month view gets a ‹‹ / ›› pair that jumps a full year (12
+  months) at a time. Week view gets *two* extra tiers instead of one:
+  ‹‹ / ›› for a month (4 weeks) and ‹‹‹ / ››› for a year (52 weeks) — a
+  year-jump alone still leaves up to ~25 single-step clicks to land on a
+  specific week within the right year, so the month tier sits between the
+  single step and the year jump. Without any of this, checking a week
+  from two years ago meant clicking › roughly 104 times. Year view has no
+  extra tiers of its own — a single ordinary step there is already a full
+  year, so a bigger one wouldn't solve the same problem. `JUMP_TIERS` in
+  `TimeRangeSelector.jsx` is the one place both granularities' tiers are
+  defined, smallest first; the component works out chevron counts and
+  left/right ordering from that list, so a third tier (or a different
+  amount) is a one-line change, not a rewrite.
+- **A default period on Your Stats** — the page opens on whatever
+  granularity is set as your default (out of the box, "Month"), always
+  with the current one selected, never a specific frozen point in time.
+  Change it any time: browse to a different tab and a small "Set \_\_\_ as
+  default" link appears beneath the tabs; your saved default itself is
+  always shown with a thin outline around its tab — separate from which
+  tab is *active* right now, since you can be looking at Year while Month
+  stays your saved default. Group Stats doesn't have this (there's no
+  single "default" that makes sense per-group the way there is for your
+  own cross-group view), so its own `TimeRangeSelector` simply doesn't
+  pass the two props (`defaultGranularity`, `onSetDefault`) that turn the
+  feature on — the component itself degrades cleanly to its old behavior
+  when they're omitted.
+- **Where "Spending thresholds" sits on Your Stats** — pinned to either the
+  very top of the page (above the period selector) or the very bottom
+  (after everything else), never in between, since thresholds are always
+  this-month regardless of the selector while every other section on the
+  page moves with it — sitting in the middle read as confusing once
+  thresholds existed alongside a period selector. Since there's no
+  obviously-correct choice, it's a per-device preference toggled from a
+  link right in that section ("Show at top/bottom instead"), not a fixed
+  decision.
+
+Both preferences above (default granularity, thresholds position) live in
+`localStorage` (`src/lib/statsPreferences.js`), the same per-device-only
+mechanism already used for currency and dark/light mode — they won't
+follow you to a different phone or browser.
 
 ## Recurring bills
 
