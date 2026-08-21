@@ -436,20 +436,32 @@ a single page, `src/pages/Guide.jsx`, and each section is self-contained.
 
 ## Recaps, PDFs, and CSV
 
-Every bill and every group's settle-up has three export options sitting
-next to each other:
+Every bill and every group's settle-up has a single **Share recap** button
+(`src/components/ShareButton.jsx`) — clicking it opens a small menu with
+the two ways to get the recap out, rather than two separate buttons sitting
+side by side:
 
-- **Share recap** — plain text via the phone's native share sheet (straight
-  into WhatsApp, Messages, wherever), falling back to copy-to-clipboard on
-  desktop. `src/lib/recapText.js` builds the text; it leans on WhatsApp's
-  own `*bold*`/`_italic_` formatting rather than markdown, since markdown
-  wouldn't render there at all.
-- **Download PDF** — uses the browser's own print dialog rather than a new
-  dependency: a `.print-only` element (see `PrintableRecap.jsx` and the
+- **Share as text** — plain text via the phone's native share sheet
+  (straight into WhatsApp, Messages, wherever), falling back to
+  copy-to-clipboard on desktop. `src/lib/recapText.js` builds the text; it
+  leans on WhatsApp's own `*bold*`/`_italic_` formatting rather than
+  markdown, since markdown wouldn't render there at all.
+- **Download as PDF** — uses the browser's own print dialog rather than a
+  new dependency: a `.print-only` element (see `PrintableRecap.jsx` and the
   `@media print` rules in `styles.css`) stays hidden on screen and is the
   only thing visible when `window.print()` is called, so "Save as PDF" in
-  the print dialog produces a clean recap with none of the app's own UI in it.
-- **Export CSV** *(bills only)* — one row per item, via `src/lib/csv.js`.
+  the print dialog produces a clean recap with none of the app's own UI in
+  it. `ShareButton` itself has no idea which printable recap actually
+  exists on the page — it just triggers the print dialog, same as before.
+
+A bill also gets a separate, always-visible **Export CSV** button (one row
+per item, via `src/lib/csv.js`) next to the share menu, divided from it by
+a thin vertical rule (`.recap-divider` in `styles.css`) rather than another
+menu option — it's a fundamentally different kind of export (structured
+data, not a human-readable recap), so folding it into the same menu would
+have blurred that distinction. A future whole-group CSV export (see
+[Roadmap](#roadmap)) should sit the same way, next to that page's own
+share menu.
 
 ### Importing from Splitwise
 

@@ -414,9 +414,7 @@ export default function BillView() {
           title={bill?.title}
           getText={() => formatBillRecap({ ...bill, payers: billPayers }, items, allMembers, format)}
         />
-        <button type="button" className="btn-secondary" onClick={() => window.print()}>
-          Download PDF
-        </button>
+        <span className="recap-divider" />
         <button type="button" className="btn-secondary" onClick={exportCsv}>
           Export CSV
         </button>

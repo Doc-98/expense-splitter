@@ -191,20 +191,25 @@ const GROUPS = [
         keywords: 'recap share text pdf csv export download print',
         body: (
           <>
-            <p>Both a single bill and a group's settle-up have the same export options:</p>
+            <p>
+              Both a single bill and a group's settle-up have a <strong>Share recap</strong>{' '}
+              button — tap it for a small menu with the two ways to get it out:
+            </p>
             <ul>
               <li>
-                <strong>Share recap</strong> — quick, plain text formatted for pasting straight
+                <strong>Share as text</strong> — quick, plain text formatted for pasting straight
                 into a chat.
               </li>
               <li>
-                <strong>Download PDF</strong> — opens your browser's print dialog; choose "Save as
-                PDF."
-              </li>
-              <li>
-                <strong>Export CSV</strong> — a spreadsheet-friendly file, bills only.
+                <strong>Download as PDF</strong> — opens your browser's print dialog; choose
+                "Save as PDF."
               </li>
             </ul>
+            <p>
+              A bill also has a separate <strong>Export CSV</strong> button next to the share
+              menu, for a spreadsheet-friendly file (bills only) rather than a human-readable
+              recap.
+            </p>
           </>
         ),
       },

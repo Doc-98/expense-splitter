@@ -323,9 +323,6 @@ export default function GroupView() {
             title={`Settle up — ${group?.name}`}
             getText={() => formatSettlementRecap(group?.name, settlement, allMembers, format)}
           />
-          <button type="button" className="btn-secondary" onClick={() => window.print()}>
-            Download PDF
-          </button>
         </div>
       )}
       <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />
