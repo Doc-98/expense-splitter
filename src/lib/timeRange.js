@@ -13,7 +13,18 @@ export function getPeriodRange(granularity, offset) {
     const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
     const lastDay = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 1)
     const label = `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${lastDay.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
-    return { start, end, label }
+    // Week is the one granularity whose label has no year in it at all
+    // (month spells it out, "August 2026"; year obviously is one) — a
+    // week's own short date range reads as ambiguous once you're more
+    // than a few months from today, so callers show this alongside the
+    // label instead of folding it in, to keep the two visually distinct
+    // rather than a longer, harder-to-scan single string. A week that
+    // crosses a year boundary (e.g. Dec 29 – Jan 4) shows both years.
+    const yearLabel =
+      start.getFullYear() === lastDay.getFullYear()
+        ? String(start.getFullYear())
+        : `${start.getFullYear()}–${lastDay.getFullYear()}`
+    return { start, end, label, yearLabel }
   }
 
   if (granularity === 'month') {

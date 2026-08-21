@@ -30,6 +30,7 @@ export default function TimeRangeSelector({
   offset,
   setOffset,
   label,
+  yearLabel,
   defaultGranularity,
   onSetDefault,
 }) {
@@ -95,7 +96,10 @@ export default function TimeRangeSelector({
           >
             ‹
           </button>
-          <span className="time-range-label">{label}</span>
+          <span className="time-range-label-stack">
+            {yearLabel && <span className="time-range-year mono">{yearLabel}</span>}
+            <span className="time-range-label">{label}</span>
+          </span>
           <button
             type="button"
             className="btn-icon"

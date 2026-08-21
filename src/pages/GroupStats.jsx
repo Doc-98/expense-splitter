@@ -77,7 +77,7 @@ export default function GroupStats() {
     load()
   }, [load])
 
-  const { start, end, label } = getPeriodRange(granularity, offset)
+  const { start, end, label, yearLabel } = getPeriodRange(granularity, offset)
   const { bills, items, itemShares } = filterByDateRange(rawBills, rawItems, rawShares, start, end)
   const totals = computeSpendingTotals({ bills, items, itemShares })
   const categoryTotals = computeCategoryTotals({ bills, items })
@@ -152,6 +152,7 @@ export default function GroupStats() {
         offset={offset}
         setOffset={setOffset}
         label={label}
+        yearLabel={yearLabel}
       />
 
       <div className="stats-summary">

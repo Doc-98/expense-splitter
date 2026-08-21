@@ -181,7 +181,7 @@ export default function AccountStats() {
     load()
   }, [load])
 
-  const { start, end, label } = getPeriodRange(granularity, offset)
+  const { start, end, label, yearLabel } = getPeriodRange(granularity, offset)
   const { bills, items, itemShares } = filterByDateRange(rawBills, rawItems, rawShares, start, end)
 
   // Spending thresholds are always compared against the current calendar
@@ -451,6 +451,7 @@ export default function AccountStats() {
             offset={offset}
             setOffset={setOffset}
             label={label}
+            yearLabel={yearLabel}
             defaultGranularity={defaultGranularity}
             onSetDefault={handleSetDefaultGranularity}
           />

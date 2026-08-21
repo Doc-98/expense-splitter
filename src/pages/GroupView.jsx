@@ -268,9 +268,6 @@ export default function GroupView() {
       <Link to={`/groups/${groupId}/recurring`} className="btn-link import-link">
         Recurring bills
       </Link>
-      <Link to={`/groups/${groupId}/import`} className="btn-link import-link">
-        Import bills from Splitwise (CSV)
-      </Link>
 
       {bills?.length === 0 && (
         <p className="empty-state">No bills yet. Start one above, then scan or add a receipt.</p>
@@ -326,9 +323,6 @@ export default function GroupView() {
             title={`Settle up — ${group?.name}`}
             getText={() => formatSettlementRecap(group?.name, settlement, allMembers, format)}
           />
-          <button type="button" className="btn-secondary" onClick={() => window.print()}>
-            Download PDF
-          </button>
         </div>
       )}
       <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />
@@ -344,7 +338,7 @@ export default function GroupView() {
           <span className="muted">this month</span>
         </div>
       </div>
-      <Link to={`/groups/${groupId}/stats`} className="btn-link">
+      <Link to={`/groups/${groupId}/stats`} className="btn-link see-stats-link">
         See full stats →
       </Link>
     </div>

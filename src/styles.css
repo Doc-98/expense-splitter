@@ -443,7 +443,13 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .debtor { font-weight: 600; }
 .creditor { font-weight: 600; color: var(--accent-dark); }
 .settlement-verb { color: var(--ink-soft); }
-.amount { margin-left: auto; font-weight: 600; }
+/* Groups the amount with its action button so the two always move
+   together — previously margin-left:auto sat on .amount alone, so if the
+   row wrapped between the amount and the button, the button (with no auto
+   margin of its own) fell back to flex-start on its own line instead of
+   staying right-aligned alongside the amount. */
+.settlement-action { margin-left: auto; display: flex; align-items: center; gap: var(--space-xs); flex-wrap: nowrap; }
+.amount { font-weight: 600; }
 .mark-paid-btn { padding: 6px 12px; font-size: 13px; }
 
 .payment-form-title {
@@ -619,6 +625,9 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .settings-section-title:first-of-type { margin-top: 0; }
 .group-stats-preview-title { margin-top: 40px; padding-top: var(--space-lg); border-top: 1px solid var(--border); }
+/* Right-aligned like a page corner turning, the usual place a "see more"
+   link like this sits. */
+.see-stats-link { display: block; text-align: right; margin-top: var(--space-sm); }
 
 .member-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .member-list-item {
@@ -640,9 +649,30 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .threshold-input-wrap { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .threshold-input-wrap input { width: 90px; text-align: right; font-family: var(--font-mono); }
 
-.share-button-wrap { display: flex; align-items: center; gap: 10px; margin-top: var(--space-sm); }
-.recap-actions { display: flex; gap: 10px; margin-top: var(--space-sm); flex-wrap: wrap; }
+.share-button-wrap { position: relative; display: flex; align-items: center; gap: 10px; margin-top: var(--space-sm); }
+.share-menu-popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px var(--space-md);
+  min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  z-index: 10;
+}
+/* margin-bottom here, on top of .group-stats-preview-title's own
+   margin-top below, so the gap above that section's divider doesn't rely
+   solely on one side's margin — belt and suspenders against the divider
+   ever reading as too close to these buttons. */
+.recap-actions { display: flex; align-items: center; gap: 10px; margin-top: var(--space-sm); margin-bottom: var(--space-lg); flex-wrap: wrap; }
 .recap-actions .share-button-wrap { margin-top: 0; }
+/* A thin separator between the share menu and a standalone export button
+   sitting in the same row (e.g. "Export CSV" on a bill) — stretches to the
+   row's own height rather than a fixed one, so it lines up with whatever
+   the actual button heights turn out to be. */
+.recap-divider { align-self: stretch; width: 1px; background: var(--border); }
 .share-status { font-size: 13px; }
 
 /* ---------- Group stats page ---------- */
@@ -703,23 +733,31 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .comparison-badge { display: block; text-align: right; font-size: 11px; margin-top: 2px; }
 
 .time-range { margin-bottom: var(--space-lg); }
-.time-range-tabs { margin-bottom: var(--space-sm); }
+/* The extra 4-5px here (on top of .tab-row's own flush layout) is what
+   keeps .tab-is-default's outline below from bleeding into a neighboring
+   tab — see the comment on that rule for why the two are related. Scoped
+   to .time-range-tabs specifically (not plain .tab-row, shared with the
+   sign-in/sign-up toggle on the login screen) so that page's tabs are
+   unaffected. */
+.time-range-tabs { margin-bottom: var(--space-sm); gap: 5px; }
 .time-range-nav {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 2px var(--space-sm);
+  gap: 6px;
 }
-.time-range-label { font-size: 14px; font-weight: 500; min-width: 110px; text-align: center; }
-.time-range-nav .btn-icon { font-size: 22px; padding: 0 2px; }
+.time-range-label-stack { display: flex; flex-direction: column; align-items: center; min-width: 110px; }
+.time-range-year { font-size: 11px; color: var(--ink-soft); line-height: 1.4; }
+.time-range-label { font-size: 14px; font-weight: 500; text-align: center; }
+.time-range-nav .btn-icon { font-size: 24px; padding: 4px 5px; }
 .time-range-nav .btn-icon:disabled { opacity: 0.3; cursor: default; }
 /* The extra "jump ~1 month" / "jump ~1 year" tiers — smaller and softer
    than the ordinary single-step ‹ / ›, which stays the biggest/clearest
-   tap target since it's the one actually used most often. Also keeps the
-   week view's now-6-arrow row from feeling as crowded as 6 identical-size
-   buttons would. */
-.time-range-nav .btn-icon.time-range-jump { font-size: 16px; color: var(--ink-soft); }
+   tap target since it's the one actually used most often. Still large
+   enough to tell apart at a glance and tap accurately, which the first
+   pass at this (font-size 16px, 2px padding, no inter-button gap) wasn't. */
+.time-range-nav .btn-icon.time-range-jump { font-size: 20px; color: var(--ink-soft); }
 
 .pagination {
   display: flex;
