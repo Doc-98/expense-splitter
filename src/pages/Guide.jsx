@@ -207,8 +207,10 @@ const GROUPS = [
             </ul>
             <p>
               A bill also has a separate <strong>Export CSV</strong> button next to the share
-              menu, for a spreadsheet-friendly file (bills only) rather than a human-readable
-              recap.
+              menu, for a spreadsheet-friendly file rather than a human-readable recap. A group's
+              settle-up recap has the same button for its own CSV export — one row per item
+              across every bill in the group, with the date, bill, category, and who paid, so it
+              can be opened in a spreadsheet or backed up outside the app.
             </p>
           </>
         ),

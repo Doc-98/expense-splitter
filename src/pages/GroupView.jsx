@@ -10,6 +10,7 @@ import { useClickOutside } from '../lib/useClickOutside'
 import { useCurrency } from '../context/CurrencyContext'
 import { processDueRecurringBills } from '../lib/recurringBills'
 import { groupItemsByDate } from '../lib/dateGroups'
+import { buildGroupCsvRows, toCsv, downloadCsv } from '../lib/csv'
 import SettlementSummary from '../components/SettlementSummary'
 import ShareButton from '../components/ShareButton'
 import InviteMenu from '../components/InviteMenu'
@@ -213,6 +214,36 @@ export default function GroupView() {
     reloadAll()
   }
 
+  // Fetched fresh on demand rather than kept in page state permanently —
+  // the bill list above only ever needs lightweight rows (no items/shares),
+  // and an export is infrequent enough that a dedicated round-trip when it's
+  // actually clicked is simpler than keeping every bill's full item detail
+  // loaded at all times just in case someone exports.
+  async function exportGroupCsv() {
+    setError(null)
+    try {
+      const [{ data: billsData, error: billsError }, { data: categoriesData, error: categoriesError }] = await Promise.all([
+        supabase
+          .from('bills')
+          .select(
+            'id, title, created_at, paid_by, category_id, items(name, quantity, unit_price, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+          )
+          .eq('group_id', groupId)
+          .order('created_at', { ascending: true }),
+        supabase.from('categories').select('id, name').eq('group_id', groupId),
+      ])
+      if (billsError) throw billsError
+      if (categoriesError) throw categoriesError
+
+      const bills = (billsData || []).map((b) => ({ ...b, payers: b.bill_payers || [] }))
+      const { header, rows } = buildGroupCsvRows(bills, allMembers, categoriesData || [])
+      const filename = `${(group?.name || 'group').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-bills.csv`
+      downloadCsv(filename, toCsv(header, rows))
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   return (
     <div className="page">
       <header className="page-header">
@@ -323,6 +354,14 @@ export default function GroupView() {
             title={`Settle up — ${group?.name}`}
             getText={() => formatSettlementRecap(group?.name, settlement, allMembers, format)}
           />
+          {bills && bills.length > 0 && (
+            <>
+              <span className="recap-divider" />
+              <button type="button" className="btn-secondary" onClick={exportGroupCsv}>
+                Export CSV
+              </button>
+            </>
+          )}
         </div>
       )}
       <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />

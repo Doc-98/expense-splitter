@@ -459,9 +459,21 @@ per item, via `src/lib/csv.js`) next to the share menu, divided from it by
 a thin vertical rule (`.recap-divider` in `styles.css`) rather than another
 menu option — it's a fundamentally different kind of export (structured
 data, not a human-readable recap), so folding it into the same menu would
-have blurred that distinction. A future whole-group CSV export (see
-[Roadmap](#roadmap)) should sit the same way, next to that page's own
-share menu.
+have blurred that distinction.
+
+The group page's settle-up recap gets the same treatment: an **Export CSV**
+button next to its own share menu, same divider style, exporting the whole
+group's bill history rather than one bill's items — `buildGroupCsvRows()` in
+`src/lib/csv.js` walks every bill in the group (oldest first) and emits one
+row per item, with `Date`, `Bill`, `Item`, `Quantity`, `Unit Price`,
+`Total Price`, `Category`, `Paid By`, and `Split With` columns. Category
+resolution matches the stats page exactly (an item's own category, else its
+bill's, else "Uncategorized"), `Paid By` lists every payer with their amount
+for multi-payer bills, and dates are the bill's local calendar day in
+`YYYY-MM-DD` form — sortable and locale-unambiguous, since this file is
+meant to be read back into a spreadsheet rather than displayed. It's the
+full history, not scoped to whatever period Your Stats happens to be showing;
+a group's CSV export is a one-off backup/analysis action, not a filtered view.
 
 ### Importing from Splitwise
 
@@ -658,7 +670,6 @@ on Your Stats) have shipped.
   personal ones that exist today — very low priority; nothing about
   `spending_thresholds` being keyed by `user_id` rules this out later, it's
   just not built
-- A whole-group CSV export (today's export is per-bill only)
 - AI-assisted category suggestions during a scan, since the vision models
   are already looking at the receipt image
 - Push notifications, once the app is used consistently enough for that to
