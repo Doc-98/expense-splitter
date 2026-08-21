@@ -7,6 +7,7 @@ import { computeBalances, computeSpendingTotals } from '../lib/settlement'
 import { computeMyCategorySpend, mergeCategorySpend } from '../lib/categoryStats'
 import { mergeCategoriesByName } from '../lib/categories'
 import { fetchThresholds } from '../lib/thresholds'
+import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
 import { getPeriodRange, filterByDateRange, sumDailyInRange, sumCategoryDailyInRange, monthlyFromDaily } from '../lib/timeRange'
 import { comparePeriods } from '../lib/periodComparison'
 import TimeRangeSelector from '../components/TimeRangeSelector'
@@ -40,9 +41,29 @@ export default function AccountStats() {
   const [thresholds, setThresholds] = useState([])
   const [snapshots, setSnapshots] = useState([]) // departed groups' frozen records
   const [overallBalance, setOverallBalance] = useState(0)
-  const [granularity, setGranularity] = useState('all')
+  // Read once on mount — the lazy useState initializer form, so this never
+  // re-reads localStorage on a later render. Always applied with offset 0;
+  // "default" is a granularity (week/month/year/all), never a specific
+  // frozen point in time.
+  const [granularity, setGranularity] = useState(() => getStatsPreferences().defaultGranularity)
   const [offset, setOffset] = useState(0)
+  // Separate from `granularity` above (which changes as you browse around)
+  // so the TimeRangeSelector outline can move the instant "Set as default"
+  // is clicked, without needing a reload to reflect the new saved value.
+  const [defaultGranularity, setDefaultGranularity] = useState(() => getStatsPreferences().defaultGranularity)
+  const [thresholdsPosition, setThresholdsPosition] = useState(() => getStatsPreferences().thresholdsPosition)
   const [error, setError] = useState(null)
+
+  function handleSetDefaultGranularity(g) {
+    setStatsPreferences({ defaultGranularity: g })
+    setDefaultGranularity(g)
+  }
+
+  function toggleThresholdsPosition() {
+    const next = thresholdsPosition === 'top' ? 'bottom' : 'top'
+    setStatsPreferences({ thresholdsPosition: next })
+    setThresholdsPosition(next)
+  }
 
   const load = useCallback(async () => {
     setError(null)
@@ -370,6 +391,45 @@ export default function AccountStats() {
     }
   }
 
+  // Built once and placed at whichever end of the page thresholdsPosition
+  // says — top (above the period selector) or bottom (after everything
+  // else) — never in the middle, since every other section on this page
+  // moves with the period selector and this one deliberately doesn't.
+  const thresholdsSection = thresholdRows.length > 0 && (
+    <>
+      <h2 className="settings-section-title">Spending thresholds</h2>
+      <div className="stats-bars">
+        {thresholdRows.map((t) => (
+          <div key={t.key} className="stats-bar-row">
+            <span className="stats-bar-label">
+              <span className="category-dot" style={{ background: t.color }} />
+              {t.name}
+            </span>
+            <div className="stats-bar-track">
+              <div
+                className={`stats-bar-fill ${t.over ? 'over-budget' : ''}`}
+                style={{
+                  width: `${Math.min(100, (t.spent / t.amount) * 100)}%`,
+                  background: t.over ? undefined : t.color,
+                }}
+              />
+            </div>
+            <span className={`mono threshold-bar-value ${t.over ? 'balance-negative' : ''}`}>
+              {format(t.spent)} / {format(t.amount)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="muted stats-note">
+        Always this calendar month, and always your own share — not scoped to the period
+        selected above. <Link to="/thresholds">Manage thresholds →</Link>{' · '}
+        <button type="button" className="btn-link" onClick={toggleThresholdsPosition}>
+          {thresholdsPosition === 'top' ? 'Show at bottom instead' : 'Show at top instead'}
+        </button>
+      </p>
+    </>
+  )
+
   return (
     <div className="page">
       <header className="page-header">
@@ -383,12 +443,16 @@ export default function AccountStats() {
         <p className="empty-state">Join or create a group to start seeing your stats.</p>
       ) : (
         <>
+          {thresholdsPosition === 'top' && thresholdsSection}
+
           <TimeRangeSelector
             granularity={granularity}
             setGranularity={setGranularity}
             offset={offset}
             setOffset={setOffset}
             label={label}
+            defaultGranularity={defaultGranularity}
+            onSetDefault={handleSetDefaultGranularity}
           />
 
           <div className="stats-summary">
@@ -415,39 +479,6 @@ export default function AccountStats() {
             left. Overall balance is always right-now, not scoped to a time period — including any
             not-yet-settled balance frozen from a group you've left.
           </p>
-
-          {thresholdRows.length > 0 && (
-            <>
-              <h2 className="settings-section-title">Spending thresholds</h2>
-              <div className="stats-bars">
-                {thresholdRows.map((t) => (
-                  <div key={t.key} className="stats-bar-row">
-                    <span className="stats-bar-label">
-                      <span className="category-dot" style={{ background: t.color }} />
-                      {t.name}
-                    </span>
-                    <div className="stats-bar-track">
-                      <div
-                        className={`stats-bar-fill ${t.over ? 'over-budget' : ''}`}
-                        style={{
-                          width: `${Math.min(100, (t.spent / t.amount) * 100)}%`,
-                          background: t.over ? undefined : t.color,
-                        }}
-                      />
-                    </div>
-                    <span className={`mono threshold-bar-value ${t.over ? 'balance-negative' : ''}`}>
-                      {format(t.spent)} / {format(t.amount)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <p className="muted stats-note">
-                Always this calendar month, and always your own share — not scoped to the period
-                selected above.{' '}
-                <Link to="/thresholds">Manage thresholds →</Link>
-              </p>
-            </>
-          )}
 
           {categoryRows.length > 0 && (
             <>
@@ -536,6 +567,8 @@ export default function AccountStats() {
               </div>
             </>
           )}
+
+          {thresholdsPosition === 'bottom' && thresholdsSection}
         </>
       )}
     </div>

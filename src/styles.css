@@ -299,6 +299,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   cursor: pointer;
 }
 .tab.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+/* The saved "default" tab — a thin outline sitting just outside the tab's
+   own box, never touching it, so it reads as "this one's pinned" without
+   competing with .tab.active's fill (a tab can be active, default, both,
+   or neither — the two are independent). */
+.tab.tab-is-default { outline: 1.5px solid var(--accent); outline-offset: 2px; }
+.time-range-set-default { display: block; margin: -4px 0 var(--space-sm); font-size: 12px; }
 
 .auth-form { display: flex; flex-direction: column; }
 .auth-form .btn-primary { margin-top: 4px; }

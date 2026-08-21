@@ -257,6 +257,16 @@ const GROUPS = [
               before this app tracked category-level history, whose frozen record only has the
               plain totals, not a category breakdown.
             </p>
+            <p>
+              A few controls on the week/month/year/all-time selector itself: when viewing by
+              week or month, a second pair of arrows (‹‹ / ››) jumps a full year at a time, for
+              checking something from a while back without clicking through one period after
+              another. On Your Stats, the page opens on whichever period is your saved default
+              (a thin outline marks that tab) — browse to a different one and a small "Set ___ as
+              default" link appears to change it. Both that and where the "Spending thresholds"
+              section sits (top or bottom of the page — a link right in that section switches it)
+              are saved only on this device, same as currency and dark mode.
+            </p>
           </>
         ),
       },
