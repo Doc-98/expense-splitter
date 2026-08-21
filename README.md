@@ -323,8 +323,17 @@ an old snapshot without anything needing to special-case it.
 
 `TimeRangeSelector` (`src/components/TimeRangeSelector.jsx`) is the
 week/month/year/all-time picker shared by Group Stats and Your Stats, with
-three things worth knowing:
+four things worth knowing:
 
+- **Which year, in week view** — month view's label already spells out
+  the year ("August 2026") and year view obviously is one, but a week's
+  own label ("Aug 17 – Aug 23") never did, so it's easy to lose track of
+  which year you're looking at after a few jumps back. Week view now
+  shows the year on its own line above the date range (`getPeriodRange()`
+  in `src/lib/timeRange.js` returns it as `yearLabel`, alongside the
+  existing `label`; both other granularities simply don't return one,
+  since it'd be redundant with what their own label already says). A week
+  that spans a year boundary (Dec 29 – Jan 4) shows both years.
 - **Jumping across long spans** — alongside the ordinary ‹ / › single-step
   arrows, month view gets a ‹‹ / ›› pair that jumps a full year (12
   months) at a time. Week view gets *two* extra tiers instead of one:

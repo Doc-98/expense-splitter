@@ -703,23 +703,31 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .comparison-badge { display: block; text-align: right; font-size: 11px; margin-top: 2px; }
 
 .time-range { margin-bottom: var(--space-lg); }
-.time-range-tabs { margin-bottom: var(--space-sm); }
+/* The extra 4-5px here (on top of .tab-row's own flush layout) is what
+   keeps .tab-is-default's outline below from bleeding into a neighboring
+   tab — see the comment on that rule for why the two are related. Scoped
+   to .time-range-tabs specifically (not plain .tab-row, shared with the
+   sign-in/sign-up toggle on the login screen) so that page's tabs are
+   unaffected. */
+.time-range-tabs { margin-bottom: var(--space-sm); gap: 5px; }
 .time-range-nav {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 2px var(--space-sm);
+  gap: 6px;
 }
-.time-range-label { font-size: 14px; font-weight: 500; min-width: 110px; text-align: center; }
-.time-range-nav .btn-icon { font-size: 22px; padding: 0 2px; }
+.time-range-label-stack { display: flex; flex-direction: column; align-items: center; min-width: 110px; }
+.time-range-year { font-size: 11px; color: var(--ink-soft); line-height: 1.4; }
+.time-range-label { font-size: 14px; font-weight: 500; text-align: center; }
+.time-range-nav .btn-icon { font-size: 24px; padding: 4px 5px; }
 .time-range-nav .btn-icon:disabled { opacity: 0.3; cursor: default; }
 /* The extra "jump ~1 month" / "jump ~1 year" tiers — smaller and softer
    than the ordinary single-step ‹ / ›, which stays the biggest/clearest
-   tap target since it's the one actually used most often. Also keeps the
-   week view's now-6-arrow row from feeling as crowded as 6 identical-size
-   buttons would. */
-.time-range-nav .btn-icon.time-range-jump { font-size: 16px; color: var(--ink-soft); }
+   tap target since it's the one actually used most often. Still large
+   enough to tell apart at a glance and tap accurately, which the first
+   pass at this (font-size 16px, 2px padding, no inter-button gap) wasn't. */
+.time-range-nav .btn-icon.time-range-jump { font-size: 20px; color: var(--ink-soft); }
 
 .pagination {
   display: flex;
