@@ -453,8 +453,12 @@ next to each other:
 
 ### Importing from Splitwise
 
-`/groups/:groupId/import` reads a Splitwise CSV export directly (Group
-settings → Export as CSV, inside Splitwise). Splitwise's format is `Date,
+`/groups/:groupId/import` reads a Splitwise CSV export directly (from
+*Splitwise's* own Group settings → Export as CSV, not this app's). The
+link to this page lives in this app's own **Group settings**, not the
+group page itself — realistically a one-time thing per group, so it
+doesn't need to stay one tap away from the bill list forever. Splitwise's
+export format is `Date,
 Description, Category, Cost, Currency`, then one column per group member
 holding their **net balance** for that expense (positive = they're owed,
 negative = they owe) — not a raw share amount. `src/lib/splitwiseImport.js`

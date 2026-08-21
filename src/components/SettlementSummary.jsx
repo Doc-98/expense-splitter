@@ -66,14 +66,16 @@ export default function SettlementSummary({ transactions, members, payments, onR
               <span className="debtor">{nameOf(t.from)}</span>
               <span className="settlement-verb">owes</span>
               <span className="creditor">{nameOf(t.to)}</span>
-              <span className="mono amount">{format(t.amount)}</span>
-              <button
-                type="button"
-                className="btn-secondary mark-paid-btn"
-                onClick={() => onRecordPayment(t.from, t.to, t.amount)}
-              >
-                Mark paid
-              </button>
+              <span className="settlement-action">
+                <span className="mono amount">{format(t.amount)}</span>
+                <button
+                  type="button"
+                  className="btn-secondary mark-paid-btn"
+                  onClick={() => onRecordPayment(t.from, t.to, t.amount)}
+                >
+                  Mark paid
+                </button>
+              </span>
             </li>
           ))}
         </ul>
@@ -91,15 +93,17 @@ export default function SettlementSummary({ transactions, members, payments, onR
                 <span className="debtor">{nameOf(p.from_member)}</span>
                 <span className="settlement-verb">paid</span>
                 <span className="creditor">{nameOf(p.to_member)}</span>
-                <span className="mono amount">{format(p.amount)}</span>
-                <button
-                  type="button"
-                  className="btn-icon"
-                  onClick={() => onDeletePayment(p.id)}
-                  aria-label="Undo this payment"
-                >
-                  ×
-                </button>
+                <span className="settlement-action">
+                  <span className="mono amount">{format(p.amount)}</span>
+                  <button
+                    type="button"
+                    className="btn-icon"
+                    onClick={() => onDeletePayment(p.id)}
+                    aria-label="Undo this payment"
+                  >
+                    ×
+                  </button>
+                </span>
               </li>
             ))}
           </ul>

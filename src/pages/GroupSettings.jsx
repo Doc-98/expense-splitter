@@ -490,6 +490,15 @@ export default function GroupSettings() {
         </button>
       </form>
 
+      <h2 className="settings-section-title">Import data</h2>
+      <p className="muted">
+        Bring in a group's spending history from another app — realistically a one-time thing, so
+        it lives here rather than cluttering the group page itself.
+      </p>
+      <Link to={`/groups/${groupId}/import`} className="btn-link import-link">
+        Import bills from Splitwise (CSV)
+      </Link>
+
       {formerRealMembers.length > 0 && (
         <>
           <h2 className="settings-section-title">Former members</h2>

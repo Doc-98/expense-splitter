@@ -216,10 +216,11 @@ const GROUPS = [
           <>
             <p>
               Already tracking expenses in Splitwise? Export your group from Splitwise as a CSV,
-              then use <strong>Import bills from Splitwise</strong> on the group page to bring
-              them in. Each Splitwise expense becomes one bill, dated to match the original.
-              You'll be asked to match each Splitwise name to an existing member or guest before
-              importing.
+              then use <strong>Import bills from Splitwise</strong> in that group's{' '}
+              <strong>Group settings</strong> to bring them in — realistically a one-time thing,
+              so it isn't on the group page itself. Each Splitwise expense becomes one bill,
+              dated to match the original. You'll be asked to match each Splitwise name to an
+              existing member or guest before importing.
             </p>
             <p>
               Splitwise only exports each person's net balance per expense, not each payer's exact
