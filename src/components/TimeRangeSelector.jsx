@@ -1,11 +1,19 @@
 const GRANULARITIES = ['week', 'month', 'year', 'all']
 
-// How far a "jump ~1 year" click moves the offset, per granularity — not
-// present for 'year' itself, since a single ordinary step there is already
-// a full year; doubling that isn't solving the same problem a 104-click
-// walk through weekly offsets is.
-const BIG_STEP = { week: 52, month: 12 }
-const BIG_STEP_LABEL = { week: '52 weeks', month: '12 months' }
+// Extra jump tiers beyond the ordinary single ‹ / › step, smallest first.
+// Month view gets one (a full year, 12 months). Week view gets two — a
+// year alone still leaves up to ~25 single-step clicks to fine-tune to a
+// specific week within it, so a ~1 month (4 week) tier sits between the
+// single step and the year jump. No entry for 'year' itself: an ordinary
+// step there is already a full year, so a bigger tier wouldn't solve the
+// same problem a 104-click walk through weekly offsets does.
+const JUMP_TIERS = {
+  week: [
+    { amount: 4, unitLabel: '1 month' },
+    { amount: 52, unitLabel: '1 year' },
+  ],
+  month: [{ amount: 12, unitLabel: '1 year' }],
+}
 
 function granularityLabel(g) {
   return g === 'all' ? 'All time' : g.charAt(0).toUpperCase() + g.slice(1)
@@ -30,7 +38,16 @@ export default function TimeRangeSelector({
     setOffset(0)
   }
 
-  const bigStep = BIG_STEP[granularity]
+  const tiers = JUMP_TIERS[granularity] || []
+  // Chevron count grows with distance from the single ‹ / › — 2 for the
+  // smallest extra tier, 3 for the next, and so on (there are never more
+  // than two today, but this generalizes if a third ever gets added).
+  // Rendered left-to-right, the *biggest* jump sits furthest from the
+  // label on the left (reversed order); on the right, ascending order puts
+  // the biggest jump furthest away there too — the usual
+  // first/prev/next/last shape.
+  const leftSteps = [...tiers].reverse().map((t, i) => ({ ...t, chevrons: tiers.length - i + 1 }))
+  const rightSteps = tiers.map((t, i) => ({ ...t, chevrons: i + 2 }))
 
   return (
     <div className="time-range">
@@ -59,16 +76,17 @@ export default function TimeRangeSelector({
       )}
       {granularity !== 'all' && (
         <div className="time-range-nav">
-          {bigStep && (
+          {leftSteps.map((t) => (
             <button
+              key={`back-${t.amount}`}
               type="button"
-              className="btn-icon"
-              onClick={() => setOffset((o) => o - bigStep)}
-              aria-label={`Jump back ${BIG_STEP_LABEL[granularity]}`}
+              className="btn-icon time-range-jump"
+              onClick={() => setOffset((o) => o - t.amount)}
+              aria-label={`Jump back ${t.unitLabel}`}
             >
-              ‹‹
+              {'‹'.repeat(t.chevrons)}
             </button>
-          )}
+          ))}
           <button
             type="button"
             className="btn-icon"
@@ -87,17 +105,18 @@ export default function TimeRangeSelector({
           >
             ›
           </button>
-          {bigStep && (
+          {rightSteps.map((t) => (
             <button
+              key={`fwd-${t.amount}`}
               type="button"
-              className="btn-icon"
-              onClick={() => setOffset((o) => Math.min(0, o + bigStep))}
+              className="btn-icon time-range-jump"
+              onClick={() => setOffset((o) => Math.min(0, o + t.amount))}
               disabled={offset >= 0}
-              aria-label={`Jump forward ${BIG_STEP_LABEL[granularity]}`}
+              aria-label={`Jump forward ${t.unitLabel}`}
             >
-              ››
+              {'›'.repeat(t.chevrons)}
             </button>
-          )}
+          ))}
         </div>
       )}
     </div>

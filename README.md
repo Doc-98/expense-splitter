@@ -326,11 +326,19 @@ week/month/year/all-time picker shared by Group Stats and Your Stats, with
 three things worth knowing:
 
 - **Jumping across long spans** — alongside the ordinary ‹ / › single-step
-  arrows, a ‹‹ / ›› pair jumps a full year at a time (52 weeks or 12
-  months) when viewing by week or month. Without it, checking a week from
-  two years ago meant clicking › roughly 104 times. Year view has no ‹‹/››
-  of its own — a single ordinary step there is already a full year, so
-  doubling it doesn't solve the same problem.
+  arrows, month view gets a ‹‹ / ›› pair that jumps a full year (12
+  months) at a time. Week view gets *two* extra tiers instead of one:
+  ‹‹ / ›› for a month (4 weeks) and ‹‹‹ / ››› for a year (52 weeks) — a
+  year-jump alone still leaves up to ~25 single-step clicks to land on a
+  specific week within the right year, so the month tier sits between the
+  single step and the year jump. Without any of this, checking a week
+  from two years ago meant clicking › roughly 104 times. Year view has no
+  extra tiers of its own — a single ordinary step there is already a full
+  year, so a bigger one wouldn't solve the same problem. `JUMP_TIERS` in
+  `TimeRangeSelector.jsx` is the one place both granularities' tiers are
+  defined, smallest first; the component works out chevron counts and
+  left/right ordering from that list, so a third tier (or a different
+  amount) is a one-line change, not a rewrite.
 - **A default period on Your Stats** — the page opens on whatever
   granularity is set as your default (out of the box, "Month"), always
   with the current one selected, never a specific frozen point in time.

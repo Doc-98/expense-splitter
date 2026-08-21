@@ -708,11 +708,18 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-md);
+  flex-wrap: wrap;
+  gap: 2px var(--space-sm);
 }
-.time-range-label { font-size: 14px; font-weight: 500; min-width: 140px; text-align: center; }
-.time-range-nav .btn-icon { font-size: 22px; }
+.time-range-label { font-size: 14px; font-weight: 500; min-width: 110px; text-align: center; }
+.time-range-nav .btn-icon { font-size: 22px; padding: 0 2px; }
 .time-range-nav .btn-icon:disabled { opacity: 0.3; cursor: default; }
+/* The extra "jump ~1 month" / "jump ~1 year" tiers — smaller and softer
+   than the ordinary single-step ‹ / ›, which stays the biggest/clearest
+   tap target since it's the one actually used most often. Also keeps the
+   week view's now-6-arrow row from feeling as crowded as 6 identical-size
+   buttons would. */
+.time-range-nav .btn-icon.time-range-jump { font-size: 16px; color: var(--ink-soft); }
 
 .pagination {
   display: flex;
