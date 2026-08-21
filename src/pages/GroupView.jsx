@@ -4,7 +4,8 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { fetchAllGroupMembers } from '../lib/members'
 import { computeBalances, simplifyDebts } from '../lib/settlement'
-import { formatSettlementRecap } from '../lib/recapText'
+import { formatSettlementRecap, formatMultiBillRecap } from '../lib/recapText'
+import { shareOrCopyText } from '../lib/shareText'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
 import { useClickOutside } from '../lib/useClickOutside'
 import { useCurrency } from '../context/CurrencyContext'
@@ -15,6 +16,7 @@ import SettlementSummary from '../components/SettlementSummary'
 import ShareButton from '../components/ShareButton'
 import InviteMenu from '../components/InviteMenu'
 import Pagination from '../components/Pagination'
+import BillActionsMenu from '../components/BillActionsMenu'
 import { PrintableSettlementRecap } from '../components/PrintableRecap'
 
 const BILLS_PAGE_SIZE = 15
@@ -39,6 +41,7 @@ export default function GroupView() {
   const [error, setError] = useState(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
+  const [shareStatus, setShareStatus] = useState(null)
 
   const activeMembers = allMembers.filter((m) => m.active)
   // Grouped by month/day for the date dividers — only the current page's
@@ -249,6 +252,46 @@ export default function GroupView() {
     reloadAll()
   }
 
+  // Entry point for the per-bill menu's own "Select" action — lands in the
+  // exact same state as opening selection mode via the list's own "Select"
+  // toggle and then ticking this one row by hand.
+  function enterSelectModeWith(billId) {
+    setSelectMode(true)
+    setSelectedIds(new Set([billId]))
+  }
+
+  // Shared by both the per-bill menu's "Share" and the bulk select bar's
+  // "Share" — fetched fresh on demand for the same reason exportGroupCsv()
+  // below is: the bill list above only ever holds lightweight rows, and
+  // sharing is rare enough that a dedicated round-trip per click is
+  // simpler than keeping every bill's full item detail in page state at
+  // all times just in case someone shares.
+  async function shareBills(billIds) {
+    setError(null)
+    try {
+      const { data, error: billsError } = await supabase
+        .from('bills')
+        .select(
+          'id, title, note, created_at, paid_by, items(name, quantity, unit_price, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+        )
+        .in('id', billIds)
+        .order('created_at', { ascending: false })
+      if (billsError) throw billsError
+
+      const billsForRecap = (data || []).map((b) => ({ ...b, payers: b.bill_payers || [] }))
+      const text = formatMultiBillRecap(billsForRecap, allMembers, format)
+      const title =
+        billsForRecap.length === 1 ? billsForRecap[0].title : `${billsForRecap.length} bills — ${group?.name}`
+      const result = await shareOrCopyText(text, title)
+      if (result === 'copied') {
+        setShareStatus('Copied to clipboard!')
+        setTimeout(() => setShareStatus(null), 2000)
+      }
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   // Fetched fresh on demand rather than kept in page state permanently —
   // the bill list above only ever needs lightweight rows (no items/shares),
   // and an export is infrequent enough that a dedicated round-trip when it's
@@ -345,16 +388,27 @@ export default function GroupView() {
       {selectMode && (
         <div className="bulk-select-bar">
           <span>{selectedIds.size} selected</span>
-          <button
-            type="button"
-            className="btn-danger"
-            disabled={selectedIds.size === 0}
-            onClick={deleteSelectedBills}
-          >
-            Delete selected
-          </button>
+          <div className="bulk-select-actions">
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={selectedIds.size === 0}
+              onClick={() => shareBills(Array.from(selectedIds))}
+            >
+              Share
+            </button>
+            <button
+              type="button"
+              className="btn-danger"
+              disabled={selectedIds.size === 0}
+              onClick={deleteSelectedBills}
+            >
+              Delete selected
+            </button>
+          </div>
         </div>
       )}
+      {shareStatus && <p className="muted share-status">{shareStatus}</p>}
 
       {bills?.length === 0 && (
         <p className="empty-state">No bills yet. Start one above, then scan or add a receipt.</p>
@@ -391,14 +445,12 @@ export default function GroupView() {
                             {billLabel}
                             <span className="chevron">→</span>
                           </Link>
-                          <button
-                            type="button"
-                            className="btn-icon"
-                            onClick={() => deleteBill(bill)}
-                            aria-label={`Delete ${bill.title}`}
-                          >
-                            ×
-                          </button>
+                          <BillActionsMenu
+                            billTitle={bill.title}
+                            onSelect={() => enterSelectModeWith(bill.id)}
+                            onShare={() => shareBills([bill.id])}
+                            onDelete={() => deleteBill(bill)}
+                          />
                         </>
                       )}
                     </li>

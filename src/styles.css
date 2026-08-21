@@ -383,7 +383,9 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-size: 14px;
+  flex-wrap: wrap;
 }
+.bulk-select-actions { display: flex; align-items: center; gap: var(--space-sm); }
 
 /* A checkbox row reuses .card-list-item's card look but needs its content
    left-aligned (checkbox, then title) rather than .card-list-item's own
@@ -391,6 +393,30 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    (title on the left, a chevron on the right). */
 .bill-select-row { justify-content: flex-start; gap: 12px; cursor: pointer; }
 .bill-select-row input[type='checkbox'] { flex-shrink: 0; width: 18px; height: 18px; }
+
+.bill-menu-wrap { position: relative; }
+.bill-menu-btn {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.bill-menu-btn:hover { color: var(--ink); }
+.bill-menu-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px var(--space-md);
+  min-width: 140px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  z-index: 10;
+}
 
 .member-count-wrap { position: relative; }
 .member-count-btn {
