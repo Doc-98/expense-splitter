@@ -58,7 +58,7 @@ const GROUPS = [
       {
         id: 'adding-a-bill',
         title: 'Adding a bill and splitting items',
-        keywords: 'bill item add scan type manual paid by default split pagination page delete select share menu',
+        keywords: 'bill item add scan type manual paid by default split pagination page delete select share menu edit rename price',
         body: (
           <>
             <p>
@@ -71,6 +71,11 @@ const GROUPS = [
               to splitting with everyone currently in the group, unless you've changed the{' '}
               <strong>"New items split with"</strong> row near the top of the bill — handy when
               only some of the group actually did that particular shop.
+            </p>
+            <p>
+              Made a typo, or a scan misread a price? <strong>Edit</strong> next to any item opens
+              a small form for its name and total cost — no need to delete it and add it back just
+              to fix a mistake. <strong>Save</strong> or <strong>Cancel</strong> returns to normal.
             </p>
             <p>
               <strong>Paid by</strong> controls who fronted the money — usually one person, but

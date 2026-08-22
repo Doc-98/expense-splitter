@@ -583,6 +583,11 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   margin-bottom: 4px;
 }
 .item-price { font-size: 14px; }
+.item-edit-btn { flex-shrink: 0; }
+
+.item-edit-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.item-edit-form input:first-child { flex: 1; min-width: 0; }
+.item-edit-form input:last-of-type { width: 80px; text-align: right; font-family: var(--font-mono); flex-shrink: 0; }
 
 .item-buyers {
   display: flex;

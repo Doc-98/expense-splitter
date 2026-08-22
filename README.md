@@ -28,6 +28,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Setup](#1-create-your-supabase-project)
 - [Resetting the database](#resetting-the-database)
 - [Receipt scanning](#receipt-scanning)
+- [Editing items](#editing-items)
 - [Currency](#currency)
 - [Categories](#categories)
 - [Spending thresholds](#spending-thresholds)
@@ -220,6 +221,31 @@ The **old, server-side approach still exists** in
 hardcoded `ANTHROPIC_API_KEY` secret) but isn't wired up to anything
 anymore — kept only as a reference/starting point if you'd rather run a
 centralized paid option for your own household than rely on BYOK.
+
+## Editing items
+
+**Edit** next to any item (`src/components/ItemRow.jsx`) swaps that row for
+a small inline form — a name field and the line's total cost, the same two
+things the row already shows — so a typo'd name or a scan that misread a
+price doesn't mean deleting the item and re-adding it (and re-picking who's
+splitting it) from scratch. **Save** or **Cancel** returns to the normal
+row; editing hides the row's buyer chips and category picker while it's
+open, same as a guest or category rename elsewhere in the app swaps out the
+rest of that row's actions rather than showing everything at once.
+
+The form deliberately doesn't ask for a quantity — this is for fixing what
+the row actually displays, not a full re-entry of the item. Since an
+item's `total_price` is really `unit_price × quantity`, and quantity isn't
+part of this form, saving a new total recomputes `unit_price` from the
+item's *existing* quantity (`Math.round((totalPrice / quantity) * 100) /
+100` in `BillView.jsx`'s `updateItem()`) rather than leaving it stale. For
+the overwhelmingly common quantity-1 case this is invisible — unit price
+and total price are the same number either way — but it matters for a
+receipt line like "2× Milk, $1.29 each": correcting the total to $3.00
+keeps `quantity` at 2 and updates `unit_price` to $1.50, so a CSV or
+recap export (both of which show quantity and unit price as their own
+columns) stays arithmetically consistent with the total shown on screen,
+instead of quietly disagreeing with it.
 
 ## Currency
 
