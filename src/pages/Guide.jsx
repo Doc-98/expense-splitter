@@ -120,6 +120,32 @@ const GROUPS = [
         ),
       },
       {
+        id: 'searching-filtering',
+        title: 'Searching and filtering bills',
+        keywords: 'search filter tag category amount price range slider match any all',
+        body: (
+          <>
+            <p>
+              The search bar above a group's bill list matches a bill's title or note —
+              case-insensitive, and a partial word is enough, same as searching this guide itself.
+              <strong> Filters</strong> next to it opens a panel (closed by default) with two more
+              ways to narrow the list, which combine with the search and with each other.
+            </p>
+            <p>
+              <strong>Tags</strong> — pick one or more categories to show only bills with an item
+              tagged that way (an item without its own tag counts as its bill's tag, or
+              "Uncategorized" if neither has one). With more than one tag picked,{' '}
+              <strong>Match any</strong> shows bills with at least one of them; <strong>Match
+              all</strong> shows only bills that have every picked tag somewhere in them.
+            </p>
+            <p>
+              <strong>Amount</strong> — a two-handle slider bounded by the group's actual cheapest
+              and priciest bill; drag either end to narrow the list to bills in that price range.
+            </p>
+          </>
+        ),
+      },
+      {
         id: 'scanning',
         title: 'Scanning a receipt',
         keywords: 'scan ocr gemini claude ollama photo camera api key',

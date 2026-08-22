@@ -381,6 +381,33 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .bill-list-controls { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); margin-bottom: var(--space-lg); }
 .bill-list-controls .import-link { margin-bottom: 0; }
 
+/* Reuses the same "receipt tape" search bar treatment as the in-app
+   guide's own search (.guide-search-input) — same torn-edge look, same
+   plain substring/case-insensitive matching underneath. */
+.bill-search-tape { display: flex; align-items: center; gap: var(--space-sm); }
+.bill-search-tape .guide-search-input { flex: 1; width: auto; }
+.bill-filter-toggle { flex-shrink: 0; white-space: nowrap; }
+.bill-filter-toggle-active { color: var(--accent-dark); font-weight: 600; }
+
+.bill-filters-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  margin: 0 0 var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.bill-filters-group { display: flex; flex-direction: column; gap: 8px; }
+.bill-filters-group-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); flex-wrap: wrap; }
+/* Compact and inline rather than the full-width stretch .tab-row/.tab
+   normally have (built for TimeRangeSelector's 4-way granularity picker)
+   — this is a plain two-way switch sitting in a header row, not its own
+   section. */
+.bill-filters-tag-mode { display: inline-flex; width: auto; margin-bottom: 0; }
+.bill-filters-tag-mode .tab { flex: none; padding: 4px 10px; font-size: 13px; }
+
 .bulk-select-bar {
   display: flex;
   align-items: center;
@@ -1112,3 +1139,71 @@ input.item-editable-input {
 }
 .recurring-form-row select,
 .recurring-form-row input[type='date'] { font-size: 14px; }
+
+/* ---------- Dual-thumb range slider (bill amount filter) ----------
+   Two overlapping native range inputs rather than a library or a
+   custom-drawn control — each stays a real, keyboard-operable input.
+   Both inputs' own track painting is hidden; a plain div pair
+   (.range-slider-track/.range-slider-fill) draws the visible track and
+   the filled span between the two handles underneath. pointer-events is
+   disabled on each input everywhere except its own thumb (re-enabled via
+   the ::-webkit-slider-thumb/::-moz-range-thumb rules below), so a click
+   passes through to whichever handle's thumb is actually under the
+   pointer rather than always hitting whichever input is on top. Known,
+   accepted limitation of this dependency-free technique: only dragging a
+   thumb moves it — clicking elsewhere on the track doesn't jump a handle
+   to that point, since enabling that would mean enabling pointer-events
+   on the full-width track too, which brings back the "which input catches
+   the click" ambiguity this whole approach exists to avoid. */
+.range-slider { position: relative; padding-top: 4px; }
+.range-slider-track {
+  position: relative;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 14px 9px;
+}
+.range-slider-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.range-slider-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  margin: 14px 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.range-slider-input:focus { outline: none; }
+.range-slider-input::-webkit-slider-runnable-track { -webkit-appearance: none; background: none; height: 4px; }
+.range-slider-input::-moz-range-track { background: none; height: 4px; border: none; }
+.range-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  cursor: pointer;
+}
+.range-slider-input::-moz-range-thumb {
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  cursor: pointer;
+}
+.range-slider-labels { display: flex; justify-content: space-between; margin-top: 4px; font-size: 13px; color: var(--ink-soft); }

@@ -3,10 +3,12 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { fetchAllGroupMembers } from '../lib/members'
+import { fetchCategories } from '../lib/categories'
 import { computeBalances, simplifyDebts } from '../lib/settlement'
 import { formatSettlementRecap, formatMultiBillRecap } from '../lib/recapText'
 import { shareOrCopyText } from '../lib/shareText'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
+import { filterBills, billTotal } from '../lib/billFilters'
 import { useClickOutside } from '../lib/useClickOutside'
 import { useCurrency } from '../context/CurrencyContext'
 import { processDueRecurringBills } from '../lib/recurringBills'
@@ -17,6 +19,7 @@ import ShareButton from '../components/ShareButton'
 import InviteMenu from '../components/InviteMenu'
 import Pagination from '../components/Pagination'
 import BillActionsMenu from '../components/BillActionsMenu'
+import RangeSlider from '../components/RangeSlider'
 import { PrintableSettlementRecap } from '../components/PrintableRecap'
 
 const BILLS_PAGE_SIZE = 15
@@ -42,11 +45,41 @@ export default function GroupView() {
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [shareStatus, setShareStatus] = useState(null)
+  const [categories, setCategories] = useState([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [selectedTagIds, setSelectedTagIds] = useState(new Set())
+  const [tagMatchMode, setTagMatchMode] = useState('any')
+  // null until initialized from real data (see the effect below) — the
+  // slider has nothing to show until there's at least one bill to derive
+  // bounds from. Once set, a new pricier bill coming in later doesn't
+  // silently widen a range someone already narrowed on purpose.
+  const [priceRange, setPriceRange] = useState(null)
 
   const activeMembers = allMembers.filter((m) => m.active)
+  const priceBounds =
+    bills && bills.length > 0 ? { min: 0, max: Math.max(1, Math.ceil(Math.max(...bills.map(billTotal)))) } : null
+  const priceFilterActive = Boolean(
+    priceBounds && priceRange && (priceRange[0] > priceBounds.min || priceRange[1] < priceBounds.max)
+  )
+  const filtersActive = selectedTagIds.size > 0 || priceFilterActive
+  // Search/tags/price all apply before pagination — Pagination and the
+  // month/day grouping below only ever see whatever's left after
+  // filtering, same as they only ever saw the full list before this
+  // feature existed.
+  const filteredBills = bills
+    ? filterBills(bills, {
+        query: searchQuery,
+        tagIds: selectedTagIds,
+        tagMode: tagMatchMode,
+        minPrice: priceRange ? priceRange[0] : null,
+        maxPrice: priceRange ? priceRange[1] : null,
+      })
+    : []
   // Grouped by month/day for the date dividers — only the current page's
-  // worth of bills, same slice the flat list used before dividers existed.
-  const visibleBills = bills?.slice(billsPage * BILLS_PAGE_SIZE, (billsPage + 1) * BILLS_PAGE_SIZE) || []
+  // worth of (filtered) bills, same slice the flat list used before
+  // dividers existed.
+  const visibleBills = filteredBills.slice(billsPage * BILLS_PAGE_SIZE, (billsPage + 1) * BILLS_PAGE_SIZE)
   const billGroups = groupItemsByDate(visibleBills)
   // My own participant row in this group — bills/items/payments reference
   // group_members.id now, not the raw account ID, so anything I create
@@ -69,10 +102,22 @@ export default function GroupView() {
     setAllMembers(await fetchAllGroupMembers(groupId))
   }, [groupId])
 
+  const loadCategories = useCallback(async () => {
+    setCategories(await fetchCategories(groupId))
+  }, [groupId])
+
+  // items(total_price, category_id) here — lightweight, just what the
+  // search/tag/price filters below need to work entirely client-side
+  // without a fetch per keystroke or slider drag. loadSettlement() below
+  // fetches items again in more detail (shares, payers) for the balance
+  // math; kept as a separate query rather than unifying the two, same as
+  // every other place in this file that fetches its own slice of a bill
+  // (exportGroupCsv, shareBills) rather than routing through one shared
+  // shape everything has to fit.
   const loadBills = useCallback(async () => {
     const { data } = await supabase
       .from('bills')
-      .select('*')
+      .select('*, items(total_price, category_id)')
       .eq('group_id', groupId)
       .order('created_at', { ascending: false })
     setBills(data || [])
@@ -137,9 +182,26 @@ export default function GroupView() {
 
   useEffect(() => {
     if (!bills) return
-    const maxPage = Math.max(0, Math.ceil(bills.length / BILLS_PAGE_SIZE) - 1)
+    const maxPage = Math.max(0, Math.ceil(filteredBills.length / BILLS_PAGE_SIZE) - 1)
     if (billsPage > maxPage) setBillsPage(maxPage)
-  }, [bills, billsPage])
+  }, [bills, filteredBills.length, billsPage])
+
+  // A fresh filter (or a changed price range) should start back on page 1
+  // of its own results, not strand you on whatever page you happened to be
+  // on for a completely different set of bills — the clamp above only
+  // catches it when the new count happens to be too small for the current
+  // page, not "the results changed" in general.
+  useEffect(() => {
+    setBillsPage(0)
+  }, [searchQuery, selectedTagIds, tagMatchMode, priceRange])
+
+  // Initializes the price slider from real data exactly once bills first
+  // load — see the priceRange state comment above for why a later reload
+  // (a new, pricier bill coming in) deliberately doesn't touch it again.
+  useEffect(() => {
+    if (priceRange !== null || !bills || bills.length === 0) return
+    setPriceRange([0, Math.max(1, Math.ceil(Math.max(...bills.map(billTotal))))])
+  }, [bills, priceRange])
 
   const reloadAll = useCallback(() => {
     loadBills()
@@ -149,6 +211,7 @@ export default function GroupView() {
   useEffect(() => {
     loadGroup()
     loadMembers()
+    loadCategories()
     reloadAll()
 
     // Opportunistic, not scheduled — this is what actually generates due
@@ -169,6 +232,7 @@ export default function GroupView() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, reloadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, reloadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members' }, loadMembers)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, loadCategories)
       .subscribe()
 
     return () => supabase.removeChannel(channel)
@@ -242,6 +306,22 @@ export default function GroupView() {
       else next.add(billId)
       return next
     })
+  }
+
+  function toggleTag(tagId) {
+    setSelectedTagIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(tagId)) next.delete(tagId)
+      else next.add(tagId)
+      return next
+    })
+  }
+
+  function clearFilters() {
+    setSearchQuery('')
+    setSelectedTagIds(new Set())
+    setTagMatchMode('any')
+    if (priceBounds) setPriceRange([priceBounds.min, priceBounds.max])
   }
 
   async function deleteSelectedBills() {
@@ -392,6 +472,96 @@ export default function GroupView() {
           Start
         </button>
       </form>
+      {bills && bills.length > 0 && (
+        <>
+          <div className="receipt-tape bill-search-tape">
+            <input
+              type="text"
+              className="guide-search-input"
+              placeholder="Search bills…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search bills"
+            />
+            <button
+              type="button"
+              className={`btn-link bill-filter-toggle ${filtersActive ? 'bill-filter-toggle-active' : ''}`}
+              onClick={() => setFiltersOpen((o) => !o)}
+            >
+              Filters{filtersActive ? ' •' : ''}
+            </button>
+          </div>
+
+          {filtersOpen && (
+            <div className="bill-filters-panel">
+              {categories.length > 0 && (
+                <div className="bill-filters-group">
+                  <div className="bill-filters-group-header">
+                    <span className="muted">Tags</span>
+                    <div className="tab-row bill-filters-tag-mode">
+                      <button
+                        type="button"
+                        className={`tab ${tagMatchMode === 'any' ? 'active' : ''}`}
+                        onClick={() => setTagMatchMode('any')}
+                      >
+                        Match any
+                      </button>
+                      <button
+                        type="button"
+                        className={`tab ${tagMatchMode === 'all' ? 'active' : ''}`}
+                        onClick={() => setTagMatchMode('all')}
+                      >
+                        Match all
+                      </button>
+                    </div>
+                  </div>
+                  <div className="chip-row">
+                    {categories.map((cat) => (
+                      <label key={cat.id} className={`buyer-chip ${selectedTagIds.has(cat.id) ? 'active' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={selectedTagIds.has(cat.id)}
+                          onChange={() => toggleTag(cat.id)}
+                        />
+                        <span className="category-dot" style={{ background: cat.color }} />
+                        {cat.name}
+                      </label>
+                    ))}
+                    <label className={`buyer-chip ${selectedTagIds.has('uncategorized') ? 'active' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={selectedTagIds.has('uncategorized')}
+                        onChange={() => toggleTag('uncategorized')}
+                      />
+                      Uncategorized
+                    </label>
+                  </div>
+                </div>
+              )}
+              {priceBounds && priceRange && priceBounds.max > priceBounds.min && (
+                <div className="bill-filters-group">
+                  <span className="muted">Amount</span>
+                  <RangeSlider
+                    min={priceBounds.min}
+                    max={priceBounds.max}
+                    valueMin={priceRange[0]}
+                    valueMax={priceRange[1]}
+                    onChangeMin={(v) => setPriceRange(([, hi]) => [v, hi])}
+                    onChangeMax={(v) => setPriceRange(([lo]) => [lo, v])}
+                    format={format}
+                  />
+                </div>
+              )}
+              {(searchQuery || filtersActive) && (
+                <button type="button" className="btn-link" onClick={clearFilters}>
+                  Clear filters
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
       <div className="bill-list-controls">
         <Link to={`/groups/${groupId}/recurring`} className="btn-link import-link">
           Recurring bills
@@ -433,6 +603,14 @@ export default function GroupView() {
 
       {bills?.length === 0 && (
         <p className="empty-state">No bills yet. Start one above, then scan or add a receipt.</p>
+      )}
+      {bills && bills.length > 0 && filteredBills.length === 0 && (
+        <p className="empty-state">
+          No bills match these filters.{' '}
+          <button type="button" className="btn-link" onClick={clearFilters}>
+            Clear filters
+          </button>
+        </p>
       )}
 
       <div className="bill-groups">
@@ -484,7 +662,7 @@ export default function GroupView() {
           </div>
         ))}
       </div>
-      <Pagination page={billsPage} setPage={setBillsPage} totalItems={bills?.length || 0} pageSize={BILLS_PAGE_SIZE} />
+      <Pagination page={billsPage} setPage={setBillsPage} totalItems={filteredBills.length} pageSize={BILLS_PAGE_SIZE} />
 
       {error && <p className="status-error">{error}</p>}
 
