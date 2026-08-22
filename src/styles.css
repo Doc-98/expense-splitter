@@ -369,6 +369,56 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .bill-list-item .card-list-item { flex: 1; }
 
+.bill-list-controls { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); margin-bottom: var(--space-lg); }
+.bill-list-controls .import-link { margin-bottom: 0; }
+
+.bulk-select-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  flex-wrap: wrap;
+}
+.bulk-select-actions { display: flex; align-items: center; gap: var(--space-sm); }
+.bulk-select-hint { width: 100%; margin: 4px 0 0; font-size: 13px; }
+
+/* A checkbox row reuses .card-list-item's card look but needs its content
+   left-aligned (checkbox, then title) rather than .card-list-item's own
+   space-between, which assumes exactly two children pinned to each edge
+   (title on the left, a chevron on the right). */
+.bill-select-row { justify-content: flex-start; gap: 12px; cursor: pointer; }
+.bill-select-row input[type='checkbox'] { flex-shrink: 0; width: 18px; height: 18px; }
+
+.bill-menu-wrap { position: relative; }
+.bill-menu-btn {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.bill-menu-btn:hover { color: var(--ink); }
+.bill-menu-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px var(--space-md);
+  min-width: 140px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  z-index: 10;
+}
+
 .member-count-wrap { position: relative; }
 .member-count-btn {
   background: none;
@@ -920,6 +970,18 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .payer-row input[type='text']:disabled { opacity: 0.4; }
 .payer-total-row { margin-top: var(--space-md); font-size: 14px; font-weight: 600; text-align: center; }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--space-md); margin-top: var(--space-lg); }
+
+/* ---------- Typed-confirm modal (delete all bills, etc.) ---------- */
+.typed-confirm-prompt { margin: var(--space-md) 0 6px; font-size: 14px; }
+.delete-all-payments-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: var(--space-sm) 0 0;
+  font-size: 14px;
+  cursor: pointer;
+}
+.delete-all-payments-option input { flex-shrink: 0; }
 
 /* ---------- Currency selector (account dropdown) ---------- */
 .dropdown-item-currency {

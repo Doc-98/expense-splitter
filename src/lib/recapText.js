@@ -34,6 +34,33 @@ export function formatBillRecap(bill, items, members, formatMoney) {
   return lines.join('\n')
 }
 
+// Shares a handful of selected bills as one message — a single selection
+// just delegates straight to formatBillRecap so it reads identically to
+// sharing that one bill from its own page, while more than one gets a
+// count header, each bill's own recap divided by a plain "—" (readable in
+// a chat app without relying on any markdown a divider might need), and a
+// grand total at the end. Bills are shared in whatever order they're
+// passed in — the caller decides that (typically the same newest-first
+// order the list itself displays), this just doesn't second-guess it.
+export function formatMultiBillRecap(bills, members, formatMoney) {
+  if (!bills || bills.length === 0) return 'No bills selected.'
+  if (bills.length === 1) {
+    const bill = bills[0]
+    return formatBillRecap(bill, bill.items || [], members, formatMoney)
+  }
+
+  const lines = [`*${bills.length} bills*`, '']
+  let grandTotal = 0
+  bills.forEach((bill, i) => {
+    const items = bill.items || []
+    grandTotal += items.reduce((sum, item) => sum + Number(item.total_price), 0)
+    lines.push(formatBillRecap(bill, items, members, formatMoney))
+    if (i < bills.length - 1) lines.push('', '—', '')
+  })
+  lines.push('', `*Grand total: ${formatMoney(grandTotal)}*`)
+  return lines.join('\n')
+}
+
 export function formatSettlementRecap(groupName, transactions, members, formatMoney) {
   const nameOf = (id) => members.find((m) => m.id === id)?.name || 'Someone'
   const lines = [`*Settle up — ${groupName}*`, '']

@@ -4,16 +4,19 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { fetchAllGroupMembers } from '../lib/members'
 import { computeBalances, simplifyDebts } from '../lib/settlement'
-import { formatSettlementRecap } from '../lib/recapText'
+import { formatSettlementRecap, formatMultiBillRecap } from '../lib/recapText'
+import { shareOrCopyText } from '../lib/shareText'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
 import { useClickOutside } from '../lib/useClickOutside'
 import { useCurrency } from '../context/CurrencyContext'
 import { processDueRecurringBills } from '../lib/recurringBills'
 import { groupItemsByDate } from '../lib/dateGroups'
+import { buildGroupCsvRows, toCsv, downloadCsv } from '../lib/csv'
 import SettlementSummary from '../components/SettlementSummary'
 import ShareButton from '../components/ShareButton'
 import InviteMenu from '../components/InviteMenu'
 import Pagination from '../components/Pagination'
+import BillActionsMenu from '../components/BillActionsMenu'
 import { PrintableSettlementRecap } from '../components/PrintableRecap'
 
 const BILLS_PAGE_SIZE = 15
@@ -36,6 +39,9 @@ export default function GroupView() {
   const [monthTotal, setMonthTotal] = useState(0)
   const [payments, setPayments] = useState([])
   const [error, setError] = useState(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [shareStatus, setShareStatus] = useState(null)
 
   const activeMembers = allMembers.filter((m) => m.active)
   // Grouped by month/day for the date dividers — only the current page's
@@ -46,6 +52,13 @@ export default function GroupView() {
   // group_members.id now, not the raw account ID, so anything I create
   // needs this resolved first (e.g. defaulting a new bill's payer to me).
   const myParticipantId = allMembers.find((m) => m.userId === user.id)?.id
+  const isAdmin = myParticipantId && myParticipantId === group?.admin_id
+  // Whether the current selection happens to cover every bill in the
+  // group, not just the visible page — bills holds the group's full list
+  // (see loadBills), so this is a real "delete everything" check, the same
+  // one delete_all_group_bills() itself enforces server-side, not just a
+  // guess based on what's currently on screen.
+  const allBillsSelected = Boolean(bills && bills.length > 0 && selectedIds.size === bills.length)
 
   const loadGroup = useCallback(async () => {
     const { data } = await supabase.from('groups').select('*').eq('id', groupId).single()
@@ -213,6 +226,120 @@ export default function GroupView() {
     reloadAll()
   }
 
+  // Selection is independent of pagination on purpose — picking bills on
+  // page 1, paging over, and picking more on page 2 before deleting all of
+  // them together is a reasonable thing to want, so selectedIds isn't reset
+  // on page change, only when selection mode itself is toggled off.
+  function toggleSelectMode() {
+    setSelectMode((v) => !v)
+    setSelectedIds(new Set())
+  }
+
+  function toggleSelected(billId) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(billId)) next.delete(billId)
+      else next.add(billId)
+      return next
+    })
+  }
+
+  async function deleteSelectedBills() {
+    const count = selectedIds.size
+    if (count === 0) return
+    // Selecting every bill in the group and deleting them is the same
+    // "wipe everything" action as the Danger Zone button, so it goes
+    // through the same admin-gated RPC — this check is a courtesy (avoids
+    // a doomed confirm dialog for a non-admin), the real enforcement is
+    // the RPC's own admin check, same as the button.
+    if (allBillsSelected && !isAdmin) {
+      setError('Only the group admin can delete every bill in a group. Deselect at least one, or ask the admin.')
+      return
+    }
+    if (!window.confirm(`Delete ${count} bill${count === 1 ? '' : 's'}? This removes all their items too.`)) return
+    setError(null)
+    const { error: deleteError } = allBillsSelected
+      ? await supabase.rpc('delete_all_group_bills', { target_group_id: groupId, delete_payments: false })
+      : await supabase.from('bills').delete().in('id', Array.from(selectedIds))
+    if (deleteError) {
+      setError(deleteError.message)
+      return
+    }
+    setSelectedIds(new Set())
+    setSelectMode(false)
+    reloadAll()
+  }
+
+  // Entry point for the per-bill menu's own "Select" action — lands in the
+  // exact same state as opening selection mode via the list's own "Select"
+  // toggle and then ticking this one row by hand.
+  function enterSelectModeWith(billId) {
+    setSelectMode(true)
+    setSelectedIds(new Set([billId]))
+  }
+
+  // Shared by both the per-bill menu's "Share" and the bulk select bar's
+  // "Share" — fetched fresh on demand for the same reason exportGroupCsv()
+  // below is: the bill list above only ever holds lightweight rows, and
+  // sharing is rare enough that a dedicated round-trip per click is
+  // simpler than keeping every bill's full item detail in page state at
+  // all times just in case someone shares.
+  async function shareBills(billIds) {
+    setError(null)
+    try {
+      const { data, error: billsError } = await supabase
+        .from('bills')
+        .select(
+          'id, title, note, created_at, paid_by, items(name, quantity, unit_price, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+        )
+        .in('id', billIds)
+        .order('created_at', { ascending: false })
+      if (billsError) throw billsError
+
+      const billsForRecap = (data || []).map((b) => ({ ...b, payers: b.bill_payers || [] }))
+      const text = formatMultiBillRecap(billsForRecap, allMembers, format)
+      const title =
+        billsForRecap.length === 1 ? billsForRecap[0].title : `${billsForRecap.length} bills — ${group?.name}`
+      const result = await shareOrCopyText(text, title)
+      if (result === 'copied') {
+        setShareStatus('Copied to clipboard!')
+        setTimeout(() => setShareStatus(null), 2000)
+      }
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  // Fetched fresh on demand rather than kept in page state permanently —
+  // the bill list above only ever needs lightweight rows (no items/shares),
+  // and an export is infrequent enough that a dedicated round-trip when it's
+  // actually clicked is simpler than keeping every bill's full item detail
+  // loaded at all times just in case someone exports.
+  async function exportGroupCsv() {
+    setError(null)
+    try {
+      const [{ data: billsData, error: billsError }, { data: categoriesData, error: categoriesError }] = await Promise.all([
+        supabase
+          .from('bills')
+          .select(
+            'id, title, created_at, paid_by, category_id, items(name, quantity, unit_price, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+          )
+          .eq('group_id', groupId)
+          .order('created_at', { ascending: true }),
+        supabase.from('categories').select('id, name').eq('group_id', groupId),
+      ])
+      if (billsError) throw billsError
+      if (categoriesError) throw categoriesError
+
+      const bills = (billsData || []).map((b) => ({ ...b, payers: b.bill_payers || [] }))
+      const { header, rows } = buildGroupCsvRows(bills, allMembers, categoriesData || [])
+      const filename = `${(group?.name || 'group').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-bills.csv`
+      downloadCsv(filename, toCsv(header, rows))
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   return (
     <div className="page">
       <header className="page-header">
@@ -265,9 +392,44 @@ export default function GroupView() {
           Start
         </button>
       </form>
-      <Link to={`/groups/${groupId}/recurring`} className="btn-link import-link">
-        Recurring bills
-      </Link>
+      <div className="bill-list-controls">
+        <Link to={`/groups/${groupId}/recurring`} className="btn-link import-link">
+          Recurring bills
+        </Link>
+        {bills && bills.length > 0 && (
+          <button type="button" className="btn-link" onClick={toggleSelectMode}>
+            {selectMode ? 'Cancel' : 'Select'}
+          </button>
+        )}
+      </div>
+
+      {selectMode && (
+        <div className="bulk-select-bar">
+          <span>{selectedIds.size} selected</span>
+          <div className="bulk-select-actions">
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={selectedIds.size === 0}
+              onClick={() => shareBills(Array.from(selectedIds))}
+            >
+              Share
+            </button>
+            <button
+              type="button"
+              className="btn-danger"
+              disabled={selectedIds.size === 0 || (allBillsSelected && !isAdmin)}
+              onClick={deleteSelectedBills}
+            >
+              Delete selected
+            </button>
+          </div>
+          {allBillsSelected && !isAdmin && (
+            <p className="muted bulk-select-hint">Only the group admin can delete every bill at once.</p>
+          )}
+        </div>
+      )}
+      {shareStatus && <p className="muted share-status">{shareStatus}</p>}
 
       {bills?.length === 0 && (
         <p className="empty-state">No bills yet. Start one above, then scan or add a receipt.</p>
@@ -280,25 +442,41 @@ export default function GroupView() {
             <div key={dayGroup.key}>
               <div className="bill-day-divider">{dayGroup.label}</div>
               <ul className="card-list">
-                {dayGroup.items.map((bill) => (
-                  <li key={bill.id} className="bill-list-item">
-                    <Link to={`/groups/${groupId}/bills/${bill.id}`} className="card-list-item">
-                      <span className="card-list-item-main">
-                        <span>{bill.title}</span>
-                        {bill.note && <span className="card-list-item-note">{bill.note}</span>}
-                      </span>
-                      <span className="chevron">→</span>
-                    </Link>
-                    <button
-                      type="button"
-                      className="btn-icon"
-                      onClick={() => deleteBill(bill)}
-                      aria-label={`Delete ${bill.title}`}
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
+                {dayGroup.items.map((bill) => {
+                  const billLabel = (
+                    <span className="card-list-item-main">
+                      <span>{bill.title}</span>
+                      {bill.note && <span className="card-list-item-note">{bill.note}</span>}
+                    </span>
+                  )
+                  return (
+                    <li key={bill.id} className="bill-list-item">
+                      {selectMode ? (
+                        <label className="card-list-item bill-select-row">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(bill.id)}
+                            onChange={() => toggleSelected(bill.id)}
+                          />
+                          {billLabel}
+                        </label>
+                      ) : (
+                        <>
+                          <Link to={`/groups/${groupId}/bills/${bill.id}`} className="card-list-item">
+                            {billLabel}
+                            <span className="chevron">→</span>
+                          </Link>
+                          <BillActionsMenu
+                            billTitle={bill.title}
+                            onSelect={() => enterSelectModeWith(bill.id)}
+                            onShare={() => shareBills([bill.id])}
+                            onDelete={() => deleteBill(bill)}
+                          />
+                        </>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           ))}
@@ -323,6 +501,14 @@ export default function GroupView() {
             title={`Settle up — ${group?.name}`}
             getText={() => formatSettlementRecap(group?.name, settlement, allMembers, format)}
           />
+          {bills && bills.length > 0 && (
+            <>
+              <span className="recap-divider" />
+              <button type="button" className="btn-secondary" onClick={exportGroupCsv}>
+                Export CSV
+              </button>
+            </>
+          )}
         </div>
       )}
       <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />

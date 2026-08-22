@@ -34,6 +34,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Period-over-period comparison](#period-over-period-comparison)
 - [Time period controls](#time-period-controls)
 - [Recurring bills](#recurring-bills)
+- [Bill actions: deleting and sharing](#bill-actions-deleting-and-sharing)
 - [Inviting people](#inviting-people)
 - [The in-app guide](#the-in-app-guide)
 - [Recaps, PDFs, and CSV](#recaps-pdfs-and-csv)
@@ -415,6 +416,80 @@ goes back to null); "Delete the bills too" is a separate, explicit choice,
 for undoing a template that turned out to be a mistake entirely rather
 than manually deleting each wrongly-generated bill by hand.
 
+## Bill actions: deleting and sharing
+
+Every bill in the group's list has a **⋮** button on its right edge —
+a small popover with **Select**, **Share**, and **Delete** for that one
+bill (`src/components/BillActionsMenu.jsx`). **Delete** asks a plain
+`window.confirm()` and removes just that bill; undoing a single accidental
+click is cheap enough not to need more than that. **Select** doesn't
+present a checkbox itself — there isn't one until selection mode is
+actually on — it turns selection mode on and ticks that one bill, landing
+in exactly the state you'd be in if you'd tapped the list's own **Select**
+toggle above it and then checked that row by hand. Both entry points feed
+the same selection state, so there's no real duplication: the toggle is
+faster when you're starting from "pick a bunch," the menu's Select is
+faster when you're starting from "actually, let's also grab this one."
+
+With one or more bills selected, a bar above the list shows a running
+count plus two actions:
+
+- **Share** — fetches the selected bills' full items and payer splits and
+  shares them as one message via the phone's native share sheet (falling
+  back to clipboard on desktop), same `shareOrCopyText` used for recaps and
+  invites elsewhere. A single bill shares identically to opening that bill
+  and sharing its own recap; more than one gets a `*N bills*` header, each
+  bill's own recap in order, and a grand total at the end
+  (`formatMultiBillRecap()` in `src/lib/recapText.js`). Text only for
+  now — no PDF option for a multi-bill share, since that would need its own
+  printable multi-bill layout rather than reusing the single-bill print
+  path each bill's own page already has.
+- **Delete selected** — a plain `window.confirm()` naming the count, then
+  removes them all in one go. Selection persists across pages of the list
+  (it's a plain `Set` of bill IDs, independent of which page is currently
+  rendered), so picking a few bills, paging over, and picking a few more
+  before deleting or sharing them all together works as expected.
+  **Cancel** (or finishing an action) clears the selection and drops back
+  to the normal list. Selecting literally every bill currently in the
+  group and hitting **Delete selected** is treated as the same "delete
+  everything" action as the Danger Zone button below — see there for what
+  that means.
+
+For clearing out a group's **entire** history in one shot (starting over,
+or undoing a bulk import gone wrong) rather than selecting hundreds of rows
+by hand, Group Settings' **Danger zone** has a **Delete all bills** button.
+This is the one bill-deleting action in the app that's admin-gated — every
+other delete path above (one bill, several, even accidentally selecting
+every bill and hitting Delete selected) stays open to any active member,
+same as it's always been; only *this specific* "wipe the group's entire
+bill history in one action" is admin-only, enforced server-side by a
+`delete_all_group_bills(target_group_id, delete_payments)` RPC
+(`security definer`, checks `groups.admin_id` itself — see
+`supabase/schema.sql`) rather than left to the general `bills` policy, so a
+non-admin can't just call the same delete directly and skip the UI. The
+confirmation dialog also asks a genuine either/or, not just click-to-agree:
+a checkbox for whether to **also delete every settle-up (payment) record**
+in the group, since normally payments are left alone by every delete path
+(see below) but "starting over completely" is a real, different intent
+from "just clear the bills." Because this one action can erase everything
+a group has ever recorded, it doesn't take a plain confirm dialog either:
+`TypedConfirmModal` (`src/components/TypedConfirmModal.jsx`) requires
+typing the group's exact name before the confirm button even enables, on
+the theory that a click is reversible-feeling in a way that typing the
+group's name deliberately isn't. It's a small generic component — any
+other action this destructive can reuse it rather than rolling its own
+typed-confirmation flow.
+
+All delete paths ultimately remove rows from `bills`, relying on `items`,
+`item_shares`, and `bill_payers` all being `on delete cascade` from
+`bills.id` — nothing bespoke needed for items to disappear along with the
+bill that owns them. **Payment (settle-up) records are left alone by every
+delete path except "delete all bills," and even there only if its checkbox
+was ticked** — normally they're a separate ledger of cash that's already
+changed hands between two people, not data that belongs to any particular
+bill, so wiping some or all of a group's bills doesn't touch its settle-up
+history unless that was explicitly asked for.
+
 ## Inviting people
 
 The **Invite** button on a group's page opens a QR code (for someone
@@ -459,9 +534,21 @@ per item, via `src/lib/csv.js`) next to the share menu, divided from it by
 a thin vertical rule (`.recap-divider` in `styles.css`) rather than another
 menu option — it's a fundamentally different kind of export (structured
 data, not a human-readable recap), so folding it into the same menu would
-have blurred that distinction. A future whole-group CSV export (see
-[Roadmap](#roadmap)) should sit the same way, next to that page's own
-share menu.
+have blurred that distinction.
+
+The group page's settle-up recap gets the same treatment: an **Export CSV**
+button next to its own share menu, same divider style, exporting the whole
+group's bill history rather than one bill's items — `buildGroupCsvRows()` in
+`src/lib/csv.js` walks every bill in the group (oldest first) and emits one
+row per item, with `Date`, `Bill`, `Item`, `Quantity`, `Unit Price`,
+`Total Price`, `Category`, `Paid By`, and `Split With` columns. Category
+resolution matches the stats page exactly (an item's own category, else its
+bill's, else "Uncategorized"), `Paid By` lists every payer with their amount
+for multi-payer bills, and dates are the bill's local calendar day in
+`YYYY-MM-DD` form — sortable and locale-unambiguous, since this file is
+meant to be read back into a spreadsheet rather than displayed. It's the
+full history, not scoped to whatever period Your Stats happens to be showing;
+a group's CSV export is a one-off backup/analysis action, not a filtered view.
 
 ### Importing from Splitwise
 
@@ -658,7 +745,6 @@ on Your Stats) have shipped.
   personal ones that exist today — very low priority; nothing about
   `spending_thresholds` being keyed by `user_id` rules this out later, it's
   just not built
-- A whole-group CSV export (today's export is per-bill only)
 - AI-assisted category suggestions during a scan, since the vision models
   are already looking at the receipt image
 - Push notifications, once the app is used consistently enough for that to

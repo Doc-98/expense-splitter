@@ -58,7 +58,7 @@ const GROUPS = [
       {
         id: 'adding-a-bill',
         title: 'Adding a bill and splitting items',
-        keywords: 'bill item add scan type manual paid by default split pagination page',
+        keywords: 'bill item add scan type manual paid by default split pagination page delete select share menu',
         body: (
           <>
             <p>
@@ -79,6 +79,28 @@ const GROUPS = [
             <p>
               A group with a lot of bills shows 15 at a time with a page selector at the bottom,
               newest first — handy after importing a big batch from Splitwise.
+            </p>
+            <p>
+              The <strong>⋮</strong> on any bill's row opens <strong>Select</strong>,{' '}
+              <strong>Share</strong>, and <strong>Delete</strong> for that one bill. Delete just
+              asks you to confirm; Select turns on selection mode with that bill already checked —
+              the same place you'd land by tapping the list's own <strong>Select</strong> toggle
+              above it and then checking that row yourself, so use whichever one you happen to
+              reach for first.
+            </p>
+            <p>
+              With bills selected, a bar above the list shows how many and offers{' '}
+              <strong>Share</strong> and <strong>Delete selected</strong>. Share sends them as one
+              message — a single bill reads exactly like sharing it from its own page; more than
+              one gets a running total added at the end. Delete selected confirms the count first.
+              Selection carries across pages, so picking some, paging over, and picking more before
+              acting on them together works fine. Selecting literally every bill and deleting them
+              is the one exception that needs the group admin, same as the Danger Zone button
+              below — anyone can delete a subset, however large.
+            </p>
+            <p>
+              For clearing out a group's entire history in one go instead of selecting hundreds of
+              rows, see <strong>Delete all bills</strong> in Group settings.
             </p>
           </>
         ),
@@ -207,8 +229,10 @@ const GROUPS = [
             </ul>
             <p>
               A bill also has a separate <strong>Export CSV</strong> button next to the share
-              menu, for a spreadsheet-friendly file (bills only) rather than a human-readable
-              recap.
+              menu, for a spreadsheet-friendly file rather than a human-readable recap. A group's
+              settle-up recap has the same button for its own CSV export — one row per item
+              across every bill in the group, with the date, bill, category, and who paid, so it
+              can be opened in a spreadsheet or backed up outside the app.
             </p>
           </>
         ),
@@ -314,7 +338,7 @@ const GROUPS = [
       {
         id: 'admin',
         title: 'Group settings and permissions',
-        keywords: 'admin permission remove kick leave transfer make owner',
+        keywords: 'admin permission remove kick leave transfer make owner delete all bills danger zone',
         body: (
           <>
             <p>
@@ -328,6 +352,16 @@ const GROUPS = [
               Guests and categories are different — any active member can add, rename, or remove
               either, since that's managing shared group data rather than removing a person
               against their will.
+            </p>
+            <p>
+              <strong>Danger zone</strong>, at the bottom, has <strong>Delete all bills</strong> —
+              every bill in the group at once, items and payer splits included, with a checkbox
+              to also clear the group's settle-up (payment) history if you want a true fresh
+              start rather than just clearing the bills. Members and categories are untouched
+              either way. This is the one bill-deleting action only the admin can do — everyone
+              else sees why instead of the button. Since it can erase a group's entire history in
+              one click, it doesn't take a plain "are you sure" either: you have to type the
+              group's exact name before the confirm button even enables.
             </p>
           </>
         ),

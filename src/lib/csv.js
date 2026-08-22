@@ -106,3 +106,64 @@ export function buildBillCsvRows(items, members) {
   ])
   return { header, rows }
 }
+
+// Local calendar day, not UTC — matches the same convention used
+// everywhere else in this app that buckets or displays a date (settlement.js's
+// dayKey, recurringBills.js's toDateString), so an export lines up with what
+// the app itself already shows for "which day" a bill falls on. ISO-shaped
+// (YYYY-MM-DD) rather than a locale-formatted date, though: this is a file
+// meant for a spreadsheet or another program to read back in, not a UI
+// label, so sorting correctly and reading unambiguously in any locale wins
+// over familiarity.
+function isoDate(dateStr) {
+  const d = new Date(dateStr)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+// Row builder for exporting a whole group's spending history — one row per
+// item across every bill, the same shape buildBillCsvRows() produces for a
+// single bill, plus enough extra columns (date, bill, category, who paid)
+// to make sense spanning many bills instead of just one.
+//
+// Effective category resolution matches computeCategoryTotals() /
+// computeMyCategorySpend() elsewhere: an item's own category_id if set,
+// otherwise its bill's, otherwise "Uncategorized" — nothing here
+// special-cases a bill with no items at all (an empty draft nobody
+// finished), it simply contributes zero rows, same as it would to any
+// other spending total in this app.
+export function buildGroupCsvRows(bills, members, categories) {
+  const nameOf = (id) => members.find((m) => m.id === id)?.name || 'Someone'
+  const categoryNameOf = (id) => categories.find((c) => c.id === id)?.name
+
+  function paidByLabel(bill) {
+    if (bill.payers && bill.payers.length > 0) {
+      return bill.payers.map((p) => `${nameOf(p.member_id)} (${Number(p.amount).toFixed(2)})`).join('; ')
+    }
+    return bill.paid_by ? nameOf(bill.paid_by) : ''
+  }
+
+  const header = ['Date', 'Bill', 'Item', 'Quantity', 'Unit Price', 'Total Price', 'Category', 'Paid By', 'Split With']
+  const rows = []
+  for (const bill of bills) {
+    const date = isoDate(bill.created_at)
+    const paidBy = paidByLabel(bill)
+    for (const item of bill.items || []) {
+      const categoryId = item.category_id || bill.category_id || null
+      rows.push([
+        date,
+        bill.title,
+        item.name,
+        item.quantity,
+        Number(item.unit_price).toFixed(2),
+        Number(item.total_price).toFixed(2),
+        (categoryId && categoryNameOf(categoryId)) || 'Uncategorized',
+        paidBy,
+        (item.item_shares || []).map((s) => nameOf(s.member_id)).join('; '),
+      ])
+    }
+  }
+  return { header, rows }
+}
