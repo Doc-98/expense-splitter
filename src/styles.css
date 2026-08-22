@@ -1207,3 +1207,8 @@ input.item-editable-input {
   cursor: pointer;
 }
 .range-slider-labels { display: flex; justify-content: space-between; margin-top: 4px; font-size: 13px; color: var(--ink-soft); }
+/* .item-editable (the dotted-underline click-to-edit look shared with
+   ItemRow's name/price/quantity) already handles the look — this just
+   gives the label a bit of hit-target padding, since a bare number is a
+   small tap target otherwise. */
+.range-slider-label { padding: 2px 0; }

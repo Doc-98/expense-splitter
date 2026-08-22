@@ -512,7 +512,12 @@ whatever page you happened to be on.
   Known limitation of building a dual slider this way without a library:
   only *dragging* a handle moves it — clicking elsewhere on the track
   doesn't jump the nearest handle to that point, the way a fancier
-  slider might.
+  slider might. The two numbers below the track are the other way to set
+  it — click/tap one to type an exact amount instead, the same
+  `InlineEditable` click-to-edit interaction (and the same dotted
+  underline) as editing an item's name or price on a bill. A typed value
+  clamps the same way dragging does: it can't cross the other handle's
+  current value or leave the slider's own bounds.
 
 Filtering happens entirely client-side against data already loaded for
 the page — `loadBills()` now also pulls each bill's `items(total_price,

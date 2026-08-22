@@ -141,6 +141,8 @@ const GROUPS = [
             <p>
               <strong>Amount</strong> — a two-handle slider bounded by the group's actual cheapest
               and priciest bill; drag either end to narrow the list to bills in that price range.
+              Or tap one of the two numbers below the slider to type an exact amount instead — same
+              tap-to-edit as an item's name or price.
             </p>
           </>
         ),
