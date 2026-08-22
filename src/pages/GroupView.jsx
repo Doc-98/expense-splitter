@@ -52,6 +52,13 @@ export default function GroupView() {
   // group_members.id now, not the raw account ID, so anything I create
   // needs this resolved first (e.g. defaulting a new bill's payer to me).
   const myParticipantId = allMembers.find((m) => m.userId === user.id)?.id
+  const isAdmin = myParticipantId && myParticipantId === group?.admin_id
+  // Whether the current selection happens to cover every bill in the
+  // group, not just the visible page — bills holds the group's full list
+  // (see loadBills), so this is a real "delete everything" check, the same
+  // one delete_all_group_bills() itself enforces server-side, not just a
+  // guess based on what's currently on screen.
+  const allBillsSelected = Boolean(bills && bills.length > 0 && selectedIds.size === bills.length)
 
   const loadGroup = useCallback(async () => {
     const { data } = await supabase.from('groups').select('*').eq('id', groupId).single()
@@ -240,9 +247,20 @@ export default function GroupView() {
   async function deleteSelectedBills() {
     const count = selectedIds.size
     if (count === 0) return
+    // Selecting every bill in the group and deleting them is the same
+    // "wipe everything" action as the Danger Zone button, so it goes
+    // through the same admin-gated RPC — this check is a courtesy (avoids
+    // a doomed confirm dialog for a non-admin), the real enforcement is
+    // the RPC's own admin check, same as the button.
+    if (allBillsSelected && !isAdmin) {
+      setError('Only the group admin can delete every bill in a group. Deselect at least one, or ask the admin.')
+      return
+    }
     if (!window.confirm(`Delete ${count} bill${count === 1 ? '' : 's'}? This removes all their items too.`)) return
     setError(null)
-    const { error: deleteError } = await supabase.from('bills').delete().in('id', Array.from(selectedIds))
+    const { error: deleteError } = allBillsSelected
+      ? await supabase.rpc('delete_all_group_bills', { target_group_id: groupId, delete_payments: false })
+      : await supabase.from('bills').delete().in('id', Array.from(selectedIds))
     if (deleteError) {
       setError(deleteError.message)
       return
@@ -400,12 +418,15 @@ export default function GroupView() {
             <button
               type="button"
               className="btn-danger"
-              disabled={selectedIds.size === 0}
+              disabled={selectedIds.size === 0 || (allBillsSelected && !isAdmin)}
               onClick={deleteSelectedBills}
             >
               Delete selected
             </button>
           </div>
+          {allBillsSelected && !isAdmin && (
+            <p className="muted bulk-select-hint">Only the group admin can delete every bill at once.</p>
+          )}
         </div>
       )}
       {shareStatus && <p className="muted share-status">{shareStatus}</p>}

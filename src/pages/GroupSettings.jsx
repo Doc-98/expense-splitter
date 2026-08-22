@@ -29,6 +29,7 @@ export default function GroupSettings() {
   const [editingCategoryName, setEditingCategoryName] = useState('')
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false)
   const [deletingAllBills, setDeletingAllBills] = useState(false)
+  const [deletePaymentsToo, setDeletePaymentsToo] = useState(false)
 
   const myParticipantId = members.find((m) => m.userId === user.id)?.id
   const isAdmin = myParticipantId && myParticipantId === adminId
@@ -160,20 +161,27 @@ export default function GroupSettings() {
     }
   }
 
-  // Deletes bills only — items, item_shares, and bill_payers cascade with
-  // them via their own FK constraints, same as a single bill delete. Payment
-  // (settle-up) records aren't tied to any bill and are deliberately left
-  // alone: they're a separate ledger of cash that's already changed hands,
-  // not part of "this group's bills."
+  // Goes through the delete_all_group_bills RPC rather than a plain client
+  // delete — it's the one place that enforces "only the admin can wipe a
+  // group's entire bill history," and (when asked) also clears the
+  // settle-up ledger in the same step. Items, item_shares, and bill_payers
+  // still cascade with each bill via their own FK constraints, same as a
+  // single bill delete; payments are only ever touched here if
+  // deletePaymentsToo is checked — otherwise this leaves them alone, same
+  // as every other delete path in the app.
   async function handleDeleteAllBills() {
     setDeletingAllBills(true)
     setError(null)
-    const { error: deleteError } = await supabase.from('bills').delete().eq('group_id', groupId)
+    const { error: deleteError } = await supabase.rpc('delete_all_group_bills', {
+      target_group_id: groupId,
+      delete_payments: deletePaymentsToo,
+    })
     setDeletingAllBills(false)
     if (deleteError) {
       setError(deleteError.message)
     } else {
       setShowDeleteAllModal(false)
+      setDeletePaymentsToo(false)
     }
   }
 
@@ -558,32 +566,50 @@ export default function GroupSettings() {
 
       <h2 className="settings-section-title">Danger zone</h2>
       <p className="muted">
-        Permanently deletes every bill in this group, along with their items and payer splits.
-        Members, categories, and settle-up payment records are untouched. This can't be undone.
+        Permanently deletes every bill in this group, along with their items and payer splits —
+        optionally its settle-up (payment) history too, your choice. Members and categories are
+        untouched either way. This can't be undone, and only the group admin can do it.
       </p>
-      <button
-        type="button"
-        className="btn-danger"
-        disabled={!name.trim()}
-        onClick={() => setShowDeleteAllModal(true)}
-      >
-        Delete all bills
-      </button>
+      {isAdmin ? (
+        <button
+          type="button"
+          className="btn-danger"
+          disabled={!name.trim()}
+          onClick={() => setShowDeleteAllModal(true)}
+        >
+          Delete all bills
+        </button>
+      ) : (
+        <p className="muted">Only the group admin can delete all bills in this group.</p>
+      )}
       {showDeleteAllModal && (
         <TypedConfirmModal
           title="Delete all bills"
           body={
-            <p>
-              This permanently deletes every bill in <strong>{name}</strong> — all their items and
-              payer splits go with them. Settle-up payment records and members stay untouched.
-              This can't be undone.
-            </p>
+            <>
+              <p>
+                This permanently deletes every bill in <strong>{name}</strong> — all their items
+                and payer splits go with them. Members and categories stay untouched. This can't
+                be undone.
+              </p>
+              <label className="delete-all-payments-option">
+                <input
+                  type="checkbox"
+                  checked={deletePaymentsToo}
+                  onChange={(e) => setDeletePaymentsToo(e.target.checked)}
+                />
+                <span>Also delete all settle-up (payment) records</span>
+              </label>
+            </>
           }
           confirmWord={name}
           confirmLabel="Delete all bills"
           pending={deletingAllBills}
           onConfirm={handleDeleteAllBills}
-          onCancel={() => setShowDeleteAllModal(false)}
+          onCancel={() => {
+            setShowDeleteAllModal(false)
+            setDeletePaymentsToo(false)
+          }}
         />
       )}
 

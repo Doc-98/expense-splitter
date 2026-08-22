@@ -673,6 +673,56 @@ end;
 $$;
 
 -- ============================================================================
+-- delete_all_group_bills: wipes every bill in a group in one step, optionally
+-- taking its payment (settle-up) history along with it.
+--
+-- Has to be a SECURITY DEFINER function rather than a plain client-side
+-- `delete from bills where group_id = ...` — the existing "members can
+-- delete bills" policy deliberately still lets any active member delete a
+-- single bill, or a chosen handful, same as always; only wiping a group's
+-- *entire* bill history in one action is admin-gated, on the theory that
+-- "some remaining trace to dispute" is a much smaller ask of trust than
+-- "everything is gone." The client decides *how* this gets invoked — the
+-- Danger Zone button, or a bulk selection that happens to cover every bill
+-- currently in the group — this function doesn't know or care which; it
+-- just enforces the one rule that actually matters. Deleting one bill at a
+-- time down to zero (including the literal last bill via the ordinary
+-- per-bill delete) is deliberately left alone — this only gates the
+-- explicit "delete everything at once" action, not an incidental empty
+-- group arrived at one bill at a time.
+--
+-- delete_payments defaults to false so a plain "delete every bill" call
+-- (from whichever entry point) never silently takes the settle-up ledger
+-- with it unless that was actually asked for.
+-- ============================================================================
+create function public.delete_all_group_bills(target_group_id uuid, delete_payments boolean default false)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  caller_participant_id uuid;
+  current_admin_id uuid;
+begin
+  select id into caller_participant_id from group_members
+    where group_id = target_group_id and user_id = auth.uid() and active = true;
+
+  select admin_id into current_admin_id from groups where id = target_group_id;
+
+  if caller_participant_id is null or caller_participant_id <> current_admin_id then
+    raise exception 'Only the group admin can delete every bill in a group';
+  end if;
+
+  delete from bills where group_id = target_group_id;
+
+  if delete_payments then
+    delete from payments where group_id = target_group_id;
+  end if;
+end;
+$$;
+
+-- ============================================================================
 -- create_group: creates a group, adds the creator as its first member, and
 -- seeds a starter set of categories, all in one atomic step. Doing the
 -- group/membership part as two separate client-side inserts caused a race

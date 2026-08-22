@@ -445,36 +445,50 @@ count plus two actions:
   printable multi-bill layout rather than reusing the single-bill print
   path each bill's own page already has.
 - **Delete selected** — a plain `window.confirm()` naming the count, then
-  removes them all in one `delete from bills … in (…)`. Selection persists
-  across pages of the list (it's a plain `Set` of bill IDs, independent of
-  which page is currently rendered), so picking a few bills, paging over,
-  and picking a few more before deleting or sharing them all together works
-  as expected. **Cancel** (or finishing an action) clears the selection and
-  drops back to the normal list.
+  removes them all in one go. Selection persists across pages of the list
+  (it's a plain `Set` of bill IDs, independent of which page is currently
+  rendered), so picking a few bills, paging over, and picking a few more
+  before deleting or sharing them all together works as expected.
+  **Cancel** (or finishing an action) clears the selection and drops back
+  to the normal list. Selecting literally every bill currently in the
+  group and hitting **Delete selected** is treated as the same "delete
+  everything" action as the Danger Zone button below — see there for what
+  that means.
 
 For clearing out a group's **entire** history in one shot (starting over,
 or undoing a bulk import gone wrong) rather than selecting hundreds of rows
 by hand, Group Settings' **Danger zone** has a **Delete all bills** button.
-Because this one action can erase everything a group has ever recorded, it
-doesn't take a plain confirm dialog: `TypedConfirmModal`
-(`src/components/TypedConfirmModal.jsx`) requires typing the group's exact
-name before the confirm button even enables, on the theory that a click is
-reversible-feeling in a way that typing the group's name deliberately
-isn't. It's a small generic component — any other action that's this
-destructive can reuse it rather than rolling its own typed-confirmation
-flow.
+This is the one bill-deleting action in the app that's admin-gated — every
+other delete path above (one bill, several, even accidentally selecting
+every bill and hitting Delete selected) stays open to any active member,
+same as it's always been; only *this specific* "wipe the group's entire
+bill history in one action" is admin-only, enforced server-side by a
+`delete_all_group_bills(target_group_id, delete_payments)` RPC
+(`security definer`, checks `groups.admin_id` itself — see
+`supabase/schema.sql`) rather than left to the general `bills` policy, so a
+non-admin can't just call the same delete directly and skip the UI. The
+confirmation dialog also asks a genuine either/or, not just click-to-agree:
+a checkbox for whether to **also delete every settle-up (payment) record**
+in the group, since normally payments are left alone by every delete path
+(see below) but "starting over completely" is a real, different intent
+from "just clear the bills." Because this one action can erase everything
+a group has ever recorded, it doesn't take a plain confirm dialog either:
+`TypedConfirmModal` (`src/components/TypedConfirmModal.jsx`) requires
+typing the group's exact name before the confirm button even enables, on
+the theory that a click is reversible-feeling in a way that typing the
+group's name deliberately isn't. It's a small generic component — any
+other action this destructive can reuse it rather than rolling its own
+typed-confirmation flow.
 
-All delete paths ultimately do the same `delete from bills`, relying on
-`items`, `item_shares`, and `bill_payers` all being `on delete cascade`
-from `bills.id` — nothing bespoke needed for items to disappear along with
-the bill that owns them. **Payment (settle-up) records are deliberately
-left alone by every delete path, including "delete all"** — they're a
-separate ledger of cash that's already changed hands between two people,
-not data that belongs to any particular bill, so wiping a group's bills
-(even all of them) doesn't touch its settle-up history. Any active member
-can delete or share bills this way, same as today's single-bill delete —
-none of it is admin-gated, matching the existing `bills` row-level
-security policy.
+All delete paths ultimately remove rows from `bills`, relying on `items`,
+`item_shares`, and `bill_payers` all being `on delete cascade` from
+`bills.id` — nothing bespoke needed for items to disappear along with the
+bill that owns them. **Payment (settle-up) records are left alone by every
+delete path except "delete all bills," and even there only if its checkbox
+was ticked** — normally they're a separate ledger of cash that's already
+changed hands between two people, not data that belongs to any particular
+bill, so wiping some or all of a group's bills doesn't touch its settle-up
+history unless that was explicitly asked for.
 
 ## Inviting people
 

@@ -94,9 +94,13 @@ const GROUPS = [
               message — a single bill reads exactly like sharing it from its own page; more than
               one gets a running total added at the end. Delete selected confirms the count first.
               Selection carries across pages, so picking some, paging over, and picking more before
-              acting on them together works fine. For clearing out a group's entire history in one
-              go instead of selecting hundreds of rows, see <strong>Delete all bills</strong> in
-              Group settings.
+              acting on them together works fine. Selecting literally every bill and deleting them
+              is the one exception that needs the group admin, same as the Danger Zone button
+              below — anyone can delete a subset, however large.
+            </p>
+            <p>
+              For clearing out a group's entire history in one go instead of selecting hundreds of
+              rows, see <strong>Delete all bills</strong> in Group settings.
             </p>
           </>
         ),
@@ -351,10 +355,13 @@ const GROUPS = [
             </p>
             <p>
               <strong>Danger zone</strong>, at the bottom, has <strong>Delete all bills</strong> —
-              every bill in the group at once, items and payer splits included. Members,
-              categories, and settle-up payment records are untouched. Since this can erase a
-              group's entire history in one click, it doesn't take a plain "are you sure": you
-              have to type the group's exact name before the button even enables.
+              every bill in the group at once, items and payer splits included, with a checkbox
+              to also clear the group's settle-up (payment) history if you want a true fresh
+              start rather than just clearing the bills. Members and categories are untouched
+              either way. This is the one bill-deleting action only the admin can do — everyone
+              else sees why instead of the button. Since it can erase a group's entire history in
+              one click, it doesn't take a plain "are you sure" either: you have to type the
+              group's exact name before the confirm button even enables.
             </p>
           </>
         ),

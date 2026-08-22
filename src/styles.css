@@ -386,6 +386,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   flex-wrap: wrap;
 }
 .bulk-select-actions { display: flex; align-items: center; gap: var(--space-sm); }
+.bulk-select-hint { width: 100%; margin: 4px 0 0; font-size: 13px; }
 
 /* A checkbox row reuses .card-list-item's card look but needs its content
    left-aligned (checkbox, then title) rather than .card-list-item's own
@@ -972,6 +973,15 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 
 /* ---------- Typed-confirm modal (delete all bills, etc.) ---------- */
 .typed-confirm-prompt { margin: var(--space-md) 0 6px; font-size: 14px; }
+.delete-all-payments-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: var(--space-sm) 0 0;
+  font-size: 14px;
+  cursor: pointer;
+}
+.delete-all-payments-option input { flex-shrink: 0; }
 
 /* ---------- Currency selector (account dropdown) ---------- */
 .dropdown-item-currency {
