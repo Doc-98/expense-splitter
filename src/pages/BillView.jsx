@@ -165,22 +165,34 @@ export default function BillView() {
     loadItems()
   }
 
-  // ItemRow's edit form only asks for a name and a new total cost — the two
-  // things the row actually shows — not a quantity, so unit_price is
-  // recomputed here from the item's existing quantity rather than left
-  // stale. Otherwise a scanned item like "2x Milk, $1.29 each" corrected to
-  // a $3 total would keep reporting unit_price 1.29 (and an implied
-  // quantity-derived total of $2.58) in the CSV/recap exports, silently
-  // disagreeing with the total_price everywhere else on screen already
-  // shows. Same Math.round(...*100)/100 cent-rounding insertItemWithShares
-  // uses going the other direction.
-  async function updateItem(item, name, totalPrice) {
-    const quantity = Number(item.quantity) || 1
-    const unitPrice = Math.round((totalPrice / quantity) * 100) / 100
-    const { error: updateError } = await supabase
-      .from('items')
-      .update({ name, unit_price: unitPrice, total_price: totalPrice })
-      .eq('id', item.id)
+  // Each of ItemRow's four click-to-edit fields (name, unit price,
+  // quantity, total price) edits independently — there's no single "save
+  // the whole row" step — so this is the one place that decides how
+  // editing any one of the three money-related fields reconciles the
+  // other two, keeping unit_price * quantity === total_price true after
+  // every edit, not just at creation:
+  //   - editing unit_price or quantity "forward-solves" total_price
+  //     (the other of the two stays fixed, the total follows)
+  //   - editing total_price "back-solves" unit_price instead (quantity
+  //     stays fixed) — the same reasoning as before: a scanned item like
+  //     "2x Milk, $1.29 each" corrected to a $3 total should keep
+  //     reporting quantity 2 and unit_price $1.50, not a stale $1.29 that
+  //     would silently disagree with the total in CSV/recap exports.
+  // Same Math.round(...*100)/100 cent-rounding insertItemWithShares uses
+  // going the other direction (unit price + quantity -> total) at creation.
+  async function updateItemField(item, field, value) {
+    const patch = { [field]: value }
+    if (field === 'unit_price') {
+      const quantity = Number(item.quantity) || 1
+      patch.total_price = Math.round(value * quantity * 100) / 100
+    } else if (field === 'quantity') {
+      const unitPrice = Number(item.unit_price) || 0
+      patch.total_price = Math.round(unitPrice * value * 100) / 100
+    } else if (field === 'total_price') {
+      const quantity = Number(item.quantity) || 1
+      patch.unit_price = Math.round((value / quantity) * 100) / 100
+    }
+    const { error: updateError } = await supabase.from('items').update(patch).eq('id', item.id)
     if (updateError) setError(updateError.message)
     loadItems()
   }
@@ -380,7 +392,7 @@ export default function BillView() {
             onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
             onDelete={() => deleteItem(item.id)}
             onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}
-            onUpdate={(name, totalPrice) => updateItem(item, name, totalPrice)}
+            onUpdate={(field, value) => updateItemField(item, field, value)}
           />
         ))}
         {items.length === 0 && <p className="empty-state">No items yet — scan a receipt or add one below.</p>}

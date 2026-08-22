@@ -53,7 +53,7 @@ body {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-button { font-family: inherit; }
+button { font-family: inherit; font-size: inherit; }
 input, select { font-family: inherit; font-size: 16px; } /* 16px prevents iOS zoom-on-focus */
 
 .mono { font-family: var(--font-mono); }
@@ -582,12 +582,55 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   border-bottom: 1px dotted var(--border);
   margin-bottom: 4px;
 }
-.item-price { font-size: 14px; }
-.item-edit-btn { flex-shrink: 0; }
+.item-price { font-size: 14px; flex-shrink: 0; }
 
-.item-edit-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.item-edit-form input:first-child { flex: 1; min-width: 0; }
-.item-edit-form input:last-of-type { width: 80px; text-align: right; font-family: var(--font-mono); flex-shrink: 0; }
+/* The unit-price/quantity detail sits directly left of the total price
+   (both flex children after .item-dots, which soaks up the rest of the
+   row's width) — smaller and softer than the total, so it reads as a
+   secondary detail rather than competing with it. */
+.item-price-detail { font-size: 11px; color: var(--ink-soft); white-space: nowrap; flex-shrink: 0; }
+
+/* Every click-to-edit value (name, unit price, quantity, total price) gets
+   the same dotted-underline treatment — deliberately the same visual
+   language as .item-dots' dotted receipt-leader just above, so "dotted
+   means editable/structural" reads as one consistent idea on this row
+   rather than a new UI convention on top of it. A <button> under the
+   hood (for real keyboard/click semantics), stripped back to look like
+   plain text. */
+.item-editable {
+  /* Deliberately doesn't touch font-family/size/weight — the button
+     reset above already inherits family/size, and each use combines this
+     class with the one that already carries the right look (.item-name,
+     .item-price/.mono, .item-price-detail), same as the plain text these
+     buttons replaced. Redeclaring font here would fight those on cascade
+     order for no benefit. */
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--ink-soft);
+}
+.item-editable:hover { border-bottom-color: var(--ink); }
+/* `input.item-editable-input` (element + class), not just `.item-editable-input`
+   — needs to match the specificity of the global input[type="text"] /
+   input:not([type]) rule (styles.css line 57) to actually win on source
+   order; a bare class selector alone loses that fight and every property
+   below gets silently overridden. font-size deliberately isn't touched
+   here (unlike the tighter padding/border) — inputs stay at the global
+   16px so focusing one doesn't trigger iOS's zoom-on-focus, even though
+   that reads a little larger than the display text it replaces. */
+input.item-editable-input {
+  color: inherit;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 0 4px;
+  background: var(--surface);
+}
+.item-name-input { width: 140px; max-width: 40vw; }
+.item-money-input { width: 64px; text-align: right; }
+.item-qty-input { width: 44px; text-align: right; }
 
 .item-buyers {
   display: flex;

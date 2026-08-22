@@ -58,7 +58,7 @@ const GROUPS = [
       {
         id: 'adding-a-bill',
         title: 'Adding a bill and splitting items',
-        keywords: 'bill item add scan type manual paid by default split pagination page delete select share menu edit rename price',
+        keywords: 'bill item add scan type manual paid by default split pagination page delete select share menu edit rename price quantity unit',
         body: (
           <>
             <p>
@@ -73,9 +73,17 @@ const GROUPS = [
               only some of the group actually did that particular shop.
             </p>
             <p>
-              Made a typo, or a scan misread a price? <strong>Edit</strong> next to any item opens
-              a small form for its name and total cost — no need to delete it and add it back just
-              to fix a mistake. <strong>Save</strong> or <strong>Cancel</strong> returns to normal.
+              Made a typo, or a scan misread a price? Tap an item's name, price, or quantity to
+              edit it right there — it turns into a text box; Enter or tapping away saves, Escape
+              backs out. A faint dotted underline marks what's tappable. No need to delete an item
+              and re-add it just to fix a mistake.
+            </p>
+            <p>
+              Next to the total, a smaller "$1.29 x 2" shows the unit price and quantity behind
+              it — tap either number to change it, and the total follows. At quantity 1 the unit
+              price is hidden (it's the same number as the total already shown), but "x 1" stays
+              so you can still bump the quantity. Editing the total itself works the other way
+              around: quantity stays put and the unit price adjusts to match.
             </p>
             <p>
               <strong>Paid by</strong> controls who fronted the money — usually one person, but
