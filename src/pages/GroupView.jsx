@@ -454,12 +454,12 @@ export default function GroupView() {
                       <li key={bill.id} className="bill-list-item">
                         {selectMode ? (
                           <label className="card-list-item bill-select-row">
+                            {billLabel}
                             <input
                               type="checkbox"
                               checked={selectedIds.has(bill.id)}
                               onChange={() => toggleSelected(bill.id)}
                             />
-                            {billLabel}
                           </label>
                         ) : (
                           <>

@@ -397,11 +397,17 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .bulk-select-actions { display: flex; align-items: center; gap: var(--space-sm); }
 .bulk-select-hint { width: 100%; margin: 4px 0 0; font-size: 13px; }
 
-/* A checkbox row reuses .card-list-item's card look but needs its content
-   left-aligned (checkbox, then title) rather than .card-list-item's own
-   space-between, which assumes exactly two children pinned to each edge
-   (title on the left, a chevron on the right). */
-.bill-select-row { justify-content: flex-start; gap: 12px; cursor: pointer; }
+/* A checkbox row reuses .card-list-item's card look as-is — same
+   space-between/align-items:center it already uses to pin the title on
+   the left and a trailing control (there, the chevron; here, the
+   checkbox) on the right, vertically centered against the name+note
+   block regardless of whether the note is present. gap is a *minimum*
+   spacing on top of space-between's own distribution, so the checkbox
+   never sits flush against a long title/note that's been ellipsized down
+   to fill the row. min-width: 0 on .card-list-item-main (its own rule)
+   is what lets that ellipsis actually happen instead of the checkbox
+   getting pushed off the row's edge or the row wrapping. */
+.bill-select-row { gap: 12px; cursor: pointer; }
 .bill-select-row input[type='checkbox'] { flex-shrink: 0; width: 18px; height: 18px; }
 
 .bill-menu-wrap { position: relative; }
