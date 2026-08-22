@@ -5,9 +5,11 @@
 const STORAGE_KEY = 'spesa-stats-preferences'
 
 const DEFAULTS = {
-  // Which TimeRangeSelector tab Your Stats opens on. Always applied with
-  // offset 0 (the current week/month/year) — "default" means a granularity,
-  // never a specific frozen point in time.
+  // Which TimeRangeSelector tab a stats page opens on — Your Stats and
+  // every group's Stats page share this one preference, so it behaves the
+  // same everywhere rather than needing to be set separately per page.
+  // Always applied with offset 0 (the current week/month/year) —
+  // "default" means a granularity, never a specific frozen point in time.
   defaultGranularity: 'month',
   // Where the "Spending thresholds" section sits on Your Stats — 'top'
   // (above the period selector, since thresholds are always this-month and

@@ -349,19 +349,23 @@ four things worth knowing:
   defined, smallest first; the component works out chevron counts and
   left/right ordering from that list, so a third tier (or a different
   amount) is a one-line change, not a rewrite.
-- **A default period on Your Stats** — the page opens on whatever
-  granularity is set as your default (out of the box, "Month"), always
-  with the current one selected, never a specific frozen point in time.
-  Change it any time: browse to a different tab and a small "Set \_\_\_ as
-  default" link appears beneath the tabs; your saved default itself is
-  always shown with a thin outline around its tab — separate from which
-  tab is *active* right now, since you can be looking at Year while Month
-  stays your saved default. Group Stats doesn't have this (there's no
-  single "default" that makes sense per-group the way there is for your
-  own cross-group view), so its own `TimeRangeSelector` simply doesn't
-  pass the two props (`defaultGranularity`, `onSetDefault`) that turn the
-  feature on — the component itself degrades cleanly to its old behavior
-  when they're omitted.
+- **A default period, shared everywhere** — every stats page (Your Stats,
+  and every group's own Stats page) opens on whatever granularity is set
+  as your default (out of the box, "Month"), always with the current one
+  selected, never a specific frozen point in time. Change it any time:
+  browse to a different tab and a small "Set \_\_\_ as default" link
+  appears beneath the tabs; your saved default itself is always shown with
+  a thin outline around its tab — separate from which tab is *active*
+  right now, since you can be looking at Year while Month stays your saved
+  default. It's one preference, not one per group or one for Your Stats
+  specifically — setting it from a group's Stats page changes what Your
+  Stats opens on too, and the other way around, since it's "how you like
+  to look at spending," not something tied to any one group.
+  `TimeRangeSelector` itself doesn't know or care which page is rendering
+  it: `defaultGranularity`/`onSetDefault` are just optional props, and
+  every page that wants the feature passes the same
+  `getStatsPreferences()`/`setStatsPreferences()` pair
+  (`src/lib/statsPreferences.js`) to read and write it.
 - **Where "Spending thresholds" sits on Your Stats** — pinned to either the
   very top of the page (above the period selector) or the very bottom
   (after everything else), never in between, since thresholds are always

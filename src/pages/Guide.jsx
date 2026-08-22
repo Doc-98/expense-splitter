@@ -292,12 +292,14 @@ const GROUPS = [
               adds a ‹‹ / ›› pair that jumps a full year at a time, for checking something from a
               while back without clicking through one period after another. Viewing by week adds
               two extra pairs — ‹‹ / ›› for a month, ‹‹‹ / ››› for a year — since a year-jump
-              alone still leaves a lot of clicking to land on the exact week you want. On Your
-              Stats, the page opens on whichever period is your saved default
-              (a thin outline marks that tab) — browse to a different one and a small "Set ___ as
-              default" link appears to change it. Both that and where the "Spending thresholds"
-              section sits (top or bottom of the page — a link right in that section switches it)
-              are saved only on this device, same as currency and dark mode.
+              alone still leaves a lot of clicking to land on the exact week you want. Every stats
+              page — Your Stats and every group's own — opens on whichever period is your saved
+              default (a thin outline marks that tab) — browse to a different one and a small "Set
+              ___ as default" link appears to change it. It's one shared default, not a separate
+              one per page: change it from a group's Stats page and Your Stats opens on it too,
+              and the other way around. That, and where the "Spending thresholds" section sits on
+              Your Stats (top or bottom of the page — a link right in that section switches it),
+              are both saved only on this device, same as currency and dark mode.
             </p>
           </>
         ),
