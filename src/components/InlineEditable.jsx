@@ -10,10 +10,15 @@ import { useEffect, useRef, useState } from 'react'
 // Generic on purpose: ItemRow uses this four times per row (name, unit
 // price, quantity, total price), each with its own validation living in
 // its own onSave — this component doesn't know or care what a "valid"
-// value looks like, it just hands whatever was typed to onSave and lets
-// the caller decide whether to act on it. A caller that does nothing on
-// invalid input effectively reverts, since the display then just falls
-// back to showing the unchanged `value` prop.
+// value looks like beyond one universal rule it enforces itself:
+// confirming an empty (or whitespace-only) box always reverts rather than
+// saving, never handed to onSave at all. That's not left to each caller's
+// own validation because it's too easy to get wrong for a numeric field —
+// parseNumber('') is 0, a perfectly "valid" number, not NaN, so a
+// per-field NaN check alone would happily save a cleared price as zero
+// instead of reverting it. Beyond that one rule, a caller that does
+// nothing on invalid input effectively reverts too, since the display
+// then just falls back to showing the unchanged `value` prop.
 export default function InlineEditable({ value, display, onSave, inputMode, className, inputClassName, ariaLabel }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -33,6 +38,7 @@ export default function InlineEditable({ value, display, onSave, inputMode, clas
   function commit() {
     if (!editing) return // avoids a double-commit when Enter's blur() also fires onBlur
     setEditing(false)
+    if (draft.trim() === '') return // confirming empty always reverts, never saves
     if (draft !== value) onSave(draft)
   }
 

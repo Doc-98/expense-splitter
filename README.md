@@ -227,10 +227,17 @@ centralized paid option for your own household than rely on BYOK.
 Every value on an item's row — its name, and (see below) its unit price,
 quantity, and total cost — is click/tap-to-edit directly in place
 (`src/components/InlineEditable.jsx`): click it, it becomes a text input;
-Enter or clicking away saves, Escape reverts. No Edit button, no separate
-form — a typo'd name or a scan that misread a price gets fixed without
-deleting the item and re-adding it (and re-picking who's splitting it)
-from scratch. The only visual cue that a value is editable is a faint
+Enter or clicking away saves, Escape reverts. Confirming an **empty** box
+— cleared and then Enter/click-away, not Escape — also always reverts
+rather than saving, enforced by `InlineEditable` itself rather than left
+to each field's own validation: a numeric field's "is this a valid
+number" check alone isn't enough here, since an emptied box parses to
+`0` (a perfectly valid number, not an error) and would otherwise silently
+save a price as zero instead of leaving it alone. No Edit button, no
+separate form — a typo'd name or a scan that misread a price gets fixed
+without deleting the item and re-adding it (and re-picking who's
+splitting it) from scratch. The only visual cue that a value is editable
+is a faint
 dotted underline, deliberately the same dotted style as the receipt-style
 leader line already running between an item's name and its price — the
 idea is that "dotted means editable/structural" reads as one consistent

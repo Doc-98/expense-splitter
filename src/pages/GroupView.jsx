@@ -435,53 +435,55 @@ export default function GroupView() {
         <p className="empty-state">No bills yet. Start one above, then scan or add a receipt.</p>
       )}
 
-      {billGroups.map((monthGroup) => (
-        <div key={monthGroup.key}>
-          <h3 className="bill-month-divider">{monthGroup.label}</h3>
-          {monthGroup.days.map((dayGroup) => (
-            <div key={dayGroup.key}>
-              <div className="bill-day-divider">{dayGroup.label}</div>
-              <ul className="card-list">
-                {dayGroup.items.map((bill) => {
-                  const billLabel = (
-                    <span className="card-list-item-main">
-                      <span>{bill.title}</span>
-                      {bill.note && <span className="card-list-item-note">{bill.note}</span>}
-                    </span>
-                  )
-                  return (
-                    <li key={bill.id} className="bill-list-item">
-                      {selectMode ? (
-                        <label className="card-list-item bill-select-row">
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(bill.id)}
-                            onChange={() => toggleSelected(bill.id)}
-                          />
-                          {billLabel}
-                        </label>
-                      ) : (
-                        <>
-                          <Link to={`/groups/${groupId}/bills/${bill.id}`} className="card-list-item">
+      <div className="bill-groups">
+        {billGroups.map((monthGroup) => (
+          <div key={monthGroup.key} className="bill-month-group">
+            <h3 className="bill-month-divider">{monthGroup.label}</h3>
+            {monthGroup.days.map((dayGroup) => (
+              <div key={dayGroup.key}>
+                <div className="bill-day-divider">{dayGroup.label}</div>
+                <ul className="card-list">
+                  {dayGroup.items.map((bill) => {
+                    const billLabel = (
+                      <span className="card-list-item-main">
+                        <span>{bill.title}</span>
+                        {bill.note && <span className="card-list-item-note">{bill.note}</span>}
+                      </span>
+                    )
+                    return (
+                      <li key={bill.id} className="bill-list-item">
+                        {selectMode ? (
+                          <label className="card-list-item bill-select-row">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(bill.id)}
+                              onChange={() => toggleSelected(bill.id)}
+                            />
                             {billLabel}
-                            <span className="chevron">→</span>
-                          </Link>
-                          <BillActionsMenu
-                            billTitle={bill.title}
-                            onSelect={() => enterSelectModeWith(bill.id)}
-                            onShare={() => shareBills([bill.id])}
-                            onDelete={() => deleteBill(bill)}
-                          />
-                        </>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
-      ))}
+                          </label>
+                        ) : (
+                          <>
+                            <Link to={`/groups/${groupId}/bills/${bill.id}`} className="card-list-item">
+                              {billLabel}
+                              <span className="chevron">→</span>
+                            </Link>
+                            <BillActionsMenu
+                              billTitle={bill.title}
+                              onSelect={() => enterSelectModeWith(bill.id)}
+                              onShare={() => shareBills([bill.id])}
+                              onDelete={() => deleteBill(bill)}
+                            />
+                          </>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
       <Pagination page={billsPage} setPage={setBillsPage} totalItems={bills?.length || 0} pageSize={BILLS_PAGE_SIZE} />
 
       {error && <p className="status-error">{error}</p>}

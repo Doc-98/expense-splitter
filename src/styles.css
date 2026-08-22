@@ -346,7 +346,16 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   font-weight: 600;
   color: var(--ink);
   margin: var(--space-lg) 0 var(--space-sm);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border);
 }
+/* .bill-month-group wrapper divs are siblings of nothing but each other
+   (see .bill-groups in GroupView.jsx) — .bill-month-divider itself can't
+   use :first-of-type for this, since each one is the lone h3 inside its
+   own wrapper div and would trivially match every time. The current
+   month sits at the top of the list with nothing above it to separate
+   from, so it's the one exception: no line, no extra gap. */
+.bill-month-group:first-child > .bill-month-divider { margin-top: 0; padding-top: 0; border-top: none; }
 .bill-day-divider {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -715,13 +724,35 @@ input.item-editable-input {
 }
 .scan-option-detail input { width: 100%; }
 
-/* ---------- Group settings page ---------- */
+/* ---------- Group settings page (and, via the same shared class, Your
+   Stats / Group Stats' own section headings) ---------- */
 .settings-section-title {
   font-family: var(--font-display);
   font-size: 16px;
   margin: var(--space-lg) 0 var(--space-sm);
 }
 .settings-section-title:first-of-type { margin-top: 0; }
+/* A thin divider above every section after the first, on Group Settings
+   and both stats pages — the first section sits at the top of the page
+   with nothing above it to separate from, same reasoning (and exception)
+   as the bill list's month dividers just above. :first-of-type correctly
+   tracks whichever section actually renders first even when that varies
+   (Your Stats' "Spending thresholds" can render at the top or the
+   bottom, per that page's own preference), since every .settings-section-title
+   here is a plain, unwrapped sibling of the others — unlike the bill-month
+   case, nothing needs a dedicated wrapper.
+   :not(.group-stats-preview-title) excludes the one other place this
+   class is reused (GroupView.jsx's "Quick stats" preview), which already
+   has its own bespoke divider treatment below and shouldn't get a second,
+   conflicting one here. */
+.settings-section-title:not(.group-stats-preview-title) {
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border);
+}
+.settings-section-title:first-of-type:not(.group-stats-preview-title) {
+  padding-top: 0;
+  border-top: none;
+}
 .group-stats-preview-title { margin-top: 40px; padding-top: var(--space-lg); border-top: 1px solid var(--border); }
 /* Right-aligned like a page corner turning, the usual place a "see more"
    link like this sits. */

@@ -76,7 +76,8 @@ const GROUPS = [
               Made a typo, or a scan misread a price? Tap an item's name, price, or quantity to
               edit it right there — it turns into a text box; Enter or tapping away saves, Escape
               backs out. A faint dotted underline marks what's tappable. No need to delete an item
-              and re-add it just to fix a mistake.
+              and re-add it just to fix a mistake. Clearing a box completely and confirming it
+              always reverts to what it said before, never saves it blank or as zero.
             </p>
             <p>
               Next to the total, a smaller "$1.29 x 2" shows the unit price and quantity behind
