@@ -165,6 +165,38 @@ export default function BillView() {
     loadItems()
   }
 
+  // Each of ItemRow's four click-to-edit fields (name, unit price,
+  // quantity, total price) edits independently — there's no single "save
+  // the whole row" step — so this is the one place that decides how
+  // editing any one of the three money-related fields reconciles the
+  // other two, keeping unit_price * quantity === total_price true after
+  // every edit, not just at creation:
+  //   - editing unit_price or quantity "forward-solves" total_price
+  //     (the other of the two stays fixed, the total follows)
+  //   - editing total_price "back-solves" unit_price instead (quantity
+  //     stays fixed) — the same reasoning as before: a scanned item like
+  //     "2x Milk, $1.29 each" corrected to a $3 total should keep
+  //     reporting quantity 2 and unit_price $1.50, not a stale $1.29 that
+  //     would silently disagree with the total in CSV/recap exports.
+  // Same Math.round(...*100)/100 cent-rounding insertItemWithShares uses
+  // going the other direction (unit price + quantity -> total) at creation.
+  async function updateItemField(item, field, value) {
+    const patch = { [field]: value }
+    if (field === 'unit_price') {
+      const quantity = Number(item.quantity) || 1
+      patch.total_price = Math.round(value * quantity * 100) / 100
+    } else if (field === 'quantity') {
+      const unitPrice = Number(item.unit_price) || 0
+      patch.total_price = Math.round(unitPrice * value * 100) / 100
+    } else if (field === 'total_price') {
+      const quantity = Number(item.quantity) || 1
+      patch.unit_price = Math.round((value / quantity) * 100) / 100
+    }
+    const { error: updateError } = await supabase.from('items').update(patch).eq('id', item.id)
+    if (updateError) setError(updateError.message)
+    loadItems()
+  }
+
   // Choosing a specific person switches (or stays) on the simple
   // single-payer path — any existing multi-payer split gets cleared, since
   // bill_payers having rows is what signals "this bill uses multiple
@@ -360,6 +392,7 @@ export default function BillView() {
             onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
             onDelete={() => deleteItem(item.id)}
             onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}
+            onUpdate={(field, value) => updateItemField(item, field, value)}
           />
         ))}
         {items.length === 0 && <p className="empty-state">No items yet — scan a receipt or add one below.</p>}

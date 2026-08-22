@@ -28,6 +28,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Setup](#1-create-your-supabase-project)
 - [Resetting the database](#resetting-the-database)
 - [Receipt scanning](#receipt-scanning)
+- [Editing items](#editing-items)
 - [Currency](#currency)
 - [Categories](#categories)
 - [Spending thresholds](#spending-thresholds)
@@ -221,6 +222,57 @@ hardcoded `ANTHROPIC_API_KEY` secret) but isn't wired up to anything
 anymore — kept only as a reference/starting point if you'd rather run a
 centralized paid option for your own household than rely on BYOK.
 
+## Editing items
+
+Every value on an item's row — its name, and (see below) its unit price,
+quantity, and total cost — is click/tap-to-edit directly in place
+(`src/components/InlineEditable.jsx`): click it, it becomes a text input;
+Enter or clicking away saves, Escape reverts. Confirming an **empty** box
+— cleared and then Enter/click-away, not Escape — also always reverts
+rather than saving, enforced by `InlineEditable` itself rather than left
+to each field's own validation: a numeric field's "is this a valid
+number" check alone isn't enough here, since an emptied box parses to
+`0` (a perfectly valid number, not an error) and would otherwise silently
+save a price as zero instead of leaving it alone. No Edit button, no
+separate form — a typo'd name or a scan that misread a price gets fixed
+without deleting the item and re-adding it (and re-picking who's
+splitting it) from scratch. The only visual cue that a value is editable
+is a faint
+dotted underline, deliberately the same dotted style as the receipt-style
+leader line already running between an item's name and its price — the
+idea is that "dotted means editable/structural" reads as one consistent
+piece of this app's visual language rather than a new UI element bolted
+on. `InlineEditable` itself is generic (just "click this, get a text
+input, commit or revert") — `ItemRow.jsx` supplies the validation for
+each of the four fields it uses it for.
+
+The row shows more than just the total now, specifically to make editing
+a multi-quantity item unambiguous: **unit price × quantity**, in a smaller
+size than the total, sitting directly left of it — e.g. "$1.29 x 2 $2.58".
+At quantity 1 the unit price is hidden (it's always identical to the total
+right next to it, so showing it twice would be redundant) but the
+quantity itself always stays visible as "x 1" — otherwise a quantity-1
+item would have no click target for its quantity at all.
+
+With three separately editable numbers that all relate to each other
+(`unit_price × quantity = total_price`), each edit reconciles the other
+two consistently (`updateItemField()` in `BillView.jsx`):
+
+- Editing **unit price** or **quantity** *forward-solves* the total — the
+  other of the two stays exactly as it was, and the total recalculates
+  from it.
+- Editing the **total** *back-solves* the unit price instead — quantity
+  stays fixed, and unit price becomes whatever makes the math work out
+  (`Math.round((total / quantity) * 100) / 100`). A receipt line like
+  "2× Milk, $1.29 each" corrected to a $3.00 total keeps quantity at 2 and
+  updates unit price to $1.50, rather than leaving a stale $1.29 that
+  would silently disagree with the corrected total in a CSV or recap
+  export (both show quantity and unit price as their own columns).
+
+For the overwhelmingly common quantity-1 case, editing the total and
+editing the unit price are the same operation by definition — there's
+only one number to edit either way.
+
 ## Currency
 
 The account menu has a currency picker — a curated set of major currencies
@@ -349,19 +401,23 @@ four things worth knowing:
   defined, smallest first; the component works out chevron counts and
   left/right ordering from that list, so a third tier (or a different
   amount) is a one-line change, not a rewrite.
-- **A default period on Your Stats** — the page opens on whatever
-  granularity is set as your default (out of the box, "Month"), always
-  with the current one selected, never a specific frozen point in time.
-  Change it any time: browse to a different tab and a small "Set \_\_\_ as
-  default" link appears beneath the tabs; your saved default itself is
-  always shown with a thin outline around its tab — separate from which
-  tab is *active* right now, since you can be looking at Year while Month
-  stays your saved default. Group Stats doesn't have this (there's no
-  single "default" that makes sense per-group the way there is for your
-  own cross-group view), so its own `TimeRangeSelector` simply doesn't
-  pass the two props (`defaultGranularity`, `onSetDefault`) that turn the
-  feature on — the component itself degrades cleanly to its old behavior
-  when they're omitted.
+- **A default period, shared everywhere** — every stats page (Your Stats,
+  and every group's own Stats page) opens on whatever granularity is set
+  as your default (out of the box, "Month"), always with the current one
+  selected, never a specific frozen point in time. Change it any time:
+  browse to a different tab and a small "Set \_\_\_ as default" link
+  appears beneath the tabs; your saved default itself is always shown with
+  a thin outline around its tab — separate from which tab is *active*
+  right now, since you can be looking at Year while Month stays your saved
+  default. It's one preference, not one per group or one for Your Stats
+  specifically — setting it from a group's Stats page changes what Your
+  Stats opens on too, and the other way around, since it's "how you like
+  to look at spending," not something tied to any one group.
+  `TimeRangeSelector` itself doesn't know or care which page is rendering
+  it: `defaultGranularity`/`onSetDefault` are just optional props, and
+  every page that wants the feature passes the same
+  `getStatsPreferences()`/`setStatsPreferences()` pair
+  (`src/lib/statsPreferences.js`) to read and write it.
 - **Where "Spending thresholds" sits on Your Stats** — pinned to either the
   very top of the page (above the period selector) or the very bottom
   (after everything else), never in between, since thresholds are always

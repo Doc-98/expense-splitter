@@ -19,11 +19,12 @@ function granularityLabel(g) {
   return g === 'all' ? 'All time' : g.charAt(0).toUpperCase() + g.slice(1)
 }
 
-// defaultGranularity/onSetDefault are both optional — omit them (as
-// GroupStats.jsx does) and this renders exactly as it always has, with no
-// outline and no "Set as default" link. Only Your Stats passes them, since
-// "default period on load" is a Your-Stats-specific preference (see
-// src/lib/statsPreferences.js).
+// defaultGranularity/onSetDefault are both optional — omit them and this
+// renders exactly as it always has, with no outline and no "Set as
+// default" link. Your Stats and every group's Stats page both pass them,
+// reading/writing the same shared, per-device preference (see
+// src/lib/statsPreferences.js), so the default period behaves identically
+// no matter which stats page you're looking at.
 export default function TimeRangeSelector({
   granularity,
   setGranularity,

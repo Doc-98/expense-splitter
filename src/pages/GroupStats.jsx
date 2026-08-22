@@ -7,6 +7,7 @@ import { computeSpendingTotals } from '../lib/settlement'
 import { computeCategoryTotals } from '../lib/categoryStats'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
 import { comparePeriods } from '../lib/periodComparison'
+import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
 import { useCurrency } from '../context/CurrencyContext'
 import TimeRangeSelector from '../components/TimeRangeSelector'
 import ComparisonBadge from '../components/ComparisonBadge'
@@ -31,10 +32,25 @@ export default function GroupStats() {
   const [rawBills, setRawBills] = useState([])
   const [rawItems, setRawItems] = useState([])
   const [rawShares, setRawShares] = useState([])
-  const [granularity, setGranularity] = useState('all')
+  // Same shared, per-device preference Your Stats reads/writes (see
+  // src/lib/statsPreferences.js) — deliberately one preference, not a
+  // separate one per group: "default period on load" is how you like to
+  // look at spending in general, and it should behave identically no
+  // matter which stats page you land on.
+  const [granularity, setGranularity] = useState(() => getStatsPreferences().defaultGranularity)
   const [offset, setOffset] = useState(0)
+  // Separate from `granularity` above (which changes as you browse around)
+  // so the TimeRangeSelector outline can move the instant "Set as default"
+  // is clicked, without needing a reload to reflect the new saved value —
+  // same reasoning as AccountStats.jsx.
+  const [defaultGranularity, setDefaultGranularity] = useState(() => getStatsPreferences().defaultGranularity)
 
   const nameOf = (id) => members.find((m) => m.id === id)?.name || 'Someone'
+
+  function handleSetDefaultGranularity(g) {
+    setStatsPreferences({ defaultGranularity: g })
+    setDefaultGranularity(g)
+  }
 
   const load = useCallback(async () => {
     setMembers(await fetchAllGroupMembers(groupId))
@@ -153,6 +169,8 @@ export default function GroupStats() {
         setOffset={setOffset}
         label={label}
         yearLabel={yearLabel}
+        defaultGranularity={defaultGranularity}
+        onSetDefault={handleSetDefaultGranularity}
       />
 
       <div className="stats-summary">

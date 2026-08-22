@@ -53,7 +53,7 @@ body {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-button { font-family: inherit; }
+button { font-family: inherit; font-size: inherit; }
 input, select { font-family: inherit; font-size: 16px; } /* 16px prevents iOS zoom-on-focus */
 
 .mono { font-family: var(--font-mono); }
@@ -346,7 +346,16 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   font-weight: 600;
   color: var(--ink);
   margin: var(--space-lg) 0 var(--space-sm);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border);
 }
+/* .bill-month-group wrapper divs are siblings of nothing but each other
+   (see .bill-groups in GroupView.jsx) — .bill-month-divider itself can't
+   use :first-of-type for this, since each one is the lone h3 inside its
+   own wrapper div and would trivially match every time. The current
+   month sits at the top of the list with nothing above it to separate
+   from, so it's the one exception: no line, no extra gap. */
+.bill-month-group:first-child > .bill-month-divider { margin-top: 0; padding-top: 0; border-top: none; }
 .bill-day-divider {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -388,11 +397,17 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .bulk-select-actions { display: flex; align-items: center; gap: var(--space-sm); }
 .bulk-select-hint { width: 100%; margin: 4px 0 0; font-size: 13px; }
 
-/* A checkbox row reuses .card-list-item's card look but needs its content
-   left-aligned (checkbox, then title) rather than .card-list-item's own
-   space-between, which assumes exactly two children pinned to each edge
-   (title on the left, a chevron on the right). */
-.bill-select-row { justify-content: flex-start; gap: 12px; cursor: pointer; }
+/* A checkbox row reuses .card-list-item's card look as-is — same
+   space-between/align-items:center it already uses to pin the title on
+   the left and a trailing control (there, the chevron; here, the
+   checkbox) on the right, vertically centered against the name+note
+   block regardless of whether the note is present. gap is a *minimum*
+   spacing on top of space-between's own distribution, so the checkbox
+   never sits flush against a long title/note that's been ellipsized down
+   to fill the row. min-width: 0 on .card-list-item-main (its own rule)
+   is what lets that ellipsis actually happen instead of the checkbox
+   getting pushed off the row's edge or the row wrapping. */
+.bill-select-row { gap: 12px; cursor: pointer; }
 .bill-select-row input[type='checkbox'] { flex-shrink: 0; width: 18px; height: 18px; }
 
 .bill-menu-wrap { position: relative; }
@@ -582,7 +597,55 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   border-bottom: 1px dotted var(--border);
   margin-bottom: 4px;
 }
-.item-price { font-size: 14px; }
+.item-price { font-size: 14px; flex-shrink: 0; }
+
+/* The unit-price/quantity detail sits directly left of the total price
+   (both flex children after .item-dots, which soaks up the rest of the
+   row's width) — smaller and softer than the total, so it reads as a
+   secondary detail rather than competing with it. */
+.item-price-detail { font-size: 11px; color: var(--ink-soft); white-space: nowrap; flex-shrink: 0; }
+
+/* Every click-to-edit value (name, unit price, quantity, total price) gets
+   the same dotted-underline treatment — deliberately the same visual
+   language as .item-dots' dotted receipt-leader just above, so "dotted
+   means editable/structural" reads as one consistent idea on this row
+   rather than a new UI convention on top of it. A <button> under the
+   hood (for real keyboard/click semantics), stripped back to look like
+   plain text. */
+.item-editable {
+  /* Deliberately doesn't touch font-family/size/weight — the button
+     reset above already inherits family/size, and each use combines this
+     class with the one that already carries the right look (.item-name,
+     .item-price/.mono, .item-price-detail), same as the plain text these
+     buttons replaced. Redeclaring font here would fight those on cascade
+     order for no benefit. */
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--ink-soft);
+}
+.item-editable:hover { border-bottom-color: var(--ink); }
+/* `input.item-editable-input` (element + class), not just `.item-editable-input`
+   — needs to match the specificity of the global input[type="text"] /
+   input:not([type]) rule (styles.css line 57) to actually win on source
+   order; a bare class selector alone loses that fight and every property
+   below gets silently overridden. font-size deliberately isn't touched
+   here (unlike the tighter padding/border) — inputs stay at the global
+   16px so focusing one doesn't trigger iOS's zoom-on-focus, even though
+   that reads a little larger than the display text it replaces. */
+input.item-editable-input {
+  color: inherit;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 0 4px;
+  background: var(--surface);
+}
+.item-name-input { width: 140px; max-width: 40vw; }
+.item-money-input { width: 64px; text-align: right; }
+.item-qty-input { width: 44px; text-align: right; }
 
 .item-buyers {
   display: flex;
@@ -667,13 +730,35 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .scan-option-detail input { width: 100%; }
 
-/* ---------- Group settings page ---------- */
+/* ---------- Group settings page (and, via the same shared class, Your
+   Stats / Group Stats' own section headings) ---------- */
 .settings-section-title {
   font-family: var(--font-display);
   font-size: 16px;
   margin: var(--space-lg) 0 var(--space-sm);
 }
 .settings-section-title:first-of-type { margin-top: 0; }
+/* A thin divider above every section after the first, on Group Settings
+   and both stats pages — the first section sits at the top of the page
+   with nothing above it to separate from, same reasoning (and exception)
+   as the bill list's month dividers just above. :first-of-type correctly
+   tracks whichever section actually renders first even when that varies
+   (Your Stats' "Spending thresholds" can render at the top or the
+   bottom, per that page's own preference), since every .settings-section-title
+   here is a plain, unwrapped sibling of the others — unlike the bill-month
+   case, nothing needs a dedicated wrapper.
+   :not(.group-stats-preview-title) excludes the one other place this
+   class is reused (GroupView.jsx's "Quick stats" preview), which already
+   has its own bespoke divider treatment below and shouldn't get a second,
+   conflicting one here. */
+.settings-section-title:not(.group-stats-preview-title) {
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border);
+}
+.settings-section-title:first-of-type:not(.group-stats-preview-title) {
+  padding-top: 0;
+  border-top: none;
+}
 .group-stats-preview-title { margin-top: 40px; padding-top: var(--space-lg); border-top: 1px solid var(--border); }
 /* Right-aligned like a page corner turning, the usual place a "see more"
    link like this sits. */
