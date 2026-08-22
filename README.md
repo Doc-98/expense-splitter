@@ -35,6 +35,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Period-over-period comparison](#period-over-period-comparison)
 - [Time period controls](#time-period-controls)
 - [Recurring bills](#recurring-bills)
+- [Searching and filtering bills](#searching-and-filtering-bills)
 - [Bill actions: deleting and sharing](#bill-actions-deleting-and-sharing)
 - [Inviting people](#inviting-people)
 - [The in-app guide](#the-in-app-guide)
@@ -471,6 +472,58 @@ default, "Keep the bills," just detaches them (`bills.recurring_bill_id`
 goes back to null); "Delete the bills too" is a separate, explicit choice,
 for undoing a template that turned out to be a mistake entirely rather
 than manually deleting each wrongly-generated bill by hand.
+
+## Searching and filtering bills
+
+A group's bill list has a search bar (same "receipt tape" look and the
+same plain, case-insensitive substring matching as the in-app guide's own
+search) plus a **Filters** button next to it that opens a panel — closed
+by default, so it stays out of the way until someone actually wants it.
+`src/lib/billFilters.js` has the pure matching logic behind all of it,
+each piece independently testable and combined with plain `&&`
+(`filterBills()`): a bill has to pass the search text, the tag filter, and
+the price range all at once to appear. Pagination and the month/day
+grouping only ever see whatever's left after filtering — same as they
+only ever saw the full list before this existed — and changing any filter
+jumps back to page 1 of its new results rather than stranding you on
+whatever page you happened to be on.
+
+- **Search** — matches a bill's title *or* note, case-insensitive, as a
+  plain substring — a fragment like "read" matches "Sourdough bread" via
+  the title alone, same shape as `Guide.jsx`'s own search.
+- **Tags** — a bill's effective tag set is every item's own category if
+  it has one, else the bill's own category, else the same synthetic
+  `'uncategorized'` bucket `computeCategoryTotals()` already uses
+  elsewhere (so untagged bills stay filterable rather than invisible to
+  every tag filter). One tag selected: the bill needs at least one item
+  carrying it. Several selected, a **Match any / Match all** switch
+  decides how: *any* means the bill needs at least one of the selected
+  tags somewhere in it (OR); *all* means every selected tag has to be
+  represented somewhere in the bill, each by at least one item, not
+  necessarily the same one (AND) — items in this app only ever carry one
+  category each, so "the same item satisfying two tags at once" could
+  never happen regardless.
+- **Amount** — a two-handle slider (`src/components/RangeSlider.jsx`,
+  built from two overlapping native range inputs rather than a new
+  dependency) bounded by the group's actual cheapest and most expensive
+  bill, narrowing the list to bills whose total falls in between. The
+  bounds are read once when bills first load; a pricier bill arriving
+  later doesn't silently widen a range you already narrowed on purpose.
+  Known limitation of building a dual slider this way without a library:
+  only *dragging* a handle moves it — clicking elsewhere on the track
+  doesn't jump the nearest handle to that point, the way a fancier
+  slider might. The two numbers below the track are the other way to set
+  it — click/tap one to type an exact amount instead, the same
+  `InlineEditable` click-to-edit interaction (and the same dotted
+  underline) as editing an item's name or price on a bill. A typed value
+  clamps the same way dragging does: it can't cross the other handle's
+  current value or leave the slider's own bounds.
+
+Filtering happens entirely client-side against data already loaded for
+the page — `loadBills()` now also pulls each bill's `items(total_price,
+category_id)` (lightweight; just what tag/price filtering needs), so
+typing in the search box or dragging a slider handle never fires its own
+round-trip.
 
 ## Bill actions: deleting and sharing
 
