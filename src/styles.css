@@ -2,6 +2,13 @@
 :root {
   --bg: #FAF9F6;
   --surface: #FFFFFF;
+  /* A faint tint of the app's own accent green, not a generic gray —
+     card rows (.card-list-item: the groups list, a group's bill list)
+     use this instead of plain --surface so they read as a distinct
+     surface against --bg, rather than only being defined by their own
+     border. --surface itself stays plain white/near-black — modals,
+     popovers, and everything else that isn't a list row are unaffected. */
+  --surface-tint: #EDF3F0;
   --ink: #1F2A24;
   --ink-soft: #5C6B63;
   --border: #E4E1D8;
@@ -27,6 +34,7 @@
 [data-theme="dark"] {
   --bg: #14201B;
   --surface: #1E2E27;
+  --surface-tint: #25382F;
   --ink: #EDEAE2;
   --ink-soft: #93A79C;
   --border: #33473D;
@@ -318,7 +326,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--surface);
+  background: var(--surface-tint);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 16px;
@@ -338,6 +346,27 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   text-overflow: ellipsis;
   max-width: 320px;
 }
+
+/* Right side of a bill row: the total/personal-status block, then
+   whichever trailing control the row actually has (the chevron, or the
+   select-mode checkbox) — grouped in their own flex row so
+   .card-list-item's own space-between still only ever sees two children
+   (the name/note block on the left, this group on the right), same as
+   before this existed. flex-shrink: 0 keeps this side at its natural
+   width under a long title/note — .card-list-item-main's own min-width:0
+   is what lets the *left* side shrink/ellipsize instead. */
+.bill-row-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+/* Two lines pairing with .card-list-item-main's own two (name/note) —
+   the total sized to match the name (font-size: inherit, same ambient
+   size, just bold for emphasis as the headline figure), the status line
+   sized to match the note (12px, italic, colored by
+   balance-negative/balance-positive — the same two classes the group's
+   own overall balance already uses elsewhere, not new colors invented
+   just for this). */
+.bill-amount-block { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.bill-amount-total { font-size: inherit; font-weight: 600; }
+.bill-amount-status { font-size: 12px; font-style: italic; white-space: nowrap; }
+.bill-amount-status-neutral { color: var(--ink-soft); }
 
 /* ---------- Bill list date dividers ---------- */
 .bill-month-divider {
@@ -433,8 +462,22 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    never sits flush against a long title/note that's been ellipsized down
    to fill the row. min-width: 0 on .card-list-item-main (its own rule)
    is what lets that ellipsis actually happen instead of the checkbox
-   getting pushed off the row's edge or the row wrapping. */
-.bill-select-row { gap: 12px; cursor: pointer; }
+   getting pushed off the row's edge or the row wrapping.
+   flex-direction/font-size/margin-bottom are not redundant with
+   .card-list-item here — this is the one .card-list-item usage that's a
+   <label> rather than a <Link>, and the plain `label { ... }` rule
+   further up this file (meant for a field-name-above-its-input form
+   layout: flex-direction: column, a smaller muted font-size, and a
+   margin-bottom to separate one labeled field from the next) otherwise
+   wins for every property it sets that neither .card-list-item nor
+   .bill-select-row also set themselves — CSS cascades per property, not
+   per rule, so .card-list-item's higher-specificity `display: flex`
+   winning doesn't help flex-direction, font-size, or margin-bottom stay
+   correct unless something here sets those same properties too. Left
+   unset, that's what stacked the checkbox under the name/note instead of
+   beside it, shrank and grayed the title text, and added an oversized
+   gap below each row on top of .card-list's own spacing between rows. */
+.bill-select-row { flex-direction: row; gap: 12px; font-size: inherit; margin-bottom: 0; cursor: pointer; }
 .bill-select-row input[type='checkbox'] { flex-shrink: 0; width: 18px; height: 18px; }
 
 .bill-menu-wrap { position: relative; }
@@ -764,7 +807,7 @@ input.item-editable-input {
   font-size: 16px;
   margin: var(--space-lg) 0 var(--space-sm);
 }
-.settings-section-title:first-of-type { margin-top: 0; }
+.settings-section-title:first-of-type:not(.section-always-divided) { margin-top: 0; }
 /* A thin divider above every section after the first, on Group Settings
    and both stats pages — the first section sits at the top of the page
    with nothing above it to separate from, same reasoning (and exception)
@@ -777,16 +820,25 @@ input.item-editable-input {
    :not(.group-stats-preview-title) excludes the one other place this
    class is reused (GroupView.jsx's "Quick stats" preview), which already
    has its own bespoke divider treatment below and shouldn't get a second,
-   conflicting one here. */
-.settings-section-title:not(.group-stats-preview-title) {
+   conflicting one here. :not(.section-always-divided) excludes a section
+   that's the *only* .settings-section-title on its page (so it'd
+   otherwise trivially count as "first") but still sits below real content
+   above it — Groups.jsx's "Create a new group", below the group list —
+   and so still wants its divider despite having no sibling section to be
+   "not the first" relative to. */
+.settings-section-title:not(.group-stats-preview-title):not(.section-always-divided) {
   padding-top: var(--space-lg);
   border-top: 1px solid var(--border);
 }
-.settings-section-title:first-of-type:not(.group-stats-preview-title) {
+.settings-section-title:first-of-type:not(.group-stats-preview-title):not(.section-always-divided) {
   padding-top: 0;
   border-top: none;
 }
 .group-stats-preview-title { margin-top: 40px; padding-top: var(--space-lg); border-top: 1px solid var(--border); }
+/* margin-top already comes from .settings-section-title's own base rule
+   (var(--space-lg)) now that the zeroing rule above excludes this class —
+   only padding-top/border-top need setting here. */
+.section-always-divided { padding-top: var(--space-lg); border-top: 1px solid var(--border); }
 /* Right-aligned like a page corner turning, the usual place a "see more"
    link like this sits. */
 .see-stats-link { display: block; text-align: right; margin-top: var(--space-sm); }

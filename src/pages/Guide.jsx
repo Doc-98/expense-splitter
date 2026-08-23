@@ -12,14 +12,16 @@ const GROUPS = [
       {
         id: 'groups',
         title: 'Groups: creating, joining, inviting',
-        keywords: 'group household trip create join invite qr code share link',
+        keywords: 'group household trip create join invite qr code share link create a new group pagination',
         defaultOpen: true,
         body: (
           <>
             <p>
               A <strong>group</strong> is a household, trip, or any set of people who share
-              expenses. Create one from the groups list, or join an existing one via an invite
-              link.
+              expenses. The groups list comes first on that page — <strong>Create a new
+              group</strong> is its own section below the list (10 groups per page, with a page
+              selector once you've got more than that), so the list itself is what you see first.
+              Or join an existing one via an invite link.
             </p>
             <p>
               On a group's page, the <strong>Invite</strong> button opens a QR code (great for
@@ -58,7 +60,7 @@ const GROUPS = [
       {
         id: 'adding-a-bill',
         title: 'Adding a bill and splitting items',
-        keywords: 'bill item add scan type manual paid by default split pagination page delete select share menu edit rename price quantity unit',
+        keywords: 'bill item add scan type manual paid by default split pagination page delete select share menu edit rename price quantity unit total borrowed lent owe balance',
         body: (
           <>
             <p>
@@ -93,6 +95,15 @@ const GROUPS = [
             <p>
               A group with a lot of bills shows 15 at a time with a page selector at the bottom,
               newest first — handy after importing a big batch from Splitwise.
+            </p>
+            <p>
+              Each bill's row also shows its total, right next to the name, and underneath it —
+              in italics — what that one bill means for you: <strong>"You borrowed …"</strong> in
+              red if your share came to more than you fronted, <strong>"You lent …"</strong> in
+              green if you fronted more than your share, or <strong>"You are not
+              involved"</strong> if you're neither paying nor assigned to anything on it. This is
+              just about that one bill, separate from your overall balance with the group further
+              down the page.
             </p>
             <p>
               The <strong>⋮</strong> on any bill's row opens <strong>Select</strong>,{' '}

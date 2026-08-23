@@ -35,8 +35,10 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Period-over-period comparison](#period-over-period-comparison)
 - [Time period controls](#time-period-controls)
 - [Recurring bills](#recurring-bills)
+- [What a bill row shows](#what-a-bill-row-shows)
 - [Searching and filtering bills](#searching-and-filtering-bills)
 - [Bill actions: deleting and sharing](#bill-actions-deleting-and-sharing)
+- [Your groups: layout and card style](#your-groups-layout-and-card-style)
 - [Inviting people](#inviting-people)
 - [The in-app guide](#the-in-app-guide)
 - [Recaps, PDFs, and CSV](#recaps-pdfs-and-csv)
@@ -473,6 +475,41 @@ goes back to null); "Delete the bills too" is a separate, explicit choice,
 for undoing a template that turned out to be a mistake entirely rather
 than manually deleting each wrongly-generated bill by hand.
 
+## What a bill row shows
+
+Each bill in the group's list shows more than just its name and note now
+— aligned to the right, vertically centered against that two-line block,
+is the bill's total (same size as the name, bold, on that same visual
+line) and, underneath it pairing with the note line, what that
+*specific bill* means for you personally, in italics:
+
+- **"You borrowed [amount]"**, tinted the same red/orange
+  (`balance-negative`) the group's overall balance already uses for a
+  negative number, if your share of this bill's cost was more than what
+  you personally fronted for it.
+- **"You lent [amount]"**, tinted the same green (`balance-positive`) the
+  overall balance already uses for a positive one, if you fronted more
+  than your own share.
+- **"You are not involved"**, in the same muted tone as the note text
+  above it, if you're neither a payer nor assigned to any item on this
+  bill at all.
+
+This is deliberately a *per-bill* figure, independent of the group's
+running balance shown further down the page — fronting this one bill
+entirely doesn't mean you're "owed" overall if you're behind on others.
+`loadSettlement()` already assembles every bill's items/shares/payers to
+compute the group's pooled balance; the same per-bill breakdown is kept
+around instead of being discarded once pooled, so this doesn't need its
+own query.
+
+One deliberate edge case: fronting a bill entirely for yourself (you paid
+it, you're the only one on it) nets to exactly zero — that reads as "You
+lent 0.00" (green), not "not involved", matching the exact `< 0 ?
+negative : positive` convention the group's own overall balance already
+uses for a zero balance elsewhere on this page. "Not involved" is
+reserved specifically for zero *participation* — no payment from you and
+nothing assigned to you — not zero *net*.
+
 ## Searching and filtering bills
 
 A group's bill list has a search bar (same "receipt tape" look and the
@@ -598,6 +635,28 @@ was ticked** — normally they're a separate ledger of cash that's already
 changed hands between two people, not data that belongs to any particular
 bill, so wiping some or all of a group's bills doesn't touch its settle-up
 history unless that was explicitly asked for.
+
+## Your groups: layout and card style
+
+The landing page (`src/pages/Groups.jsx`) is deliberately "list first" —
+**Create a new group** lives in its own section *below* the group list,
+not above it, so the list itself is the first thing you see and the
+create-a-group form doesn't sit between you and a group you're trying to
+open. Same reasoning, and the same divider treatment, as every other
+"section below other content" on this page's siblings. The list itself
+paginates at 10 groups a page (`src/components/Pagination.jsx`, the same
+component the bill list already uses, just a smaller page size), rather
+than growing without bound as you join more groups.
+
+Both the groups list and every group's own bill list share one card
+style (`.card-list-item`), which now sits on a new `--surface-tint` token
+instead of plain `--surface` — a faint tint of the app's own accent
+green (not a generic gray), so a row reads as a distinct surface against
+the page background purely from its own color, not only from its border.
+`--surface` itself is untouched (modals, popovers, and everything else
+that isn't a list row look exactly as before) — this is scoped
+specifically to `.card-list-item`, the one shared style behind both
+lists.
 
 ## Inviting people
 

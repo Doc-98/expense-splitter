@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
-import { computeBalances, simplifyDebts } from '../lib/settlement'
+import { computeBalances, computeSpendingTotals, simplifyDebts } from '../lib/settlement'
 import { formatSettlementRecap, formatMultiBillRecap } from '../lib/recapText'
 import { shareOrCopyText } from '../lib/shareText'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
@@ -45,6 +45,13 @@ export default function GroupView() {
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [shareStatus, setShareStatus] = useState(null)
+  // { [billId]: { [memberId]: { paid, consumed } } } — computed alongside
+  // the group's overall settlement (see loadSettlement below), reusing
+  // the exact same per-bill items/shares it already assembles for that,
+  // just kept around per-bill instead of only flowing into one pooled
+  // balance. Lets each bill row show what *this* bill specifically means
+  // for you, independent of the group's running balance.
+  const [billPersonalTotals, setBillPersonalTotals] = useState({})
   const [categories, setCategories] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -155,6 +162,21 @@ export default function GroupView() {
         }
       }
     }
+
+    // Same reuse principle as the weekly/monthly preview below — one
+    // computeSpendingTotals() call per bill, scoped to just that bill's
+    // own items/shares, rather than a second query. A bill nobody's
+    // touched in either direction (no payer, nothing assigned) simply
+    // has no entry for anyone, same "absence means zero involvement"
+    // convention computeSpendingTotals already uses at the group level.
+    const perBillTotals = {}
+    for (const bill of billsData) {
+      const billItems = items.filter((it) => it.bill_id === bill.id)
+      const billItemIds = new Set(billItems.map((it) => it.id))
+      const billItemShares = itemShares.filter((s) => billItemIds.has(s.item_id))
+      perBillTotals[bill.id] = computeSpendingTotals({ bills: [bill], items: billItems, itemShares: billItemShares })
+    }
+    setBillPersonalTotals(perBillTotals)
 
     // Reuses the same fetch for the quick weekly/monthly preview at the
     // bottom of the page, rather than firing off a second round-trip for
@@ -628,22 +650,51 @@ export default function GroupView() {
                         {bill.note && <span className="card-list-item-note">{bill.note}</span>}
                       </span>
                     )
+                    // Undefined (not just zero) means "never touched this
+                    // bill in either direction" — computeSpendingTotals
+                    // only creates an entry for someone who paid and/or
+                    // had at least one item assigned, same convention as
+                    // the group's own overall balance.
+                    const mine = billPersonalTotals[bill.id]?.[myParticipantId]
+                    const net = mine ? Math.round((mine.paid - mine.consumed) * 100) / 100 : null
+                    const billAmount = (
+                      <span className="bill-amount-block">
+                        <span className="mono bill-amount-total">{format(billTotal(bill))}</span>
+                        {net === null ? (
+                          <span className="bill-amount-status bill-amount-status-neutral">
+                            You are not involved
+                          </span>
+                        ) : net < 0 ? (
+                          <span className="bill-amount-status balance-negative">
+                            You borrowed {format(-net)}
+                          </span>
+                        ) : (
+                          <span className="bill-amount-status balance-positive">You lent {format(net)}</span>
+                        )}
+                      </span>
+                    )
                     return (
                       <li key={bill.id} className="bill-list-item">
                         {selectMode ? (
                           <label className="card-list-item bill-select-row">
                             {billLabel}
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.has(bill.id)}
-                              onChange={() => toggleSelected(bill.id)}
-                            />
+                            <span className="bill-row-right">
+                              {billAmount}
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(bill.id)}
+                                onChange={() => toggleSelected(bill.id)}
+                              />
+                            </span>
                           </label>
                         ) : (
                           <>
                             <Link to={`/groups/${groupId}/bills/${bill.id}`} className="card-list-item">
                               {billLabel}
-                              <span className="chevron">→</span>
+                              <span className="bill-row-right">
+                                {billAmount}
+                                <span className="chevron">→</span>
+                              </span>
                             </Link>
                             <BillActionsMenu
                               billTitle={bill.title}
