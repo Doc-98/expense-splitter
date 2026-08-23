@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import Pagination from '../components/Pagination'
+import { loadErrorMessage } from '../lib/loadErrorMessage'
 
 const GROUPS_PAGE_SIZE = 10
 
@@ -33,7 +34,7 @@ export default function Groups() {
       .eq('active', true)
 
     if (membershipError) {
-      setError(membershipError.message)
+      setError(loadErrorMessage(membershipError))
       return
     }
 
@@ -49,7 +50,7 @@ export default function Groups() {
       .in('id', groupIds)
 
     if (groupsError) {
-      setError(groupsError.message)
+      setError(loadErrorMessage(groupsError))
       return
     }
 

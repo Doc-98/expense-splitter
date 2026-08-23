@@ -7,6 +7,8 @@ import { computeBalances, computeSpendingTotals } from '../lib/settlement'
 import { computeMyCategorySpend, mergeCategorySpend } from '../lib/categoryStats'
 import { mergeCategoriesByName } from '../lib/categories'
 import { fetchThresholds } from '../lib/thresholds'
+import { fetchAllRows } from '../lib/fetchAllRows'
+import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
 import { getPeriodRange, filterByDateRange, sumDailyInRange, sumCategoryDailyInRange, monthlyFromDaily } from '../lib/timeRange'
 import { comparePeriods } from '../lib/periodComparison'
@@ -68,31 +70,43 @@ export default function AccountStats() {
   const load = useCallback(async () => {
     setError(null)
     try {
-      const { data: memberRows } = await supabase
+      const { data: memberRows, error: memberError } = await supabase
         .from('group_members')
         .select('id, group_id')
         .eq('user_id', user.id)
         .eq('active', true)
+      if (memberError) throw memberError
 
       const groupIds = (memberRows || []).map((r) => r.group_id)
       const participantByGroup = new Map((memberRows || []).map((r) => [r.group_id, r.id]))
       setMyParticipantByGroup(participantByGroup)
 
-      const { data: groupsData } = groupIds.length
-        ? await supabase.from('groups').select('id, name').in('id', groupIds)
-        : { data: [] }
-      setGroups(groupsData || [])
+      let groupsData = []
+      if (groupIds.length) {
+        const { data, error: groupsError } = await supabase.from('groups').select('id, name').in('id', groupIds)
+        if (groupsError) throw groupsError
+        groupsData = data || []
+      }
+      setGroups(groupsData)
 
-      const { data: rawBillsData } = groupIds.length
-        ? await supabase
-            .from('bills')
-            .select(
-              'id, group_id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+      // Paged through fetchAllRows rather than one unbounded request — a
+      // group with a big imported history can have thousands of bills, and
+      // this used to be a single request with no error check at all, so a
+      // failure here (a timeout on that large a payload, most plausibly)
+      // silently looked identical to "you have no spending," rather than
+      // showing up as anything wrong.
+      const list = groupIds.length
+        ? (
+            await fetchAllRows(() =>
+              supabase
+                .from('bills')
+                .select(
+                  'id, group_id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+                )
+                .in('group_id', groupIds)
             )
-            .in('group_id', groupIds)
-        : { data: [] }
-
-      const list = (rawBillsData || []).map((b) => ({ ...b, payers: b.bill_payers || [] }))
+          ).map((b) => ({ ...b, payers: b.bill_payers || [] }))
+        : []
       const items = []
       const itemShares = []
       for (const bill of list) {
@@ -123,27 +137,42 @@ export default function AccountStats() {
       // amounts. Neither is scoped to whatever period the rest of this page
       // is showing — thresholds are always compared against the current
       // calendar month specifically (see Thresholds.jsx for why).
-      const { data: categoriesData } = groupIds.length
-        ? await supabase.from('categories').select('id, name, color').in('group_id', groupIds).order('created_at', { ascending: true })
-        : { data: [] }
-      setRawCategories(categoriesData || [])
+      let categoriesData = []
+      if (groupIds.length) {
+        const { data, error: categoriesError } = await supabase
+          .from('categories')
+          .select('id, name, color')
+          .in('group_id', groupIds)
+          .order('created_at', { ascending: true })
+        if (categoriesError) throw categoriesError
+        categoriesData = data || []
+      }
+      setRawCategories(categoriesData)
       setThresholds(await fetchThresholds(user.id))
 
       // Departed groups' frozen records — a group you're back in shouldn't
       // also show a stale snapshot, live data already covers it fully.
-      const { data: snapshotData } = await supabase
+      const { data: snapshotRows, error: snapshotError } = await supabase
         .from('departure_snapshots')
         .select('*')
         .eq('user_id', user.id)
-      setSnapshots((snapshotData || []).filter((s) => !groupIds.includes(s.group_id)))
+      if (snapshotError) throw snapshotError
+      const snapshotData = snapshotRows || []
+      setSnapshots(snapshotData.filter((s) => !groupIds.includes(s.group_id)))
 
       // Overall balance is a running, "right now" figure — it isn't scoped to
       // whatever time period is selected below. It's the live balance from
       // every group you're still in, plus any not-yet-settled balance frozen
       // from groups you've left.
-      const { data: paymentsData } = groupIds.length
-        ? await supabase.from('payments').select('id, group_id, from_member, to_member, amount').in('group_id', groupIds)
-        : { data: [] }
+      let paymentsData = []
+      if (groupIds.length) {
+        const { data, error: paymentsError } = await supabase
+          .from('payments')
+          .select('id, group_id, from_member, to_member, amount')
+          .in('group_id', groupIds)
+        if (paymentsError) throw paymentsError
+        paymentsData = data || []
+      }
 
       let balanceSum = 0
       for (const groupId of groupIds) {
@@ -151,7 +180,7 @@ export default function AccountStats() {
         const groupBills = list.filter((b) => b.group_id === groupId)
         const groupItems = items.filter((it) => groupBills.some((b) => b.id === it.bill_id))
         const groupShares = itemShares.filter((s) => groupItems.some((it) => it.id === s.item_id))
-        const groupPayments = (paymentsData || [])
+        const groupPayments = paymentsData
           .filter((p) => p.group_id === groupId)
           .map((p) => ({ from_user: p.from_member, to_user: p.to_member, amount: p.amount }))
         const balances = computeBalances({
@@ -162,7 +191,7 @@ export default function AccountStats() {
         })
         balanceSum += balances[myId] || 0
       }
-      for (const snap of (snapshotData || []).filter((s) => !groupIds.includes(s.group_id))) {
+      for (const snap of snapshotData.filter((s) => !groupIds.includes(s.group_id))) {
         if (!snap.balance_settled) balanceSum += Number(snap.balance)
       }
       setOverallBalance(Math.round(balanceSum * 100) / 100)
@@ -173,7 +202,7 @@ export default function AccountStats() {
       // aborted the rest of load() with nothing shown — whatever state had
       // already been set before the failure just stayed on screen,
       // incomplete, with no indication anything had gone wrong.
-      setError(err.message)
+      setError(loadErrorMessage(err))
     }
   }, [user.id])
 
@@ -439,6 +468,13 @@ export default function AccountStats() {
         <h1>Your stats</h1>
       </header>
 
+      {/* Rendered above the groups.length check below, not inside it — a
+          failed load() leaves groups at its empty initial state, and that
+          check alone would otherwise show "Join or create a group" instead
+          of the actual error, which is exactly the kind of silently
+          misleading result this is meant to prevent. */}
+      {error && <p className="status-error">Couldn't load your stats: {error}</p>}
+
       {groups.length === 0 && snapshots.length === 0 ? (
         <p className="empty-state">Join or create a group to start seeing your stats.</p>
       ) : (
@@ -549,8 +585,6 @@ export default function AccountStats() {
               ))}
             </tbody>
           </table>
-
-          {error && <p className="status-error">{error}</p>}
 
           {showMonthly && monthlyRows.length > 0 && (
             <>
