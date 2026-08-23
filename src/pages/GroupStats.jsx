@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient'
 import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
 import { fetchAllRows } from '../lib/fetchAllRows'
+import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { computeSpendingTotals } from '../lib/settlement'
 import { computeCategoryTotals } from '../lib/categoryStats'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
@@ -101,7 +102,7 @@ export default function GroupStats() {
       setRawShares(itemShares)
       setError(null)
     } catch (err) {
-      setError(err.message)
+      setError(loadErrorMessage(err))
     }
   }, [groupId])
 

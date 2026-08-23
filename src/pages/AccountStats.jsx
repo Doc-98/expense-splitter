@@ -8,6 +8,7 @@ import { computeMyCategorySpend, mergeCategorySpend } from '../lib/categoryStats
 import { mergeCategoriesByName } from '../lib/categories'
 import { fetchThresholds } from '../lib/thresholds'
 import { fetchAllRows } from '../lib/fetchAllRows'
+import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
 import { getPeriodRange, filterByDateRange, sumDailyInRange, sumCategoryDailyInRange, monthlyFromDaily } from '../lib/timeRange'
 import { comparePeriods } from '../lib/periodComparison'
@@ -201,7 +202,7 @@ export default function AccountStats() {
       // aborted the rest of load() with nothing shown — whatever state had
       // already been set before the failure just stayed on screen,
       // incomplete, with no indication anything had gone wrong.
-      setError(err.message)
+      setError(loadErrorMessage(err))
     }
   }, [user.id])
 

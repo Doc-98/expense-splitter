@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
 import { fetchAllRows } from '../lib/fetchAllRows'
+import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { computeBalances, computeSpendingTotals, simplifyDebts } from '../lib/settlement'
 import { formatSettlementRecap, formatMultiBillRecap } from '../lib/recapText'
 import { shareOrCopyText } from '../lib/shareText'
@@ -115,7 +116,7 @@ export default function GroupView() {
       setGroup(data)
       setError(null)
     } catch (err) {
-      setError(`Couldn't load this group: ${err.message}`)
+      setError(`Couldn't load this group: ${loadErrorMessage(err)}`)
     }
   }, [groupId])
 
@@ -124,7 +125,7 @@ export default function GroupView() {
       setAllMembers(await fetchAllGroupMembers(groupId))
       setError(null)
     } catch (err) {
-      setError(`Couldn't load this group's members: ${err.message}`)
+      setError(`Couldn't load this group's members: ${loadErrorMessage(err)}`)
     }
   }, [groupId])
 
@@ -133,7 +134,7 @@ export default function GroupView() {
       setCategories(await fetchCategories(groupId))
       setError(null)
     } catch (err) {
-      setError(`Couldn't load this group's categories: ${err.message}`)
+      setError(`Couldn't load this group's categories: ${loadErrorMessage(err)}`)
     }
   }, [groupId])
 
@@ -162,7 +163,7 @@ export default function GroupView() {
       setBills(data)
       setError(null)
     } catch (err) {
-      setError(`Couldn't load bills: ${err.message}`)
+      setError(`Couldn't load bills: ${loadErrorMessage(err)}`)
     }
   }, [groupId])
 
@@ -244,7 +245,7 @@ export default function GroupView() {
       const balances = computeBalances({ bills: billsData, items, itemShares, payments: paymentsForBalances })
       setSettlement(simplifyDebts(balances))
     } catch (err) {
-      setError(`Couldn't load this group's bills: ${err.message}`)
+      setError(`Couldn't load this group's bills: ${loadErrorMessage(err)}`)
     }
   }, [groupId])
 
