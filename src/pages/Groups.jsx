@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
+import Pagination from '../components/Pagination'
+
+const GROUPS_PAGE_SIZE = 10
 
 export default function Groups() {
   const { user } = useAuth()
   const [groups, setGroups] = useState(null)
+  const [groupsPage, setGroupsPage] = useState(0)
   const [newGroupName, setNewGroupName] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState(null)
@@ -14,6 +18,12 @@ export default function Groups() {
     loadGroups()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!groups) return
+    const maxPage = Math.max(0, Math.ceil(groups.length / GROUPS_PAGE_SIZE) - 1)
+    if (groupsPage > maxPage) setGroupsPage(maxPage)
+  }, [groups, groupsPage])
 
   async function loadGroups() {
     const { data: memberships, error: membershipError } = await supabase
@@ -74,6 +84,30 @@ export default function Groups() {
         </Link>
       </div>
 
+      {error && <p className="status-error">{error}</p>}
+
+      {groups === null && <p className="muted">Loading your groups…</p>}
+      {groups?.length === 0 && (
+        <p className="empty-state">
+          No groups yet — create one below, or open an invite link a friend sent you.
+        </p>
+      )}
+
+      <ul className="card-list">
+        {groups
+          ?.slice(groupsPage * GROUPS_PAGE_SIZE, (groupsPage + 1) * GROUPS_PAGE_SIZE)
+          .map((group) => (
+            <li key={group.id}>
+              <Link to={`/groups/${group.id}`} className="card-list-item">
+                <span>{group.name}</span>
+                <span className="chevron">→</span>
+              </Link>
+            </li>
+          ))}
+      </ul>
+      <Pagination page={groupsPage} setPage={setGroupsPage} totalItems={groups?.length || 0} pageSize={GROUPS_PAGE_SIZE} />
+
+      <h2 className="settings-section-title section-always-divided">Create a new group</h2>
       <form onSubmit={createGroup} className="inline-form">
         <input
           value={newGroupName}
@@ -84,25 +118,6 @@ export default function Groups() {
           Create
         </button>
       </form>
-      {error && <p className="status-error">{error}</p>}
-
-      {groups === null && <p className="muted">Loading your groups…</p>}
-      {groups?.length === 0 && (
-        <p className="empty-state">
-          No groups yet — create one above, or open an invite link a friend sent you.
-        </p>
-      )}
-
-      <ul className="card-list">
-        {groups?.map((group) => (
-          <li key={group.id}>
-            <Link to={`/groups/${group.id}`} className="card-list-item">
-              <span>{group.name}</span>
-              <span className="chevron">→</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
     </div>
   )
 }

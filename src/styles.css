@@ -2,6 +2,13 @@
 :root {
   --bg: #FAF9F6;
   --surface: #FFFFFF;
+  /* A faint tint of the app's own accent green, not a generic gray —
+     card rows (.card-list-item: the groups list, a group's bill list)
+     use this instead of plain --surface so they read as a distinct
+     surface against --bg, rather than only being defined by their own
+     border. --surface itself stays plain white/near-black — modals,
+     popovers, and everything else that isn't a list row are unaffected. */
+  --surface-tint: #EDF3F0;
   --ink: #1F2A24;
   --ink-soft: #5C6B63;
   --border: #E4E1D8;
@@ -27,6 +34,7 @@
 [data-theme="dark"] {
   --bg: #14201B;
   --surface: #1E2E27;
+  --surface-tint: #25382F;
   --ink: #EDEAE2;
   --ink-soft: #93A79C;
   --border: #33473D;
@@ -318,7 +326,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--surface);
+  background: var(--surface-tint);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 16px;
@@ -799,7 +807,7 @@ input.item-editable-input {
   font-size: 16px;
   margin: var(--space-lg) 0 var(--space-sm);
 }
-.settings-section-title:first-of-type { margin-top: 0; }
+.settings-section-title:first-of-type:not(.section-always-divided) { margin-top: 0; }
 /* A thin divider above every section after the first, on Group Settings
    and both stats pages — the first section sits at the top of the page
    with nothing above it to separate from, same reasoning (and exception)
@@ -812,16 +820,25 @@ input.item-editable-input {
    :not(.group-stats-preview-title) excludes the one other place this
    class is reused (GroupView.jsx's "Quick stats" preview), which already
    has its own bespoke divider treatment below and shouldn't get a second,
-   conflicting one here. */
-.settings-section-title:not(.group-stats-preview-title) {
+   conflicting one here. :not(.section-always-divided) excludes a section
+   that's the *only* .settings-section-title on its page (so it'd
+   otherwise trivially count as "first") but still sits below real content
+   above it — Groups.jsx's "Create a new group", below the group list —
+   and so still wants its divider despite having no sibling section to be
+   "not the first" relative to. */
+.settings-section-title:not(.group-stats-preview-title):not(.section-always-divided) {
   padding-top: var(--space-lg);
   border-top: 1px solid var(--border);
 }
-.settings-section-title:first-of-type:not(.group-stats-preview-title) {
+.settings-section-title:first-of-type:not(.group-stats-preview-title):not(.section-always-divided) {
   padding-top: 0;
   border-top: none;
 }
 .group-stats-preview-title { margin-top: 40px; padding-top: var(--space-lg); border-top: 1px solid var(--border); }
+/* margin-top already comes from .settings-section-title's own base rule
+   (var(--space-lg)) now that the zeroing rule above excludes this class —
+   only padding-top/border-top need setting here. */
+.section-always-divided { padding-top: var(--space-lg); border-top: 1px solid var(--border); }
 /* Right-aligned like a page corner turning, the usual place a "see more"
    link like this sits. */
 .see-stats-link { display: block; text-align: right; margin-top: var(--space-sm); }

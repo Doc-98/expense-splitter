@@ -12,14 +12,16 @@ const GROUPS = [
       {
         id: 'groups',
         title: 'Groups: creating, joining, inviting',
-        keywords: 'group household trip create join invite qr code share link',
+        keywords: 'group household trip create join invite qr code share link create a new group pagination',
         defaultOpen: true,
         body: (
           <>
             <p>
               A <strong>group</strong> is a household, trip, or any set of people who share
-              expenses. Create one from the groups list, or join an existing one via an invite
-              link.
+              expenses. The groups list comes first on that page — <strong>Create a new
+              group</strong> is its own section below the list (10 groups per page, with a page
+              selector once you've got more than that), so the list itself is what you see first.
+              Or join an existing one via an invite link.
             </p>
             <p>
               On a group's page, the <strong>Invite</strong> button opens a QR code (great for

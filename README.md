@@ -38,6 +38,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [What a bill row shows](#what-a-bill-row-shows)
 - [Searching and filtering bills](#searching-and-filtering-bills)
 - [Bill actions: deleting and sharing](#bill-actions-deleting-and-sharing)
+- [Your groups: layout and card style](#your-groups-layout-and-card-style)
 - [Inviting people](#inviting-people)
 - [The in-app guide](#the-in-app-guide)
 - [Recaps, PDFs, and CSV](#recaps-pdfs-and-csv)
@@ -634,6 +635,28 @@ was ticked** — normally they're a separate ledger of cash that's already
 changed hands between two people, not data that belongs to any particular
 bill, so wiping some or all of a group's bills doesn't touch its settle-up
 history unless that was explicitly asked for.
+
+## Your groups: layout and card style
+
+The landing page (`src/pages/Groups.jsx`) is deliberately "list first" —
+**Create a new group** lives in its own section *below* the group list,
+not above it, so the list itself is the first thing you see and the
+create-a-group form doesn't sit between you and a group you're trying to
+open. Same reasoning, and the same divider treatment, as every other
+"section below other content" on this page's siblings. The list itself
+paginates at 10 groups a page (`src/components/Pagination.jsx`, the same
+component the bill list already uses, just a smaller page size), rather
+than growing without bound as you join more groups.
+
+Both the groups list and every group's own bill list share one card
+style (`.card-list-item`), which now sits on a new `--surface-tint` token
+instead of plain `--surface` — a faint tint of the app's own accent
+green (not a generic gray), so a row reads as a distinct surface against
+the page background purely from its own color, not only from its border.
+`--surface` itself is untouched (modals, popovers, and everything else
+that isn't a list row look exactly as before) — this is scoped
+specifically to `.card-list-item`, the one shared style behind both
+lists.
 
 ## Inviting people
 
