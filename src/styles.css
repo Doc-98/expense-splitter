@@ -433,8 +433,22 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    never sits flush against a long title/note that's been ellipsized down
    to fill the row. min-width: 0 on .card-list-item-main (its own rule)
    is what lets that ellipsis actually happen instead of the checkbox
-   getting pushed off the row's edge or the row wrapping. */
-.bill-select-row { gap: 12px; cursor: pointer; }
+   getting pushed off the row's edge or the row wrapping.
+   flex-direction/font-size/margin-bottom are not redundant with
+   .card-list-item here — this is the one .card-list-item usage that's a
+   <label> rather than a <Link>, and the plain `label { ... }` rule
+   further up this file (meant for a field-name-above-its-input form
+   layout: flex-direction: column, a smaller muted font-size, and a
+   margin-bottom to separate one labeled field from the next) otherwise
+   wins for every property it sets that neither .card-list-item nor
+   .bill-select-row also set themselves — CSS cascades per property, not
+   per rule, so .card-list-item's higher-specificity `display: flex`
+   winning doesn't help flex-direction, font-size, or margin-bottom stay
+   correct unless something here sets those same properties too. Left
+   unset, that's what stacked the checkbox under the name/note instead of
+   beside it, shrank and grayed the title text, and added an oversized
+   gap below each row on top of .card-list's own spacing between rows. */
+.bill-select-row { flex-direction: row; gap: 12px; font-size: inherit; margin-bottom: 0; cursor: pointer; }
 .bill-select-row input[type='checkbox'] { flex-shrink: 0; width: 18px; height: 18px; }
 
 .bill-menu-wrap { position: relative; }
