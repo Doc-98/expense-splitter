@@ -339,6 +339,27 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   max-width: 320px;
 }
 
+/* Right side of a bill row: the total/personal-status block, then
+   whichever trailing control the row actually has (the chevron, or the
+   select-mode checkbox) — grouped in their own flex row so
+   .card-list-item's own space-between still only ever sees two children
+   (the name/note block on the left, this group on the right), same as
+   before this existed. flex-shrink: 0 keeps this side at its natural
+   width under a long title/note — .card-list-item-main's own min-width:0
+   is what lets the *left* side shrink/ellipsize instead. */
+.bill-row-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+/* Two lines pairing with .card-list-item-main's own two (name/note) —
+   the total sized to match the name (font-size: inherit, same ambient
+   size, just bold for emphasis as the headline figure), the status line
+   sized to match the note (12px, italic, colored by
+   balance-negative/balance-positive — the same two classes the group's
+   own overall balance already uses elsewhere, not new colors invented
+   just for this). */
+.bill-amount-block { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.bill-amount-total { font-size: inherit; font-weight: 600; }
+.bill-amount-status { font-size: 12px; font-style: italic; white-space: nowrap; }
+.bill-amount-status-neutral { color: var(--ink-soft); }
+
 /* ---------- Bill list date dividers ---------- */
 .bill-month-divider {
   font-family: var(--font-display);
