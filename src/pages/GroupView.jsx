@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
+import { fetchAllRows } from '../lib/fetchAllRows'
 import { computeBalances, computeSpendingTotals, simplifyDebts } from '../lib/settlement'
 import { formatSettlementRecap, formatMultiBillRecap } from '../lib/recapText'
 import { shareOrCopyText } from '../lib/shareText'
@@ -100,17 +101,40 @@ export default function GroupView() {
   // guess based on what's currently on screen.
   const allBillsSelected = Boolean(bills && bills.length > 0 && selectedIds.size === bills.length)
 
+  // Every loader below used to just destructure `{ data }` and move on — a
+  // failed request (a dropped connection, an expired session, anything)
+  // silently looked identical to "this group genuinely has no bills," which
+  // is a much harder bug to spot than an error message would have been.
+  // Each one now checks `error` and surfaces it through the same banner the
+  // rest of the page already uses, and clears it first so a later successful
+  // reload doesn't leave a stale error sitting on screen.
   const loadGroup = useCallback(async () => {
-    const { data } = await supabase.from('groups').select('*').eq('id', groupId).single()
-    setGroup(data)
+    try {
+      const { data, error: groupError } = await supabase.from('groups').select('*').eq('id', groupId).single()
+      if (groupError) throw groupError
+      setGroup(data)
+      setError(null)
+    } catch (err) {
+      setError(`Couldn't load this group: ${err.message}`)
+    }
   }, [groupId])
 
   const loadMembers = useCallback(async () => {
-    setAllMembers(await fetchAllGroupMembers(groupId))
+    try {
+      setAllMembers(await fetchAllGroupMembers(groupId))
+      setError(null)
+    } catch (err) {
+      setError(`Couldn't load this group's members: ${err.message}`)
+    }
   }, [groupId])
 
   const loadCategories = useCallback(async () => {
-    setCategories(await fetchCategories(groupId))
+    try {
+      setCategories(await fetchCategories(groupId))
+      setError(null)
+    } catch (err) {
+      setError(`Couldn't load this group's categories: ${err.message}`)
+    }
   }, [groupId])
 
   // items(total_price, category_id) here — lightweight, just what the
@@ -121,85 +145,107 @@ export default function GroupView() {
   // every other place in this file that fetches its own slice of a bill
   // (exportGroupCsv, shareBills) rather than routing through one shared
   // shape everything has to fit.
+  //
+  // Paged through via fetchAllRows rather than one unbounded request — a
+  // group with a big imported history can have thousands of bills, and one
+  // request trying to carry all of them (each with its own nested items) is
+  // exactly the shape of request that's prone to silently timing out.
   const loadBills = useCallback(async () => {
-    const { data } = await supabase
-      .from('bills')
-      .select('*, items(total_price, category_id)')
-      .eq('group_id', groupId)
-      .order('created_at', { ascending: false })
-    setBills(data || [])
+    try {
+      const data = await fetchAllRows(() =>
+        supabase
+          .from('bills')
+          .select('*, items(total_price, category_id)')
+          .eq('group_id', groupId)
+          .order('created_at', { ascending: false })
+      )
+      setBills(data)
+      setError(null)
+    } catch (err) {
+      setError(`Couldn't load bills: ${err.message}`)
+    }
   }, [groupId])
 
   const loadSettlement = useCallback(async () => {
-    const { data: rawBillsData } = await supabase
-      .from('bills')
-      .select('id, paid_by, created_at, items(id, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)')
-      .eq('group_id', groupId)
+    try {
+      const rawBillsData = await fetchAllRows(() =>
+        supabase
+          .from('bills')
+          .select(
+            'id, paid_by, created_at, items(id, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+          )
+          .eq('group_id', groupId)
+      )
 
-    const { data: paymentsData } = await supabase
-      .from('payments')
-      .select('id, from_member, to_member, amount, created_at')
-      .eq('group_id', groupId)
-      .order('created_at', { ascending: false })
+      const paymentsData = await fetchAllRows(() =>
+        supabase
+          .from('payments')
+          .select('id, from_member, to_member, amount, created_at')
+          .eq('group_id', groupId)
+          .order('created_at', { ascending: false })
+      )
 
-    setPayments(paymentsData || [])
+      setPayments(paymentsData)
+      setError(null)
 
-    if (!rawBillsData) return
+      // computeBalances/computeSpendingTotals expect a bill's multi-payer
+      // split (if any) as .payers — renamed from Supabase's nested
+      // bill_payers here at the query boundary, same spirit as the
+      // item_shares -> user_id remap just below.
+      const billsData = rawBillsData.map((b) => ({ ...b, payers: b.bill_payers || [] }))
 
-    // computeBalances/computeSpendingTotals expect a bill's multi-payer
-    // split (if any) as .payers — renamed from Supabase's nested
-    // bill_payers here at the query boundary, same spirit as the
-    // item_shares -> user_id remap just below.
-    const billsData = rawBillsData.map((b) => ({ ...b, payers: b.bill_payers || [] }))
-
-    const items = []
-    const itemShares = []
-    for (const bill of billsData) {
-      for (const item of bill.items || []) {
-        items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price })
-        for (const share of item.item_shares || []) {
-          itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
+      const items = []
+      const itemShares = []
+      for (const bill of billsData) {
+        for (const item of bill.items || []) {
+          items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price })
+          for (const share of item.item_shares || []) {
+            itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
+          }
         }
       }
+
+      // Same reuse principle as the weekly/monthly preview below — one
+      // computeSpendingTotals() call per bill, scoped to just that bill's
+      // own items/shares, rather than a second query. A bill nobody's
+      // touched in either direction (no payer, nothing assigned) simply
+      // has no entry for anyone, same "absence means zero involvement"
+      // convention computeSpendingTotals already uses at the group level.
+      const perBillTotals = {}
+      for (const bill of billsData) {
+        const billItems = items.filter((it) => it.bill_id === bill.id)
+        const billItemIds = new Set(billItems.map((it) => it.id))
+        const billItemShares = itemShares.filter((s) => billItemIds.has(s.item_id))
+        perBillTotals[bill.id] = computeSpendingTotals({ bills: [bill], items: billItems, itemShares: billItemShares })
+      }
+      setBillPersonalTotals(perBillTotals)
+
+      // Reuses the same fetch for the quick weekly/monthly preview at the
+      // bottom of the page, rather than firing off a second round-trip for
+      // numbers this data already contains.
+      const thisWeek = getPeriodRange('week', 0)
+      const thisMonth = getPeriodRange('month', 0)
+      const weekBills = filterByDateRange(billsData, items, [], thisWeek.start, thisWeek.end)
+      const monthBills = filterByDateRange(billsData, items, [], thisMonth.start, thisMonth.end)
+      setWeekTotal(weekBills.items.reduce((sum, it) => sum + Number(it.total_price), 0))
+      setMonthTotal(monthBills.items.reduce((sum, it) => sum + Number(it.total_price), 0))
+
+      // computeBalances/simplifyDebts operate on a generic "userId" key —
+      // it's always been just an opaque ID as far as they're concerned, so
+      // feeding them group_members.id values (real accounts and guests
+      // alike) needs no changes there, only here at the query/mapping
+      // boundary.
+      const paymentsForBalances = paymentsData.map((p) => ({
+        from_user: p.from_member,
+        to_user: p.to_member,
+        amount: p.amount,
+      }))
+
+      const balances = computeBalances({ bills: billsData, items, itemShares, payments: paymentsForBalances })
+      setSettlement(simplifyDebts(balances))
+    } catch (err) {
+      setError(`Couldn't load this group's bills: ${err.message}`)
     }
-
-    // Same reuse principle as the weekly/monthly preview below — one
-    // computeSpendingTotals() call per bill, scoped to just that bill's
-    // own items/shares, rather than a second query. A bill nobody's
-    // touched in either direction (no payer, nothing assigned) simply
-    // has no entry for anyone, same "absence means zero involvement"
-    // convention computeSpendingTotals already uses at the group level.
-    const perBillTotals = {}
-    for (const bill of billsData) {
-      const billItems = items.filter((it) => it.bill_id === bill.id)
-      const billItemIds = new Set(billItems.map((it) => it.id))
-      const billItemShares = itemShares.filter((s) => billItemIds.has(s.item_id))
-      perBillTotals[bill.id] = computeSpendingTotals({ bills: [bill], items: billItems, itemShares: billItemShares })
-    }
-    setBillPersonalTotals(perBillTotals)
-
-    // Reuses the same fetch for the quick weekly/monthly preview at the
-    // bottom of the page, rather than firing off a second round-trip for
-    // numbers this data already contains.
-    const thisWeek = getPeriodRange('week', 0)
-    const thisMonth = getPeriodRange('month', 0)
-    const weekBills = filterByDateRange(billsData, items, [], thisWeek.start, thisWeek.end)
-    const monthBills = filterByDateRange(billsData, items, [], thisMonth.start, thisMonth.end)
-    setWeekTotal(weekBills.items.reduce((sum, it) => sum + Number(it.total_price), 0))
-    setMonthTotal(monthBills.items.reduce((sum, it) => sum + Number(it.total_price), 0))
-
-    // computeBalances/simplifyDebts operate on a generic "userId" key — it's
-    // always been just an opaque ID as far as they're concerned, so feeding
-    // them group_members.id values (real accounts and guests alike) needs
-    // no changes there, only here at the query/mapping boundary.
-    const paymentsForBalances = (paymentsData || []).map((p) => ({
-      from_user: p.from_member,
-      to_user: p.to_member,
-      amount: p.amount,
-    }))
-
-    const balances = computeBalances({ bills: billsData, items, itemShares, payments: paymentsForBalances })
-    setSettlement(simplifyDebts(balances))
   }, [groupId])
 
   useEffect(() => {
@@ -420,20 +466,21 @@ export default function GroupView() {
   async function exportGroupCsv() {
     setError(null)
     try {
-      const [{ data: billsData, error: billsError }, { data: categoriesData, error: categoriesError }] = await Promise.all([
-        supabase
-          .from('bills')
-          .select(
-            'id, title, created_at, paid_by, category_id, items(name, quantity, unit_price, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
-          )
-          .eq('group_id', groupId)
-          .order('created_at', { ascending: true }),
+      const [billsData, { data: categoriesData, error: categoriesError }] = await Promise.all([
+        fetchAllRows(() =>
+          supabase
+            .from('bills')
+            .select(
+              'id, title, created_at, paid_by, category_id, items(name, quantity, unit_price, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+            )
+            .eq('group_id', groupId)
+            .order('created_at', { ascending: true })
+        ),
         supabase.from('categories').select('id, name').eq('group_id', groupId),
       ])
-      if (billsError) throw billsError
       if (categoriesError) throw categoriesError
 
-      const bills = (billsData || []).map((b) => ({ ...b, payers: b.bill_payers || [] }))
+      const bills = billsData.map((b) => ({ ...b, payers: b.bill_payers || [] }))
       const { header, rows } = buildGroupCsvRows(bills, allMembers, categoriesData || [])
       const filename = `${(group?.name || 'group').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-bills.csv`
       downloadCsv(filename, toCsv(header, rows))
@@ -456,6 +503,8 @@ export default function GroupView() {
           Settings
         </Link>
       </header>
+
+      {error && <p className="status-error">{error}</p>}
 
       <div className="group-actions">
         <InviteMenu
@@ -714,8 +763,6 @@ export default function GroupView() {
         ))}
       </div>
       <Pagination page={billsPage} setPage={setBillsPage} totalItems={filteredBills.length} pageSize={BILLS_PAGE_SIZE} />
-
-      {error && <p className="status-error">{error}</p>}
 
       <SettlementSummary
         transactions={settlement}

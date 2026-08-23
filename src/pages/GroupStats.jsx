@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
+import { fetchAllRows } from '../lib/fetchAllRows'
 import { computeSpendingTotals } from '../lib/settlement'
 import { computeCategoryTotals } from '../lib/categoryStats'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
@@ -44,6 +45,7 @@ export default function GroupStats() {
   // is clicked, without needing a reload to reflect the new saved value —
   // same reasoning as AccountStats.jsx.
   const [defaultGranularity, setDefaultGranularity] = useState(() => getStatsPreferences().defaultGranularity)
+  const [error, setError] = useState(null)
 
   const nameOf = (id) => members.find((m) => m.id === id)?.name || 'Someone'
 
@@ -52,41 +54,55 @@ export default function GroupStats() {
     setDefaultGranularity(g)
   }
 
+  // A failed fetch here used to just leave every number on this page at its
+  // initial empty-array default — indistinguishable from "this group
+  // genuinely has no bills for that period." Now it surfaces instead, and
+  // the bills query is paged through fetchAllRows rather than asked for in
+  // one shot, since a group with a big imported history can have thousands
+  // of bills — exactly the kind of request that's prone to silently timing
+  // out before this had any error handling to catch it.
   const load = useCallback(async () => {
-    setMembers(await fetchAllGroupMembers(groupId))
-    setCategories(await fetchCategories(groupId))
+    try {
+      setMembers(await fetchAllGroupMembers(groupId))
+      setCategories(await fetchCategories(groupId))
 
-    const { data: rawBillsData } = await supabase
-      .from('bills')
-      .select(
-        'id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+      const rawBillsData = await fetchAllRows(() =>
+        supabase
+          .from('bills')
+          .select(
+            'id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+          )
+          .eq('group_id', groupId)
+          .order('created_at', { ascending: true })
       )
-      .eq('group_id', groupId)
-      .order('created_at', { ascending: true })
 
-    const list = (rawBillsData || []).map((b) => ({ ...b, payers: b.bill_payers || [] }))
-    const items = []
-    const itemShares = []
-    for (const bill of list) {
-      for (const item of bill.items || []) {
-        items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price, category_id: item.category_id })
-        for (const share of item.item_shares || []) {
-          itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
+      const list = rawBillsData.map((b) => ({ ...b, payers: b.bill_payers || [] }))
+      const items = []
+      const itemShares = []
+      for (const bill of list) {
+        for (const item of bill.items || []) {
+          items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price, category_id: item.category_id })
+          for (const share of item.item_shares || []) {
+            itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
+          }
         }
       }
+      setRawBills(
+        list.map((b) => ({
+          id: b.id,
+          title: b.title,
+          created_at: b.created_at,
+          paid_by: b.paid_by,
+          payers: b.payers,
+          category_id: b.category_id,
+        }))
+      )
+      setRawItems(items)
+      setRawShares(itemShares)
+      setError(null)
+    } catch (err) {
+      setError(err.message)
     }
-    setRawBills(
-      list.map((b) => ({
-        id: b.id,
-        title: b.title,
-        created_at: b.created_at,
-        paid_by: b.paid_by,
-        payers: b.payers,
-        category_id: b.category_id,
-      }))
-    )
-    setRawItems(items)
-    setRawShares(itemShares)
   }, [groupId])
 
   useEffect(() => {
@@ -161,6 +177,8 @@ export default function GroupStats() {
         </Link>
         <h1>Stats</h1>
       </header>
+
+      {error && <p className="status-error">Couldn't load stats: {error}</p>}
 
       <TimeRangeSelector
         granularity={granularity}
