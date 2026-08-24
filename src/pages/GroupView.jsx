@@ -157,7 +157,7 @@ export default function GroupView() {
       const data = await fetchAllRows(() =>
         supabase
           .from('bills')
-          .select('*, items(total_price, category_id)')
+          .select('*, items(total_price, category_id)', { count: 'exact' })
           .eq('group_id', groupId)
           .order('created_at', { ascending: false })
       )
@@ -170,22 +170,26 @@ export default function GroupView() {
 
   const loadSettlement = useCallback(async () => {
     try {
-      const rawBillsData = await fetchAllRows(() =>
-        supabase
-          .from('bills')
-          .select(
-            'id, paid_by, created_at, items(id, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)'
-          )
-          .eq('group_id', groupId)
-      )
-
-      const paymentsData = await fetchAllRows(() =>
-        supabase
-          .from('payments')
-          .select('id, from_member, to_member, amount, created_at')
-          .eq('group_id', groupId)
-          .order('created_at', { ascending: false })
-      )
+      // Bills and payments don't depend on each other, so fetch both at
+      // once rather than waiting on one before starting the other.
+      const [rawBillsData, paymentsData] = await Promise.all([
+        fetchAllRows(() =>
+          supabase
+            .from('bills')
+            .select(
+              'id, paid_by, created_at, items(id, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)',
+              { count: 'exact' }
+            )
+            .eq('group_id', groupId)
+        ),
+        fetchAllRows(() =>
+          supabase
+            .from('payments')
+            .select('id, from_member, to_member, amount, created_at', { count: 'exact' })
+            .eq('group_id', groupId)
+            .order('created_at', { ascending: false })
+        ),
+      ])
 
       setPayments(paymentsData)
       setError(null)
@@ -514,7 +518,8 @@ export default function GroupView() {
           supabase
             .from('bills')
             .select(
-              'id, title, created_at, paid_by, category_id, items(name, quantity, unit_price, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+              'id, title, created_at, paid_by, category_id, items(name, quantity, unit_price, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)',
+              { count: 'exact' }
             )
             .eq('group_id', groupId)
             .order('created_at', { ascending: true })

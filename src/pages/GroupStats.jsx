@@ -65,18 +65,25 @@ export default function GroupStats() {
   // out before this had any error handling to catch it.
   const load = useCallback(async () => {
     try {
-      setMembers(await fetchAllGroupMembers(groupId))
-      setCategories(await fetchCategories(groupId))
-
-      const rawBillsData = await fetchAllRows(() =>
-        supabase
-          .from('bills')
-          .select(
-            'id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
-          )
-          .eq('group_id', groupId)
-          .order('created_at', { ascending: true })
-      )
+      // Members, categories, and bills don't depend on each other — fetch
+      // all three at once instead of stacking three round-trips in a row
+      // before anything on this page can render.
+      const [membersData, categoriesData, rawBillsData] = await Promise.all([
+        fetchAllGroupMembers(groupId),
+        fetchCategories(groupId),
+        fetchAllRows(() =>
+          supabase
+            .from('bills')
+            .select(
+              'id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)',
+              { count: 'exact' }
+            )
+            .eq('group_id', groupId)
+            .order('created_at', { ascending: true })
+        ),
+      ])
+      setMembers(membersData)
+      setCategories(categoriesData)
 
       const list = rawBillsData.map((b) => ({ ...b, payers: b.bill_payers || [] }))
       const items = []
