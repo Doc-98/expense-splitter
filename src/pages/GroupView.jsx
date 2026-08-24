@@ -76,11 +76,31 @@ export default function GroupView() {
   const [billPersonalTotals, setBillPersonalTotals] = useState({})
   const [categories, setCategories] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
+  // Collapsed by default — a search bar plus a filters panel is a lot of
+  // screen real estate for something you might not touch for a while if
+  // you're just adding bills and settling up, not digging through old
+  // ones. The "Search" button that opens it lives in .group-actions,
+  // alongside Invite; the section itself carries its own ↑ to retract
+  // (see the search section's JSX below), and "/" opens it too (see the
+  // keydown effect below), matching whichever way it was closed.
+  const [searchOpen, setSearchOpen] = useState(false)
+  // Same Escape-to-close convention as the filters panel just below (and
+  // every popover in the app, via useClickOutside) — an inline panel
+  // toggled by its own button, same shape as filtersOpen, so it gets the
+  // same treatment.
+  useEscapeKey(() => setSearchOpen(false), searchOpen)
   // "/" jumps straight to this (see the keydown effect below), same
   // shortcut GitHub/Slack use for their own search boxes — so it needs a
   // real DOM node to call .focus() on, not just the value/onChange state
   // every other input on this page gets away with.
   const searchInputRef = useRef(null)
+  // Focuses the search box the moment it actually mounts — searchOpen and
+  // the ref becoming usable happen a render apart, so the keydown handler
+  // below can't just call .focus() straight after setSearchOpen(true) and
+  // expect the DOM node to already exist yet.
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus()
+  }, [searchOpen])
   const [filtersOpen, setFiltersOpen] = useState(false)
   useEscapeKey(() => setFiltersOpen(false), filtersOpen)
   const [selectedTagIds, setSelectedTagIds] = useState(new Set())
@@ -283,11 +303,15 @@ export default function GroupView() {
   // "/" jumps straight to the search box, from anywhere on the page —
   // independent of the list-navigation hook below (works in select mode,
   // or with zero bills currently matching a filter, since the box itself
-  // is still there to change either of those).
+  // is still there to change either of those). Opens the search section
+  // first if it's currently collapsed — the useEffect above handles
+  // actually focusing it once it's mounted; the direct .focus() call here
+  // is for the already-open case, where there's no mount to wait on.
   useEffect(() => {
     function onKeyDown(e) {
       if (e.key !== '/' || isTypingTarget(document.activeElement)) return
       e.preventDefault()
+      setSearchOpen(true)
       searchInputRef.current?.focus()
     }
     window.addEventListener('keydown', onKeyDown)
@@ -631,19 +655,21 @@ export default function GroupView() {
             </div>
           )}
         </div>
+        {/* Hidden once the search section itself is open — its own ↑
+            (below) is what closes it again, so there's never two controls
+            on screen at once for the same thing. */}
+        {bills && bills.length > 0 && !searchOpen && (
+          <button
+            type="button"
+            className={`btn-secondary ${searchQuery || filtersActive ? 'bill-search-toggle-active' : ''}`}
+            onClick={() => setSearchOpen(true)}
+          >
+            Search{searchQuery || filtersActive ? ' •' : ''}
+          </button>
+        )}
       </div>
 
-      <form onSubmit={createBill} className="inline-form">
-        <input
-          value={newBillTitle}
-          onChange={(e) => setNewBillTitle(e.target.value)}
-          placeholder="New bill (e.g. Lidl - Tuesday)"
-        />
-        <button type="submit" className="btn-primary">
-          Start
-        </button>
-      </form>
-      {bills && bills.length > 0 && (
+      {bills && bills.length > 0 && searchOpen && (
         <>
           <div className="receipt-tape bill-search-tape">
             <input
@@ -661,6 +687,14 @@ export default function GroupView() {
               onClick={() => setFiltersOpen((o) => !o)}
             >
               Filters{filtersActive ? ' •' : ''}
+            </button>
+            <button
+              type="button"
+              className="btn-icon bill-search-collapse"
+              onClick={() => setSearchOpen(false)}
+              aria-label="Hide search"
+            >
+              ↑
             </button>
           </div>
 
@@ -734,6 +768,17 @@ export default function GroupView() {
         </>
       )}
 
+      <form onSubmit={createBill} className="inline-form">
+        <input
+          value={newBillTitle}
+          onChange={(e) => setNewBillTitle(e.target.value)}
+          placeholder="New bill (e.g. Lidl - Tuesday)"
+        />
+        <button type="submit" className="btn-primary">
+          Add
+        </button>
+      </form>
+
       <div className="bill-list-controls">
         <Link to={`/groups/${groupId}/recurring`} className="btn-link import-link">
           Recurring bills
@@ -774,7 +819,7 @@ export default function GroupView() {
       {shareStatus && <p className="muted share-status">{shareStatus}</p>}
 
       {bills?.length === 0 && (
-        <p className="empty-state">No bills yet. Start one above, then scan or add a receipt.</p>
+        <p className="empty-state">No bills yet. Add one above, then scan or add a receipt.</p>
       )}
       {bills && bills.length > 0 && filteredBills.length === 0 && (
         <p className="empty-state">

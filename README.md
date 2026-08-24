@@ -506,7 +506,9 @@ into a field (search, an amount, a filter) is never intercepted.
   Delete), not on a page of its own — so there's nowhere for Enter to go.
 - **A group's bill list, specifically** also gets `/` to jump straight to
   the search box from anywhere on the page, same shortcut GitHub/Slack use
-  for their own search.
+  for their own search — opening the search section first if it's
+  currently collapsed (see [Searching and filtering
+  bills](#searching-and-filtering-bills)).
 - **Stats pages** (`TimeRangeSelector`, shared by Group Stats and Your
   Stats) — ← / → step to the previous/next period, the same single step as
   the ‹ / › buttons next to the period label. Doesn't cover the jump
@@ -515,12 +517,12 @@ into a field (search, an amount, a filter) is never intercepted.
   previous/next period to step to.
 - **Escape closes whatever's open** — the account menu, a bill's own
   action menu, the member-count popover, the invite/share popovers, and
-  the bill list's filters panel. The first four all already close on an
-  outside click (`src/lib/useClickOutside.js`), which now also listens for
-  Escape (`src/lib/useEscapeKey.js`) rather than only a click; the filters
-  panel has no floating "outside" of its own to click away from — it's an
-  inline panel toggled by its own button — so it uses the Escape hook
-  directly instead.
+  the bill list's search section and its filters panel. The first four all
+  already close on an outside click (`src/lib/useClickOutside.js`), which
+  now also listens for Escape (`src/lib/useEscapeKey.js`) rather than only
+  a click; the search section and filters panel have no floating "outside"
+  of their own to click away from — both are inline panels toggled by
+  their own button — so they use the Escape hook directly instead.
 
 **Why the bill list's Pagination bar is sticky now:** a page of bills can
 run from a couple of rows to a full screen depending on how many day/month
@@ -613,6 +615,20 @@ A group's bill list has a search bar (same "receipt tape" look and the
 same plain, case-insensitive substring matching as the in-app guide's own
 search) plus a **Filters** button next to it that opens a panel — closed
 by default, so it stays out of the way until someone actually wants it.
+
+The search bar itself starts collapsed too, behind a **Search** button
+next to Invite — the same reasoning as Filters, one level up: search and
+filtering are for digging through old bills, not the everyday flow of
+adding a new one and settling up, so neither should sit expanded on
+screen by default. Opening it (the button, or `/` from anywhere on the
+page — see [Keyboard navigation](#keyboard-navigation)) reveals the
+search bar between the Invite row and "Add a bill," with a small ↑ at its
+own right edge to collapse it again; a search or filter left active while
+collapsed shows as a "•" on the Search button, same convention the
+Filters button already uses for the same thing. Collapsing it doesn't
+clear whatever's currently set — reopening shows exactly what you left,
+same as Filters' own panel already works.
+
 `src/lib/billFilters.js` has the pure matching logic behind all of it,
 each piece independently testable and combined with plain `&&`
 (`filterBills()`): a bill has to pass the search text, the tag filter, and
@@ -828,13 +844,26 @@ holding their **net balance** for that expense (positive = they're owed,
 negative = they owe) — not a raw share amount. `src/lib/splitwiseImport.js`
 reconstructs who paid (whoever has the largest positive net) and each
 person's actual share (`cost - theirNet` for the payer, `-theirNet` for
-everyone else) from that. Since Splitwise doesn't track individual line
-items the way this app does, each imported expense becomes one bill with a
-single item covering the whole cost, dated to match the original expense —
-that date is what the bill list's own date dividers group it under (see
-[How the data model works](#how-the-data-model-works)), so an import lands
-exactly where it belongs in the timeline without anything special needed
-here for that.
+everyone else) from that, dated to match the original expense — that date
+is what the bill list's own date dividers group it under (see [How the
+data model works](#how-the-data-model-works)), so an import lands exactly
+where it belongs in the timeline without anything special needed here for
+that.
+
+Splitwise doesn't track individual line items the way this app does, but
+an imported expense isn't a single item covering the whole cost either —
+each person's own reconstructed share becomes its own item, assigned just
+to them (`unit_price`/`total_price` both that exact amount, one
+`item_shares` row at weight 1). That's the same shape a hand-entered
+"everyone bought their own thing" bill already has in this app: every
+`item_shares` row anywhere is always an equal weight of 1 per buyer — an
+*uneven* split, imported or not, always comes from separate items, never
+from weighting shares within one (see the `item_shares` row in [How the
+data model works](#how-the-data-model-works)). Splitting it this way
+rather than one big item means an imported bill is exactly as editable
+afterward as any other — rename an item, reassign it, adjust its price —
+instead of needing a weighted-shares concept that exists nowhere else in
+the app.
 
 Before importing, you're asked to match each name Splitwise exported
 against an existing member of the group (real or guest) or create a new
@@ -863,10 +892,16 @@ anything needs it — one expense at a time, wizard-style, the same feel as
 the people-matching step itself. For each: pick who paid (a plain dropdown
 for the common single-payer case, with a "Multiple payers…" option that
 opens the same amount-entry modal a bill's own page uses) and who it's
-split with (equal-share chips — finer per-person amounts on the consuming
-side stay available afterward through ordinary bill editing, same as any
-other bill). "Skip for now" imports the bill with no payer set rather than
-forcing a decision on the spot; either way, the bill's note gets a
+split with — checkboxes, defaulting to an even split of the cost among
+whoever's checked (`splitEvenly()` in `src/lib/splitEvenly.js`, cent-exact
+rather than plain division, so an odd number of cents left over from a
+3-way split doesn't silently go missing), with a "Split unevenly…" option
+right there for when it isn't — the *same* amount-entry modal reused a
+second time, just for who's consuming the bill instead of who fronted it,
+since it's genuinely the same shape either way: pick some people, assign
+each an amount, the amounts must sum to the total. "Skip for now" imports
+the bill with no payer set rather than forcing a decision on the spot;
+either way, the bill's note gets a
 permanent, searchable tag (`Splitwise import: reviewed manually` or
 `Splitwise import: needs review — payer not set`) so it's findable again
 through the group's own bill search long after this one import session

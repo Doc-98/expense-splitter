@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
 import { fetchGroupMembers, addGuest } from '../lib/members'
 import { parseSplitwiseCsv, checkImportBalances } from '../lib/splitwiseImport'
+import { splitEvenly } from '../lib/splitEvenly'
 import MultiPayerModal from '../components/MultiPayerModal'
 
 // Appended to a review-resolved (or skipped) bill's note, on top of the
@@ -32,6 +33,7 @@ export default function ImportBills() {
   const [reviewIndex, setReviewIndex] = useState(0)
   const [reviewResolutions, setReviewResolutions] = useState([]) // parallel to parsed.needsReview
   const [reviewPayerModalOpen, setReviewPayerModalOpen] = useState(false)
+  const [reviewSplitModalOpen, setReviewSplitModalOpen] = useState(false)
   const [importing, setImporting] = useState(false)
   const [progress, setProgress] = useState(null)
   const [result, setResult] = useState(null)
@@ -130,9 +132,22 @@ export default function ImportBills() {
   const reviewParticipants = resolvedIds
     ? parsed.peopleNames.map((name) => ({ id: resolvedIds[name], name })).filter((p) => p.id)
     : []
+  const nameOf = (id) => reviewParticipants.find((p) => p.id === id)?.name || 'Someone'
 
   const currentReviewItem = parsed?.needsReview[reviewIndex]
-  const currentResolution = reviewResolutions[reviewIndex] || { payerId: null, payers: null, buyerIds: reviewParticipants.map((p) => p.id) }
+  // buyerAmounts stays null until "Split unevenly…" is actually used —
+  // null means "split buyerIds' share of the cost equally," the same
+  // implicit default this always had, just now able to be overridden
+  // instead of being the only option. Once set, it's the source of truth
+  // (an array of {member_id, amount} — the same shape MultiPayerModal
+  // already hands back for payers) and buyerIds just trails along for
+  // book-keeping (see toggleReviewBuyer/confirmReviewSplit below).
+  const currentResolution = reviewResolutions[reviewIndex] || {
+    payerId: null,
+    payers: null,
+    buyerIds: reviewParticipants.map((p) => p.id),
+    buyerAmounts: null,
+  }
 
   function updateCurrentResolution(patch) {
     setReviewResolutions((rs) => {
@@ -155,14 +170,40 @@ export default function ImportBills() {
     setReviewPayerModalOpen(false)
   }
 
+  // Only reachable while there's no custom split yet — the checkbox row
+  // this drives is swapped out for a summary button once buyerAmounts is
+  // set (see the review step's JSX below), same as the payer picker
+  // itself switches to a button once it's gone multi. Clearing
+  // buyerAmounts here defensively costs nothing even so: whichever people
+  // are actually included changing is exactly what would make an old
+  // custom split stale.
   function toggleReviewBuyer(memberId) {
     const current = currentResolution.buyerIds
     const next = current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId]
-    updateCurrentResolution({ buyerIds: next })
+    updateCurrentResolution({ buyerIds: next, buyerAmounts: null })
+  }
+
+  function confirmReviewSplit(amounts) {
+    updateCurrentResolution({ buyerAmounts: amounts, buyerIds: amounts.map((a) => a.member_id) })
+    setReviewSplitModalOpen(false)
   }
 
   const currentResolutionHasPayer = Boolean(currentResolution.payerId || currentResolution.payers?.length > 0)
-  const currentResolutionValid = currentResolutionHasPayer && currentResolution.buyerIds.length > 0
+  const currentResolutionHasSplit = Boolean(currentResolution.buyerAmounts?.length > 0 || currentResolution.buyerIds.length > 0)
+  const currentResolutionValid = currentResolutionHasPayer && currentResolutionHasSplit
+
+  // What the "Split unevenly…" modal opens pre-filled with — the existing
+  // custom split if there is one (editing it further), otherwise an equal
+  // split of whoever's currently checked, so adjusting from "even" starts
+  // from what's already on screen instead of a blank form.
+  const reviewSplitDraft =
+    currentResolution.buyerAmounts ||
+    (currentReviewItem
+      ? currentResolution.buyerIds.map((id, i) => ({
+          member_id: id,
+          amount: splitEvenly(currentReviewItem.cost, currentResolution.buyerIds.length)[i],
+        }))
+      : [])
 
   async function nextReviewItem(skip) {
     const resolutions = [...reviewResolutions]
@@ -193,7 +234,18 @@ export default function ImportBills() {
     const insertedItems = []
     const insertedShares = []
 
-    async function insertOne({ date, description, category, cost, payerId, payers, buyerShares, noteSuffix }) {
+    // buyerAmounts is { member_id: amount }, each entry becoming its own
+    // item assigned to just that person — not one item covering the whole
+    // cost, split by proportional weights. Same shape a hand-entered
+    // "everyone bought their own thing" bill already has (see
+    // BillView.jsx: item_shares there are always a plain weight of 1 per
+    // buyer; unevenness always comes from having separate items, never
+    // from weighting shares within one), so an uneven split — Splitwise's
+    // own reconstructed shares, or a custom "Split unevenly…" from the
+    // review step — is representable at all, and an imported bill ends up
+    // just as editable afterward as any other: rename an item, reassign
+    // it, adjust its price, right there on the bill's own page.
+    async function insertBill({ date, description, category, cost, payerId, payers, buyerAmounts, noteSuffix }) {
       const baseNote = category ? `Imported from Splitwise (${category})` : 'Imported from Splitwise'
       const note = noteSuffix ? `${baseNote} — ${noteSuffix}` : baseNote
 
@@ -211,19 +263,33 @@ export default function ImportBills() {
         .single()
       if (billError) throw billError
 
-      const { data: item, error: itemError } = await supabase
-        .from('items')
-        .insert({ bill_id: bill.id, name: description, unit_price: cost, quantity: 1, total_price: cost })
-        .select()
-        .single()
+      const buyerEntries = Object.entries(buyerAmounts || {})
+      // Nobody resolved at all (a skipped review item) — still record the
+      // bill's full cost as a single unattributed item rather than
+      // silently losing it, same as before this existed.
+      const itemsToInsert =
+        buyerEntries.length > 0
+          ? buyerEntries.map(([, amount]) => ({
+              bill_id: bill.id,
+              name: description,
+              unit_price: amount,
+              quantity: 1,
+              total_price: amount,
+            }))
+          : [{ bill_id: bill.id, name: description, unit_price: cost, quantity: 1, total_price: cost }]
+
+      // One batch insert for all of this bill's items, relying on Postgres
+      // returning a multi-row INSERT...VALUES's RETURNING rows in the same
+      // order they were submitted — lets buyerEntries[i] be paired with
+      // insertedItemRows[i] below without a round-trip per item.
+      const { data: insertedItemRows, error: itemError } = await supabase.from('items').insert(itemsToInsert).select()
       if (itemError) throw itemError
 
-      const shareEntries = Object.entries(buyerShares || {})
-      if (shareEntries.length > 0) {
-        const shareRows = shareEntries.map(([member_id, shares]) => ({ item_id: item.id, member_id, shares }))
+      if (buyerEntries.length > 0) {
+        const shareRows = buyerEntries.map(([member_id], i) => ({ item_id: insertedItemRows[i].id, member_id, shares: 1 }))
         const { error: sharesError } = await supabase.from('item_shares').insert(shareRows)
         if (sharesError) throw sharesError
-        for (const [user_id, shares] of shareEntries) insertedShares.push({ item_id: item.id, user_id, shares })
+        for (const row of shareRows) insertedShares.push({ item_id: row.item_id, user_id: row.member_id, shares: row.shares })
       }
 
       let billPayers = []
@@ -236,15 +302,18 @@ export default function ImportBills() {
       }
 
       insertedBills.push({ id: bill.id, paid_by: payerId || null, payers: billPayers })
-      insertedItems.push({ id: item.id, bill_id: bill.id, total_price: cost })
+      for (const row of insertedItemRows) insertedItems.push({ id: row.id, bill_id: bill.id, total_price: row.total_price })
     }
 
     try {
       let imported = 0
 
       // The ordinary, automatically-resolved expenses — same shape and
-      // logic this always had, just now sharing insertOne() with the
-      // review-resolved path below instead of duplicating it.
+      // logic this always had, just now sharing insertBill() with the
+      // review-resolved path below instead of duplicating it. expense.shares
+      // is already { name: exact amount }, reconstructed from Splitwise's
+      // own net-balance numbers (see splitwiseImport.js) — nothing to
+      // compute here beyond resolving names to member ids.
       for (let i = 0; i < parsed.expenses.length; i++) {
         const expense = parsed.expenses[i]
         setProgress(`Importing ${i + 1} of ${parsed.expenses.length + parsed.needsReview.length}…`)
@@ -252,59 +321,67 @@ export default function ImportBills() {
         const payerId = ids[expense.payerName]
         if (!payerId) continue
 
-        const buyerShares = {}
+        const buyerAmounts = {}
         for (const [name, amount] of Object.entries(expense.shares)) {
           const memberId = ids[name]
-          if (memberId) buyerShares[memberId] = amount
+          if (memberId) buyerAmounts[memberId] = amount
         }
 
-        await insertOne({
+        await insertBill({
           date: expense.date,
           description: expense.description,
           category: expense.category,
           cost: expense.cost,
           payerId,
           payers: null,
-          buyerShares,
+          buyerAmounts,
         })
         imported++
       }
 
       // The ones the review step just resolved (or you chose to skip) —
-      // equal shares among whoever was checked, since Splitwise's export
-      // gave no usable per-person amounts for these to begin with, unlike
-      // the exact reconstructed amounts above.
+      // whatever amounts "Split unevenly…" produced, or an equal split of
+      // the cost among whoever was checked if that was never opened
+      // (splitEvenly rather than plain division, so a 3-way split of an
+      // odd number of cents still adds up to exactly the bill total).
       for (let i = 0; i < parsed.needsReview.length; i++) {
         const item = parsed.needsReview[i]
         const resolution = resolutions[i]
         setProgress(`Importing ${parsed.expenses.length + i + 1} of ${parsed.expenses.length + parsed.needsReview.length}…`)
 
         if (!resolution || resolution.skipped) {
-          await insertOne({
+          await insertBill({
             date: item.date,
             description: item.description,
             category: item.category,
             cost: item.cost,
             payerId: null,
             payers: null,
-            buyerShares: {},
+            buyerAmounts: {},
             noteSuffix: SKIPPED_NOTE,
           })
           imported++
           continue
         }
 
-        const buyerShares = {}
-        for (const id of resolution.buyerIds) buyerShares[id] = 1
+        const buyerAmounts = {}
+        if (resolution.buyerAmounts) {
+          for (const { member_id, amount } of resolution.buyerAmounts) buyerAmounts[member_id] = amount
+        } else if (resolution.buyerIds.length > 0) {
+          const amounts = splitEvenly(item.cost, resolution.buyerIds.length)
+          resolution.buyerIds.forEach((id, idx) => {
+            buyerAmounts[id] = amounts[idx]
+          })
+        }
 
-        await insertOne({
+        await insertBill({
           date: item.date,
           description: item.description,
           category: item.category,
           cost: item.cost,
           payerId: resolution.payerId,
           payers: resolution.payers,
-          buyerShares,
+          buyerAmounts,
           noteSuffix: REVIEWED_NOTE,
         })
         imported++
@@ -349,8 +426,9 @@ export default function ImportBills() {
           <p className="muted">
             Export your group from Splitwise as a CSV (Group settings → Export as CSV in Splitwise),
             then upload it here. Each expense becomes one bill, imported with its original date and
-            payer preserved — Splitwise doesn't track individual line items the way this app does, so
-            each import is a single-item bill covering the whole expense.
+            payer preserved. Splitwise doesn't track individual line items, but each person's own
+            share becomes its own item, assigned just to them — so an imported bill ends up exactly
+            as editable afterward as any other.
           </p>
           <input type="file" accept=".csv,text/csv" onChange={handleFile} />
         </>
@@ -424,10 +502,7 @@ export default function ImportBills() {
             <span className="muted">Paid by</span>
             {currentResolution.payers?.length > 0 ? (
               <button type="button" className="btn-link" onClick={() => setReviewPayerModalOpen(true)}>
-                {currentResolution.payers
-                  .map((p) => reviewParticipants.find((m) => m.id === p.member_id)?.name || 'Someone')
-                  .join(', ')}{' '}
-                (split)
+                {currentResolution.payers.map((p) => nameOf(p.member_id)).join(', ')} (split)
               </button>
             ) : (
               <select value={currentResolution.payerId || ''} onChange={(e) => setReviewPayer(e.target.value)}>
@@ -444,18 +519,34 @@ export default function ImportBills() {
 
           <div className="default-buyers-row">
             <span className="muted">Split with:</span>
-            <div className="chip-row">
-              {reviewParticipants.map((p) => (
-                <label key={p.id} className={currentResolution.buyerIds.includes(p.id) ? 'buyer-chip active' : 'buyer-chip'}>
-                  <input
-                    type="checkbox"
-                    checked={currentResolution.buyerIds.includes(p.id)}
-                    onChange={() => toggleReviewBuyer(p.id)}
-                  />
-                  {p.name}
-                </label>
-              ))}
-            </div>
+            {currentResolution.buyerAmounts ? (
+              <button type="button" className="btn-link" onClick={() => setReviewSplitModalOpen(true)}>
+                {currentResolution.buyerAmounts.map((a) => nameOf(a.member_id)).join(', ')} (custom split)
+              </button>
+            ) : (
+              <div className="chip-row">
+                {reviewParticipants.map((p) => (
+                  <label key={p.id} className={currentResolution.buyerIds.includes(p.id) ? 'buyer-chip active' : 'buyer-chip'}>
+                    <input
+                      type="checkbox"
+                      checked={currentResolution.buyerIds.includes(p.id)}
+                      onChange={() => toggleReviewBuyer(p.id)}
+                    />
+                    {p.name}
+                  </label>
+                ))}
+              </div>
+            )}
+            {/* Equal split is the default above — this is the escape hatch
+                for when it isn't, same amount-entry modal the payer side
+                already uses (see MultiPayerModal.jsx), just for who's
+                consuming the bill instead of who fronted it. Needs at
+                least two people checked to mean anything. */}
+            {!currentResolution.buyerAmounts && currentResolution.buyerIds.length > 1 && (
+              <button type="button" className="btn-link" onClick={() => setReviewSplitModalOpen(true)}>
+                Split unevenly…
+              </button>
+            )}
           </div>
 
           <div className="modal-actions">
@@ -479,6 +570,17 @@ export default function ImportBills() {
               currentPayers={currentResolution.payers || []}
               onConfirm={confirmReviewPayers}
               onCancel={() => setReviewPayerModalOpen(false)}
+            />
+          )}
+
+          {reviewSplitModalOpen && (
+            <MultiPayerModal
+              title="Split this bill"
+              members={reviewParticipants}
+              billTotal={currentReviewItem.cost}
+              currentPayers={reviewSplitDraft}
+              onConfirm={confirmReviewSplit}
+              onCancel={() => setReviewSplitModalOpen(false)}
             />
           )}
         </>

@@ -432,6 +432,17 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .bill-search-tape .guide-search-input { flex: 1; width: auto; }
 .bill-filter-toggle { flex-shrink: 0; white-space: nowrap; }
 .bill-filter-toggle-active { color: var(--accent-dark); font-weight: 600; }
+/* Retracts the whole search section (GroupView.jsx) — sits at the tape's
+   own right edge, after Filters, rather than a separate header row just
+   for it. */
+.bill-search-collapse { flex-shrink: 0; }
+/* The "Search" toggle in .group-actions that opens the section back up —
+   same "•" convention as .bill-filter-toggle-active for "something's set
+   even though you can't see it right now." Just weight, not color — a
+   .btn-secondary's text is already accent-dark by default (same as
+   Invite), so color alone wouldn't read as a distinct "active" state
+   here the way it does on .bill-filter-toggle's plain link text. */
+.bill-search-toggle-active { font-weight: 700; }
 
 .bill-filters-panel {
   background: var(--surface);
