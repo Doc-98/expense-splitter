@@ -8,6 +8,7 @@ import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
 import { computeBalances, computeSpendingTotals, simplifyDebts } from '../lib/settlement'
+import { deriveBillsItemsShares } from '../lib/deriveBillData'
 import { formatSettlementRecap, formatMultiBillRecap } from '../lib/recapText'
 import { shareOrCopyText } from '../lib/shareText'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
@@ -38,6 +39,20 @@ export default function GroupView() {
   const memberPopoverRef = useRef(null)
   useClickOutside(memberPopoverRef, () => setShowMembers(false), showMembers)
   const [bills, setBills] = useState(null)
+  // Mirrors `bills` for loadPaymentsAndSettlement below to read from,
+  // rather than closing over `bills` directly — that function is handed
+  // to the realtime subscription's payments handler (see the effect with
+  // [groupId] deps further down), which is only ever set up once per
+  // group, not re-subscribed every time `bills` changes; closing over
+  // `bills` there would freeze it at whatever it was when the channel was
+  // created (its initial `null`), silently computing settlement against
+  // an empty bill list forever after a realtime payment update. A ref
+  // sidesteps that — always reads the latest value, with nothing to go
+  // stale.
+  const billsRef = useRef(null)
+  useEffect(() => {
+    billsRef.current = bills
+  }, [bills])
   const [billsPage, setBillsPage] = useState(0)
   const [newBillTitle, setNewBillTitle] = useState('')
   const [settlement, setSettlement] = useState(null)
@@ -49,7 +64,7 @@ export default function GroupView() {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [shareStatus, setShareStatus] = useState(null)
   // { [billId]: { [memberId]: { paid, consumed } } } — computed alongside
-  // the group's overall settlement (see loadSettlement below), reusing
+  // the group's overall settlement (see computeAndSetSettlement below), reusing
   // the exact same per-bill items/shares it already assembles for that,
   // just kept around per-bill instead of only flowing into one pooled
   // balance. Lets each bill row show what *this* bill specifically means
@@ -98,7 +113,7 @@ export default function GroupView() {
   const isAdmin = myParticipantId && myParticipantId === group?.admin_id
   // Whether the current selection happens to cover every bill in the
   // group, not just the visible page — bills holds the group's full list
-  // (see loadBills), so this is a real "delete everything" check, the same
+  // (see loadBillsAndSettlement), so this is a real "delete everything" check, the same
   // one delete_all_group_bills() itself enforces server-side, not just a
   // guess based on what's currently on screen.
   const allBillsSelected = Boolean(bills && bills.length > 0 && selectedIds.size === bills.length)
@@ -139,48 +154,76 @@ export default function GroupView() {
     }
   }, [groupId])
 
-  // items(total_price, category_id) here — lightweight, just what the
-  // search/tag/price filters below need to work entirely client-side
-  // without a fetch per keystroke or slider drag. loadSettlement() below
-  // fetches items again in more detail (shares, payers) for the balance
-  // math; kept as a separate query rather than unifying the two, same as
-  // every other place in this file that fetches its own slice of a bill
-  // (exportGroupCsv, shareBills) rather than routing through one shared
-  // shape everything has to fit.
-  //
-  // Paged through via fetchAllRows rather than one unbounded request — a
-  // group with a big imported history can have thousands of bills, and one
-  // request trying to carry all of them (each with its own nested items) is
-  // exactly the shape of request that's prone to silently timing out.
-  const loadBills = useCallback(async () => {
-    try {
-      const data = await fetchAllRows(() =>
-        supabase
-          .from('bills')
-          .select('*, items(total_price, category_id)', { count: 'exact' })
-          .eq('group_id', groupId)
-          .order('created_at', { ascending: false })
-      )
-      setBills(data)
-      setError(null)
-    } catch (err) {
-      setError(`Couldn't load bills: ${loadErrorMessage(err)}`)
-    }
-  }, [groupId])
+  // One unified per-bill shape — '*' for every plain bill column (title,
+  // note, category_id, etc., what the bill list/search/filter need) plus
+  // items(id, total_price, category_id, item_shares(...)) and bill_payers
+  // (what the settlement math needs) — rather than the two separate
+  // queries this used to be (one light, for the list; one heavier, for
+  // balances). They were kept apart originally for code clarity — each
+  // piece only asking for what it actually uses — but they're fetching
+  // essentially the same bills either way, so on a group with a big
+  // imported history, that meant two separate paginated round-trips where
+  // one now does. Paged through fetchAllRows rather than one unbounded
+  // request either way — a big group's bills, each with nested items, is
+  // exactly the kind of response that's prone to silently timing out.
+  const BILLS_SELECT = '*, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
 
-  const loadSettlement = useCallback(async () => {
+  // Derives the settlement-side state (per-bill personal totals, the
+  // group's simplified debts, the week/month preview totals) from bills
+  // already fetched — deliberately separate from the fetch itself, so a
+  // payments-only change (see loadPayments below) can recompute all of
+  // this from whatever's already in `bills` state without re-fetching the
+  // bill list just because a payment came or went.
+  function computeAndSetSettlement(billsData, paymentsData) {
+    const { list: settlementBills, items, itemShares } = deriveBillsItemsShares(billsData)
+
+    // Same reuse principle as the weekly/monthly preview below — one
+    // computeSpendingTotals() call per bill, scoped to just that bill's
+    // own items/shares, rather than a second query. A bill nobody's
+    // touched in either direction (no payer, nothing assigned) simply
+    // has no entry for anyone, same "absence means zero involvement"
+    // convention computeSpendingTotals already uses at the group level.
+    const perBillTotals = {}
+    for (const bill of settlementBills) {
+      const billItems = items.filter((it) => it.bill_id === bill.id)
+      const billItemIds = new Set(billItems.map((it) => it.id))
+      const billItemShares = itemShares.filter((s) => billItemIds.has(s.item_id))
+      perBillTotals[bill.id] = computeSpendingTotals({ bills: [bill], items: billItems, itemShares: billItemShares })
+    }
+    setBillPersonalTotals(perBillTotals)
+
+    const thisWeek = getPeriodRange('week', 0)
+    const thisMonth = getPeriodRange('month', 0)
+    const weekBills = filterByDateRange(settlementBills, items, [], thisWeek.start, thisWeek.end)
+    const monthBills = filterByDateRange(settlementBills, items, [], thisMonth.start, thisMonth.end)
+    setWeekTotal(weekBills.items.reduce((sum, it) => sum + Number(it.total_price), 0))
+    setMonthTotal(monthBills.items.reduce((sum, it) => sum + Number(it.total_price), 0))
+
+    // computeBalances/simplifyDebts operate on a generic "userId" key —
+    // it's always been just an opaque ID as far as they're concerned, so
+    // feeding them group_members.id values (real accounts and guests
+    // alike) needs no changes there, only here at the query/mapping
+    // boundary.
+    const paymentsForBalances = paymentsData.map((p) => ({
+      from_user: p.from_member,
+      to_user: p.to_member,
+      amount: p.amount,
+    }))
+    const balances = computeBalances({ bills: settlementBills, items, itemShares, payments: paymentsForBalances })
+    setSettlement(simplifyDebts(balances))
+  }
+
+  const loadBillsAndSettlement = useCallback(async () => {
     try {
       // Bills and payments don't depend on each other, so fetch both at
       // once rather than waiting on one before starting the other.
-      const [rawBillsData, paymentsData] = await Promise.all([
+      const [billsData, paymentsData] = await Promise.all([
         fetchAllRows(() =>
           supabase
             .from('bills')
-            .select(
-              'id, paid_by, created_at, items(id, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)',
-              { count: 'exact' }
-            )
+            .select(BILLS_SELECT, { count: 'exact' })
             .eq('group_id', groupId)
+            .order('created_at', { ascending: false })
         ),
         fetchAllRows(() =>
           supabase
@@ -191,66 +234,33 @@ export default function GroupView() {
         ),
       ])
 
+      setBills(billsData)
       setPayments(paymentsData)
       setError(null)
-
-      // computeBalances/computeSpendingTotals expect a bill's multi-payer
-      // split (if any) as .payers — renamed from Supabase's nested
-      // bill_payers here at the query boundary, same spirit as the
-      // item_shares -> user_id remap just below.
-      const billsData = rawBillsData.map((b) => ({ ...b, payers: b.bill_payers || [] }))
-
-      const items = []
-      const itemShares = []
-      for (const bill of billsData) {
-        for (const item of bill.items || []) {
-          items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price })
-          for (const share of item.item_shares || []) {
-            itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
-          }
-        }
-      }
-
-      // Same reuse principle as the weekly/monthly preview below — one
-      // computeSpendingTotals() call per bill, scoped to just that bill's
-      // own items/shares, rather than a second query. A bill nobody's
-      // touched in either direction (no payer, nothing assigned) simply
-      // has no entry for anyone, same "absence means zero involvement"
-      // convention computeSpendingTotals already uses at the group level.
-      const perBillTotals = {}
-      for (const bill of billsData) {
-        const billItems = items.filter((it) => it.bill_id === bill.id)
-        const billItemIds = new Set(billItems.map((it) => it.id))
-        const billItemShares = itemShares.filter((s) => billItemIds.has(s.item_id))
-        perBillTotals[bill.id] = computeSpendingTotals({ bills: [bill], items: billItems, itemShares: billItemShares })
-      }
-      setBillPersonalTotals(perBillTotals)
-
-      // Reuses the same fetch for the quick weekly/monthly preview at the
-      // bottom of the page, rather than firing off a second round-trip for
-      // numbers this data already contains.
-      const thisWeek = getPeriodRange('week', 0)
-      const thisMonth = getPeriodRange('month', 0)
-      const weekBills = filterByDateRange(billsData, items, [], thisWeek.start, thisWeek.end)
-      const monthBills = filterByDateRange(billsData, items, [], thisMonth.start, thisMonth.end)
-      setWeekTotal(weekBills.items.reduce((sum, it) => sum + Number(it.total_price), 0))
-      setMonthTotal(monthBills.items.reduce((sum, it) => sum + Number(it.total_price), 0))
-
-      // computeBalances/simplifyDebts operate on a generic "userId" key —
-      // it's always been just an opaque ID as far as they're concerned, so
-      // feeding them group_members.id values (real accounts and guests
-      // alike) needs no changes there, only here at the query/mapping
-      // boundary.
-      const paymentsForBalances = paymentsData.map((p) => ({
-        from_user: p.from_member,
-        to_user: p.to_member,
-        amount: p.amount,
-      }))
-
-      const balances = computeBalances({ bills: billsData, items, itemShares, payments: paymentsForBalances })
-      setSettlement(simplifyDebts(balances))
+      computeAndSetSettlement(billsData, paymentsData)
     } catch (err) {
       setError(`Couldn't load this group's bills: ${loadErrorMessage(err)}`)
+    }
+  }, [groupId])
+
+  // A payments-only change (recording or deleting one) never touches the
+  // bill list itself, so this only re-fetches payments and recomputes
+  // settlement from the bills already sitting in state — no reason to
+  // re-fetch every bill in the group just because a payment came or went.
+  const loadPaymentsAndSettlement = useCallback(async () => {
+    try {
+      const paymentsData = await fetchAllRows(() =>
+        supabase
+          .from('payments')
+          .select('id, from_member, to_member, amount, created_at', { count: 'exact' })
+          .eq('group_id', groupId)
+          .order('created_at', { ascending: false })
+      )
+      setPayments(paymentsData)
+      setError(null)
+      computeAndSetSettlement(billsRef.current || [], paymentsData)
+    } catch (err) {
+      setError(`Couldn't load payments: ${loadErrorMessage(err)}`)
     }
   }, [groupId])
 
@@ -277,10 +287,13 @@ export default function GroupView() {
     setPriceRange([0, Math.max(1, Math.ceil(Math.max(...bills.map(billTotal))))])
   }, [bills, priceRange])
 
-  const reloadAll = useCallback(() => {
-    loadBills()
-    loadSettlement()
-  }, [loadBills, loadSettlement])
+  // Kept as its own name (rather than every call site just saying
+  // loadBillsAndSettlement directly) since "reload everything" is the
+  // concept call sites actually care about — bill create/delete, the
+  // recurring-bills sweep, and the bills/items/item_shares realtime
+  // subscription below all mean "the bill list itself changed," as
+  // opposed to loadPaymentsAndSettlement's narrower "just a payment."
+  const reloadAll = loadBillsAndSettlement
 
   // Keeps the cache current with whatever's actually on screen — the
   // initial load, a background reload, and a realtime update all funnel
@@ -345,7 +358,7 @@ export default function GroupView() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bills' }, reloadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, reloadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, reloadAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, reloadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, loadPaymentsAndSettlement)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members' }, loadMembers)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, loadCategories)
       .subscribe()
@@ -386,7 +399,7 @@ export default function GroupView() {
       created_by: user.id,
     })
     if (paymentError) setError(paymentError.message)
-    loadSettlement()
+    loadPaymentsAndSettlement()
   }
 
   async function deletePayment(paymentId) {
@@ -394,7 +407,7 @@ export default function GroupView() {
     setError(null)
     const { error: deleteError } = await supabase.from('payments').delete().eq('id', paymentId)
     if (deleteError) setError(deleteError.message)
-    loadSettlement()
+    loadPaymentsAndSettlement()
   }
 
   async function deleteBill(bill) {

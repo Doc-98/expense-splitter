@@ -430,6 +430,20 @@ four things worth knowing:
   obviously-correct choice, it's a per-device preference toggled from a
   link right in that section ("Show at top/bottom instead"), not a fixed
   decision.
+- **A recent window loads first, older history backfills after** — Group
+  Stats and Your Stats both fetch this year plus last year's worth of
+  bills up front, render immediately, then fetch the rest of the history
+  in the background (`getStatsWindowStart()`/`isViewCovered()` in
+  `src/lib/timeRange.js`). That covers every default view's own
+  current-vs-previous comparison exactly (week and month trivially fit
+  inside it; year needs precisely "this year plus last year," which is the
+  boundary itself) — only "All time," or paging back further than a year,
+  ever needs the backfill to have finished. While it hasn't, a small note
+  says so rather than the numbers just silently being short a few years of
+  bills; on Your Stats specifically, that note stays up until the backfill
+  finishes regardless of which period is selected, since the "overall
+  balance (now)" figure there is never period-scoped and always needs
+  every bill and payment to be correct.
 
 Both preferences above (default granularity, thresholds position) live in
 `localStorage` (`src/lib/statsPreferences.js`), the same per-device-only
@@ -907,21 +921,15 @@ Roughly in the order they're likely to land, though nothing here is
 promised on any particular timeline — this is a personal project, built as
 time and interest allow.
 
-- Two performance options held in reserve for the group page and stats
-  pages, only worth doing if a per-page in-memory cache plus fetching
-  independent queries in parallel (both already in place) turn out not to
-  be enough on a genuinely large group:
-  - Merging `GroupView.jsx`'s two separate big bill fetches (`loadBills`
-    for the list, `loadSettlement` for balances) into one unified query —
-    they currently re-fetch essentially the same bills twice, just with
-    slightly different nested detail, which was originally kept separate
-    for code clarity rather than performance
-  - Moving the settlement/category-totals math into a Postgres function
-    instead of shipping every item/share row to the browser for
-    `computeSpendingTotals`/`computeCategoryTotals` to sum client-side —
-    the most scalable fix long-term, but a real lift (a new migration, a
-    SECURITY DEFINER function, RLS to think through), not something to
-    start speculatively
+- Moving the settlement/category-totals math into a Postgres function
+  instead of shipping every item/share row to the browser for
+  `computeSpendingTotals`/`computeCategoryTotals` to sum client-side — held
+  in reserve, only worth doing if everything else already in place (the
+  per-page cache, parallel fetching, the recent-window-then-backfill split
+  on stats pages, GroupView's unified bill fetch) turns out not to be
+  enough on a genuinely large group. The most scalable fix long-term, but a
+  real lift (a new migration, a SECURITY DEFINER function, RLS to think
+  through), not something to start speculatively
 - Group-level (or shared) spending thresholds, as a variant alongside the
   personal ones that exist today — very low priority; nothing about
   `spending_thresholds` being keyed by `user_id` rules this out later, it's
