@@ -98,11 +98,20 @@ code {
   padding: var(--space-md) var(--space-md) 0;
 }
 .app-header-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-family: var(--font-display);
   font-size: 18px;
   font-weight: 600;
   color: var(--accent-dark);
   text-decoration: none;
+  line-height: 1.2;
+}
+.app-header-version {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 400;
 }
 .account-menu { position: relative; }
 .account-chip {
