@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+
 const GRANULARITIES = ['week', 'month', 'year', 'all']
 
 // Extra jump tiers beyond the ordinary single ‹ / › step, smallest first.
@@ -39,6 +41,34 @@ export default function TimeRangeSelector({
     setGranularity(g)
     setOffset(0)
   }
+
+  // ←/→ step to the previous/next period, same as the single ‹ / › buttons
+  // right below — shared by both stats pages that render this component
+  // (GroupStats, AccountStats) since they both just pass through
+  // offset/setOffset the same way. Doesn't cover the jump tiers (a month
+  // or year at a time) — those stay mouse-only, there's no obvious extra
+  // key combo for them and the single step already covers what arrow keys
+  // are for here. Skipped in 'all' view, same as the buttons themselves
+  // not rendering there — there's no "previous all-time" to step to.
+  useEffect(() => {
+    if (granularity === 'all') return
+    function isTypingTarget(el) {
+      return Boolean(el) && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+    }
+    function onKeyDown(e) {
+      if (isTypingTarget(document.activeElement)) return
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        setOffset((o) => o - 1)
+      } else if (e.key === 'ArrowRight') {
+        if (offset >= 0) return
+        e.preventDefault()
+        setOffset((o) => Math.min(0, o + 1))
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [granularity, offset, setOffset])
 
   const tiers = JUMP_TIERS[granularity] || []
   // Chevron count grows with distance from the single ‹ / › — 2 for the
