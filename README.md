@@ -29,6 +29,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Resetting the database](#resetting-the-database)
 - [Receipt scanning](#receipt-scanning)
 - [Editing items](#editing-items)
+- [Backdating (or postdating) a bill](#backdating-or-postdating-a-bill)
 - [Currency](#currency)
 - [Categories](#categories)
 - [Spending thresholds](#spending-thresholds)
@@ -275,6 +276,31 @@ two consistently (`updateItemField()` in `BillView.jsx`):
 For the overwhelmingly common quantity-1 case, editing the total and
 editing the unit price are the same operation by definition — there's
 only one number to edit either way.
+
+## Backdating (or postdating) a bill
+
+There's no separate "date" column on a bill — `created_at` already doubles
+as its date everywhere in the app (sorting, month/day grouping, stats),
+including for imported bills, whose `created_at` is deliberately set to the
+historical date rather than the moment the import ran (see "Importing from
+Splitwise" below). A bill's own click-to-edit date, in a bill's own page
+just above the item list (right next to "New items split with"), edits
+that same column directly — no new column, no migration, just a plain
+`UPDATE` on the field already doing this job (`src/lib/billDate.js`,
+`updateBillDate()` in `BillView.jsx`).
+
+Deliberately small and right-aligned rather than a prominent form field —
+most bills are added the same day they happened and never need this, so
+it stays out of the way for the common case. It's there for the rest: a
+bill added a few days late that would otherwise land in the wrong week's
+report, or fixing up a bill by hand after an import missed it. Editing it
+keeps the bill's original time-of-day, only swapping the calendar day, so
+it doesn't silently reorder relative to other bills from the same day by
+landing on midnight. Uses the same `InlineEditable` component as item
+editing above, extended with an `inputType` prop (`"date"` here, `"text"`
+everywhere else) so it gets the browser's native date picker rather than a
+free-text box — the one visible difference from an ordinary click-to-edit
+field.
 
 ## Currency
 

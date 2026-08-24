@@ -19,7 +19,23 @@ import { useEffect, useRef, useState } from 'react'
 // instead of reverting it. Beyond that one rule, a caller that does
 // nothing on invalid input effectively reverts too, since the display
 // then just falls back to showing the unchanged `value` prop.
-export default function InlineEditable({ value, display, onSave, inputMode, className, inputClassName, ariaLabel }) {
+//
+// `inputType` (default "text") is passed straight through to the input
+// while editing — e.g. "date" for a bill's date (see the .bill-date-row
+// in BillView.jsx), which gets the browser's native date picker instead
+// of a plain text box, with `value`/`onSave` working in the input's own
+// "YYYY-MM-DD" format either way; the empty-reverts-always rule above
+// applies to that the same as any other value.
+export default function InlineEditable({
+  value,
+  display,
+  onSave,
+  inputMode,
+  inputType = 'text',
+  className,
+  inputClassName,
+  ariaLabel,
+}) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   const inputRef = useRef(null)
@@ -57,7 +73,7 @@ export default function InlineEditable({ value, display, onSave, inputMode, clas
     return (
       <input
         ref={inputRef}
-        type="text"
+        type={inputType}
         className={inputClassName}
         inputMode={inputMode}
         value={draft}

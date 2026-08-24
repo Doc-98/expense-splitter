@@ -60,7 +60,7 @@ const GROUPS = [
       {
         id: 'adding-a-bill',
         title: 'Adding a bill and splitting items',
-        keywords: 'bill item add scan type manual paid by default split pagination page delete select share menu edit rename price quantity unit total borrowed lent owe balance',
+        keywords: 'bill item add scan type manual paid by default split pagination page delete select share menu edit rename price quantity unit total borrowed lent owe balance date backdate postdate',
         body: (
           <>
             <p>
@@ -91,6 +91,14 @@ const GROUPS = [
             <p>
               <strong>Paid by</strong> controls who fronted the money — usually one person, but
               see <strong>Multiple payers</strong> below if more than one person chipped in.
+            </p>
+            <p>
+              A bill's date — right-aligned, in small type just above the item list — is also
+              tap-to-edit, the same as an item's name or price. Most bills happen the same day
+              they're added and never need this, which is why it stays out of the way; it's there
+              for adding one a few days late without it landing in the wrong week's report, or for
+              fixing up a bill by hand (say, after an import missed it). Tapping it opens your
+              device's own date picker rather than a text box.
             </p>
             <p>
               A group with a lot of bills shows 15 at a time with a page selector at the bottom,

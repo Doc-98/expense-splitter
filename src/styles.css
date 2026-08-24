@@ -717,6 +717,16 @@ input.item-editable-input {
 .item-money-input { width: 64px; text-align: right; }
 .item-qty-input { width: 44px; text-align: right; }
 
+/* Right-aligned and small/muted on purpose — this is a fixup control for
+   the rare case you're backdating a bill or fixing an import, not
+   something that needs to compete for attention on every ordinary bill.
+   .bill-date-editable has to come after .item-editable above to win the
+   cascade on `color` — same specificity (one class each), so source order
+   decides, and .item-editable's own `color: inherit` would otherwise win
+   just by sitting later in the file. */
+.bill-date-row { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.bill-date-editable { font-size: 12px; color: var(--ink-soft); }
+
 .item-buyers {
   display: flex;
   flex-wrap: wrap;

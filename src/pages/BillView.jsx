@@ -4,6 +4,8 @@ import { supabase } from '../supabaseClient'
 import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
 import { parseNumber } from '../lib/parseNumber'
+import { toDateInputValue, applyDateInputValue } from '../lib/billDate'
+import InlineEditable from '../components/InlineEditable'
 import { formatBillRecap } from '../lib/recapText'
 import { buildBillCsvRows, toCsv, downloadCsv } from '../lib/csv'
 import ItemRow from '../components/ItemRow'
@@ -251,6 +253,20 @@ export default function BillView() {
     setBill((b) => ({ ...b, default_buyer_ids: next }))
   }
 
+  // Backdates or postdates the bill — its own click-to-edit date, next to
+  // "New items split with," rather than a dedicated form field, since most
+  // bills are added the same day they happened and don't need one; this
+  // is for the rest: adding one late without it landing in the wrong
+  // week's stats, or fixing up an imported bill by hand. Just an UPDATE on
+  // created_at, the column already doing the "bill's date" job everywhere
+  // else in the app (see src/lib/billDate.js) — no new column needed.
+  async function updateBillDate(dateInputValue) {
+    const next = applyDateInputValue(bill.created_at, dateInputValue)
+    const { error: updateError } = await supabase.from('bills').update({ created_at: next }).eq('id', billId)
+    if (updateError) return setError(updateError.message)
+    setBill((b) => ({ ...b, created_at: next }))
+  }
+
   async function setBillCategory(categoryId) {
     await supabase
       .from('bills')
@@ -380,6 +396,24 @@ export default function BillView() {
           ))}
         </div>
       </div>
+
+      {bill && (
+        <div className="bill-date-row">
+          <InlineEditable
+            className="mono item-editable bill-date-editable"
+            inputClassName="item-editable-input"
+            inputType="date"
+            value={toDateInputValue(bill.created_at)}
+            display={new Date(bill.created_at).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })}
+            onSave={updateBillDate}
+            ariaLabel="Bill date"
+          />
+        </div>
+      )}
 
       <div className="receipt-tape">
         {items.map((item) => (
