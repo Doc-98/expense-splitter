@@ -18,7 +18,14 @@ export function validatePayerDraft(draft, billTotal) {
 // Canceling (or clicking the backdrop) just unmounts this component with
 // its draft discarded; the bill's actual saved payer split is completely
 // untouched either way.
-export default function MultiPayerModal({ members, billTotal, currentPayers, onConfirm, onCancel }) {
+//
+// Despite the name, this is really just "assign amounts to a subset of
+// members that must sum to a total" — genuinely the same shape whether
+// it's who fronted a bill (the original use) or who's consuming it and
+// how much of it is theirs (the Splitwise import review step's "Split
+// unevenly…"). `title` is the one thing that differs between call sites;
+// everything else about the interaction is identical either way.
+export default function MultiPayerModal({ title = 'Multiple payers', members, billTotal, currentPayers, onConfirm, onCancel }) {
   const { format } = useCurrency()
   const [draft, setDraft] = useState(() => {
     const map = {}
@@ -49,7 +56,7 @@ export default function MultiPayerModal({ members, billTotal, currentPayers, onC
   return (
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
-        <h2>Multiple payers</h2>
+        <h2>{title}</h2>
         {members.map((m) => (
           <label key={m.id} className="payer-row">
             <input type="checkbox" checked={m.id in draft} onChange={() => toggle(m.id)} />
@@ -69,7 +76,7 @@ export default function MultiPayerModal({ members, billTotal, currentPayers, onC
           Entered: <span className="mono">{format(roundedEntered)}</span> / Bill total:{' '}
           <span className="mono">{format(roundedBillTotal)}</span>
         </p>
-        {!hasAnyPayer && <p className="status-error">Select at least one payer.</p>}
+        {!hasAnyPayer && <p className="status-error">Select at least one person.</p>}
         {hasAnyPayer && !sumsMatch && (
           <p className="status-error">These amounts need to add up to exactly the bill total.</p>
         )}
