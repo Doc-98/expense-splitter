@@ -437,7 +437,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    for it. */
 .bill-search-collapse { flex-shrink: 0; }
 /* The "Search" toggle in .group-actions that opens the section back up —
-   same "•" convention as .bill-filter-toggle-active for "something's set
+   pushed to the row's right edge (margin-left: auto, the standard flex
+   trick for it) rather than sitting immediately next to the member-count
+   button, so it reads as its own thing on the opposite side of the row
+   instead of crowding Invite/member-count on the left. */
+.bill-search-toggle { margin-left: auto; }
+/* Same "•" convention as .bill-filter-toggle-active for "something's set
    even though you can't see it right now." Just weight, not color — a
    .btn-secondary's text is already accent-dark by default (same as
    Invite), so color alone wouldn't read as a distinct "active" state

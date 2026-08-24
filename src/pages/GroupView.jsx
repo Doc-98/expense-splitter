@@ -661,7 +661,7 @@ export default function GroupView() {
         {bills && bills.length > 0 && !searchOpen && (
           <button
             type="button"
-            className={`btn-secondary ${searchQuery || filtersActive ? 'bill-search-toggle-active' : ''}`}
+            className={`btn-secondary bill-search-toggle ${searchQuery || filtersActive ? 'bill-search-toggle-active' : ''}`}
             onClick={() => setSearchOpen(true)}
           >
             Search{searchQuery || filtersActive ? ' •' : ''}
