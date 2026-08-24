@@ -6,6 +6,7 @@ import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
 import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
+import { groupViewCache } from '../lib/groupViewCache'
 import { computeBalances, computeSpendingTotals, simplifyDebts } from '../lib/settlement'
 import { formatSettlementRecap, formatMultiBillRecap } from '../lib/recapText'
 import { shareOrCopyText } from '../lib/shareText'
@@ -277,7 +278,48 @@ export default function GroupView() {
     loadSettlement()
   }, [loadBills, loadSettlement])
 
+  // Keeps the cache current with whatever's actually on screen — the
+  // initial load, a background reload, and a realtime update all funnel
+  // through the same state setters above, so this one effect covers all
+  // three without any loader needing to know the cache exists. Guarded on
+  // group/bills both being set so a still-loading (or failed-before-ever-
+  // loading) page doesn't cache a half-populated snapshot that would paint
+  // instantly-but-wrong the next time this group is opened.
   useEffect(() => {
+    if (!group || !bills) return
+    groupViewCache.set(groupId, {
+      group,
+      allMembers,
+      categories,
+      bills,
+      billPersonalTotals,
+      settlement,
+      payments,
+      weekTotal,
+      monthTotal,
+    })
+  }, [groupId, group, allMembers, categories, bills, billPersonalTotals, settlement, payments, weekTotal, monthTotal])
+
+  useEffect(() => {
+    // Paints instantly from whatever was on screen last time this group was
+    // open, if anything — then the loads just below always run anyway, so
+    // a stale cache is never shown for more than the length of one fetch.
+    // Not gated behind a "was there a cache hit" check on the loads
+    // themselves; the point is a revisit is never *worse* than a fresh
+    // visit, only sometimes faster to first paint.
+    const cached = groupViewCache.get(groupId)
+    if (cached) {
+      setGroup(cached.group)
+      setAllMembers(cached.allMembers)
+      setCategories(cached.categories)
+      setBills(cached.bills)
+      setBillPersonalTotals(cached.billPersonalTotals)
+      setSettlement(cached.settlement)
+      setPayments(cached.payments)
+      setWeekTotal(cached.weekTotal)
+      setMonthTotal(cached.monthTotal)
+    }
+
     loadGroup()
     loadMembers()
     loadCategories()

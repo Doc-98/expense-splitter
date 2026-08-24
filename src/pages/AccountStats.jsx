@@ -9,6 +9,7 @@ import { mergeCategoriesByName } from '../lib/categories'
 import { fetchThresholds } from '../lib/thresholds'
 import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
+import { accountStatsCache } from '../lib/accountStatsCache'
 import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
 import { getPeriodRange, filterByDateRange, sumDailyInRange, sumCategoryDailyInRange, monthlyFromDaily } from '../lib/timeRange'
 import { comparePeriods } from '../lib/periodComparison'
@@ -206,9 +207,55 @@ export default function AccountStats() {
     }
   }, [user.id])
 
+  // Same cache-then-revalidate pattern as GroupView.jsx/GroupStats.jsx:
+  // paint instantly from whatever Your Stats looked like last time this
+  // page was open (if anything), then always fetch fresh anyway — a
+  // revisit is never worse than today's plain reload, just sometimes
+  // faster to first paint. Depends only on [user.id, load] (not on the
+  // state it hydrates), so this fires once per account, not every time
+  // load() finishes populating that same state — the write-back effect
+  // just below stays in sync with it on every change instead.
   useEffect(() => {
+    const cached = accountStatsCache.get(user.id)
+    if (cached) {
+      setGroups(cached.groups)
+      setMyParticipantByGroup(cached.myParticipantByGroup)
+      setRawBills(cached.rawBills)
+      setRawItems(cached.rawItems)
+      setRawShares(cached.rawShares)
+      setRawCategories(cached.rawCategories)
+      setThresholds(cached.thresholds)
+      setSnapshots(cached.snapshots)
+      setOverallBalance(cached.overallBalance)
+    }
     load()
-  }, [load])
+  }, [user.id, load])
+
+  useEffect(() => {
+    if (!groups.length && !snapshots.length) return
+    accountStatsCache.set(user.id, {
+      groups,
+      myParticipantByGroup,
+      rawBills,
+      rawItems,
+      rawShares,
+      rawCategories,
+      thresholds,
+      snapshots,
+      overallBalance,
+    })
+  }, [
+    user.id,
+    groups,
+    myParticipantByGroup,
+    rawBills,
+    rawItems,
+    rawShares,
+    rawCategories,
+    thresholds,
+    snapshots,
+    overallBalance,
+  ])
 
   const { start, end, label, yearLabel } = getPeriodRange(granularity, offset)
   const { bills, items, itemShares } = filterByDateRange(rawBills, rawItems, rawShares, start, end)

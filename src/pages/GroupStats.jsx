@@ -5,6 +5,7 @@ import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
 import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
+import { groupStatsCache } from '../lib/groupStatsCache'
 import { computeSpendingTotals } from '../lib/settlement'
 import { computeCategoryTotals } from '../lib/categoryStats'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
@@ -106,9 +107,32 @@ export default function GroupStats() {
     }
   }, [groupId])
 
+  // Same cache-then-revalidate pattern as GroupView.jsx: paint instantly
+  // from whatever this group's stats looked like last time this page was
+  // open (if anything), then always fetch fresh anyway — a revisit is
+  // never worse than today's plain reload, just sometimes faster to first
+  // paint. See groupStatsCache.js/lruCache.js for why this is a plain
+  // in-memory, session-only cache rather than anything persisted. Depends
+  // only on [groupId, load] (not on the state it hydrates) so this fires
+  // once per group visit, not every time load() finishes populating that
+  // same state — the write-back effect just below is what stays in sync
+  // with it on every change instead.
   useEffect(() => {
+    const cached = groupStatsCache.get(groupId)
+    if (cached) {
+      setMembers(cached.members)
+      setCategories(cached.categories)
+      setRawBills(cached.rawBills)
+      setRawItems(cached.rawItems)
+      setRawShares(cached.rawShares)
+    }
     load()
-  }, [load])
+  }, [groupId, load])
+
+  useEffect(() => {
+    if (!members.length) return
+    groupStatsCache.set(groupId, { members, categories, rawBills, rawItems, rawShares })
+  }, [groupId, members, categories, rawBills, rawItems, rawShares])
 
   const { start, end, label, yearLabel } = getPeriodRange(granularity, offset)
   const { bills, items, itemShares } = filterByDateRange(rawBills, rawItems, rawShares, start, end)
