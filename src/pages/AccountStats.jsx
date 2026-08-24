@@ -11,7 +11,15 @@ import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { accountStatsCache } from '../lib/accountStatsCache'
 import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
-import { getPeriodRange, filterByDateRange, sumDailyInRange, sumCategoryDailyInRange, monthlyFromDaily } from '../lib/timeRange'
+import {
+  getPeriodRange,
+  filterByDateRange,
+  sumDailyInRange,
+  sumCategoryDailyInRange,
+  monthlyFromDaily,
+  getStatsWindowStart,
+} from '../lib/timeRange'
+import { deriveBillsItemsShares } from '../lib/deriveBillData'
 import { comparePeriods } from '../lib/periodComparison'
 import TimeRangeSelector from '../components/TimeRangeSelector'
 import ComparisonBadge from '../components/ComparisonBadge'
@@ -56,6 +64,15 @@ export default function AccountStats() {
   const [defaultGranularity, setDefaultGranularity] = useState(() => getStatsPreferences().defaultGranularity)
   const [thresholdsPosition, setThresholdsPosition] = useState(() => getStatsPreferences().thresholdsPosition)
   const [error, setError] = useState(null)
+  // 'loading' until the background backfill (see load() below) finishes,
+  // 'complete' once every one of my groups' full history is in rawBills,
+  // 'failed' if the backfill errored. Unlike GroupStats.jsx, this page
+  // doesn't only show the notice when the *selected period* needs older
+  // data — overallBalance below is a "right now, regardless of period"
+  // figure that always needs full history to be correct, so the notice
+  // here is gated on historyStatus alone, not on isViewCovered.
+  const [historyStatus, setHistoryStatus] = useState('loading')
+  const [historyWindowStart, setHistoryWindowStart] = useState(null)
 
   function handleSetDefaultGranularity(g) {
     setStatsPreferences({ defaultGranularity: g })
@@ -68,9 +85,70 @@ export default function AccountStats() {
     setThresholdsPosition(next)
   }
 
+  const BILLS_SELECT =
+    'id, group_id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+
+  // Returns the derived { list, items, itemShares } alongside setting
+  // rawBills/rawItems/rawShares from it — the caller (load(), below) needs
+  // that derived shape immediately, to compute overallBalance from,
+  // without waiting on a re-render to read the new state back out.
+  function applyRawBills(rawBillsData) {
+    const { list, items, itemShares } = deriveBillsItemsShares(rawBillsData)
+    setRawBills(
+      list.map((b) => ({
+        id: b.id,
+        group_id: b.group_id,
+        title: b.title,
+        created_at: b.created_at,
+        paid_by: b.paid_by,
+        category_id: b.category_id,
+        payers: b.payers,
+      }))
+    )
+    setRawItems(items)
+    setRawShares(itemShares)
+    return { list, items, itemShares }
+  }
+
+  // The live balance from every group still active in, on top of any
+  // not-yet-settled balance frozen from a group left — a "right now"
+  // figure, not scoped to whatever period is selected below, so it's the
+  // one number on this page that always needs *every* bill and payment to
+  // be correct. That's why it's only ever computed from the fully
+  // backfilled data in load() below, never from just the recent window.
+  function computeOverallBalance(list, items, itemShares, groupIds, participantByGroup, paymentsData, snapshotData) {
+    let balanceSum = 0
+    for (const groupId of groupIds) {
+      const myId = participantByGroup.get(groupId)
+      const groupBills = list.filter((b) => b.group_id === groupId)
+      const groupItems = items.filter((it) => groupBills.some((b) => b.id === it.bill_id))
+      const groupShares = itemShares.filter((s) => groupItems.some((it) => it.id === s.item_id))
+      const groupPayments = paymentsData
+        .filter((p) => p.group_id === groupId)
+        .map((p) => ({ from_user: p.from_member, to_user: p.to_member, amount: p.amount }))
+      const balances = computeBalances({ bills: groupBills, items: groupItems, itemShares: groupShares, payments: groupPayments })
+      balanceSum += balances[myId] || 0
+    }
+    for (const snap of snapshotData.filter((s) => !groupIds.includes(s.group_id))) {
+      if (!snap.balance_settled) balanceSum += Number(snap.balance)
+    }
+    return Math.round(balanceSum * 100) / 100
+  }
+
+  // The bills fetch is split into two phases, same as GroupStats.jsx: a
+  // "recent window" (this year plus last year — see getStatsWindowStart)
+  // fetched up front so the page renders immediately with genuinely
+  // correct numbers for any of today's default views, then the rest of
+  // every group's history backfilled afterward in the background. Only
+  // once that backfill finishes does this recompute overallBalance — see
+  // the comment on computeOverallBalance above for why that figure
+  // specifically can't be computed from a partial window.
   const load = useCallback(async () => {
     setError(null)
     try {
+      const windowStart = getStatsWindowStart()
+      setHistoryWindowStart(windowStart)
+
       // None of these three depend on each other — group_members only needs
       // user.id, and thresholds/departure snapshots are scoped to the
       // account, not to any particular group — so all three fire at once
@@ -98,26 +176,17 @@ export default function AccountStats() {
 
       // Everything below only needs groupIds (known now) and none of it
       // depends on any of the others' results either, so all four fetch at
-      // once rather than one after another. The bills query is paged
-      // through fetchAllRows rather than asked for in one shot — a group
-      // with a big imported history can have thousands of bills, exactly
-      // the kind of request that's prone to silently timing out (this used
-      // to be a single unchecked request, so a failure here silently
-      // looked identical to "you have no spending" rather than showing up
-      // as anything wrong).
-      const [groupsResult, rawBillsData, categoriesResult, paymentsResult] = await Promise.all([
+      // once rather than one after another. Payments aren't windowed like
+      // bills are — the table is small (people settle up far less often
+      // than they add bills) and overallBalance needs every payment
+      // regardless, so there's nothing to gain by deferring it.
+      const [groupsResult, recentBillsData, categoriesResult, paymentsResult] = await Promise.all([
         groupIds.length
           ? supabase.from('groups').select('id, name').in('id', groupIds)
           : Promise.resolve({ data: [], error: null }),
         groupIds.length
           ? fetchAllRows(() =>
-              supabase
-                .from('bills')
-                .select(
-                  'id, group_id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)',
-                  { count: 'exact' }
-                )
-                .in('group_id', groupIds)
+              supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).in('group_id', groupIds).gte('created_at', windowStart.toISOString())
             )
           : Promise.resolve([]),
         // For the "Spending thresholds" section below — every category
@@ -130,9 +199,6 @@ export default function AccountStats() {
               .in('group_id', groupIds)
               .order('created_at', { ascending: true })
           : Promise.resolve({ data: [], error: null }),
-        // For the overall-balance figure below — the live balance from
-        // every group still active in, on top of any not-yet-settled
-        // balance frozen from a group left (from snapshotData above).
         groupIds.length
           ? supabase.from('payments').select('id, group_id, from_member, to_member, amount').in('group_id', groupIds)
           : Promise.resolve({ data: [], error: null }),
@@ -142,56 +208,30 @@ export default function AccountStats() {
       if (paymentsResult.error) throw paymentsResult.error
 
       setGroups(groupsResult.data || [])
-
-      const list = rawBillsData.map((b) => ({ ...b, payers: b.bill_payers || [] }))
-      const items = []
-      const itemShares = []
-      for (const bill of list) {
-        for (const item of bill.items || []) {
-          items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price, category_id: item.category_id })
-          for (const share of item.item_shares || []) {
-            itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
-          }
-        }
-      }
-      setRawBills(
-        list.map((b) => ({
-          id: b.id,
-          group_id: b.group_id,
-          title: b.title,
-          created_at: b.created_at,
-          paid_by: b.paid_by,
-          category_id: b.category_id,
-          payers: b.payers,
-        }))
-      )
-      setRawItems(items)
-      setRawShares(itemShares)
+      // Deliberately doesn't touch historyStatus/overallBalance here — see
+      // the comment above applyRawBills's call site in the backfill below.
+      applyRawBills(recentBillsData)
       setRawCategories(categoriesResult.data || [])
 
       const paymentsData = paymentsResult.data || []
 
-      let balanceSum = 0
-      for (const groupId of groupIds) {
-        const myId = participantByGroup.get(groupId)
-        const groupBills = list.filter((b) => b.group_id === groupId)
-        const groupItems = items.filter((it) => groupBills.some((b) => b.id === it.bill_id))
-        const groupShares = itemShares.filter((s) => groupItems.some((it) => it.id === s.item_id))
-        const groupPayments = paymentsData
-          .filter((p) => p.group_id === groupId)
-          .map((p) => ({ from_user: p.from_member, to_user: p.to_member, amount: p.amount }))
-        const balances = computeBalances({
-          bills: groupBills,
-          items: groupItems,
-          itemShares: groupShares,
-          payments: groupPayments,
-        })
-        balanceSum += balances[myId] || 0
+      try {
+        const olderBillsData = groupIds.length
+          ? await fetchAllRows(() =>
+              supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).in('group_id', groupIds).lt('created_at', windowStart.toISOString())
+            )
+          : []
+        const { list, items, itemShares } = applyRawBills([...olderBillsData, ...recentBillsData])
+        setOverallBalance(computeOverallBalance(list, items, itemShares, groupIds, participantByGroup, paymentsData, snapshotData))
+        setHistoryStatus('complete')
+      } catch {
+        // The recent window above is still shown, correctly, for anything
+        // within it — this only means older history (and therefore
+        // overallBalance, which needs all of it) couldn't be reached, so
+        // the "still loading" notice below stays up rather than
+        // disappearing, but nothing already on screen is wrong.
+        setHistoryStatus('failed')
       }
-      for (const snap of snapshotData.filter((s) => !groupIds.includes(s.group_id))) {
-        if (!snap.balance_settled) balanceSum += Number(snap.balance)
-      }
-      setOverallBalance(Math.round(balanceSum * 100) / 100)
     } catch (err) {
       // Without this, a failure anywhere above (most likely: fetchThresholds
       // hitting a spending_thresholds table that doesn't exist yet on a
@@ -223,6 +263,8 @@ export default function AccountStats() {
       setThresholds(cached.thresholds)
       setSnapshots(cached.snapshots)
       setOverallBalance(cached.overallBalance)
+      setHistoryStatus(cached.historyStatus)
+      setHistoryWindowStart(cached.historyWindowStart)
     }
     load()
   }, [user.id, load])
@@ -239,6 +281,8 @@ export default function AccountStats() {
       thresholds,
       snapshots,
       overallBalance,
+      historyStatus,
+      historyWindowStart,
     })
   }, [
     user.id,
@@ -251,7 +295,15 @@ export default function AccountStats() {
     thresholds,
     snapshots,
     overallBalance,
+    historyStatus,
+    historyWindowStart,
   ])
+
+  // Unlike GroupStats.jsx, not gated on isViewCovered for the selected
+  // period — overallBalance above is always on screen and always needs
+  // full history, so as long as that backfill hasn't finished, the notice
+  // stays up regardless of which period happens to be selected.
+  const historyIncomplete = historyStatus !== 'complete' && Boolean(historyWindowStart)
 
   const { start, end, label, yearLabel } = getPeriodRange(granularity, offset)
   const { bills, items, itemShares } = filterByDateRange(rawBills, rawItems, rawShares, start, end)
@@ -517,6 +569,13 @@ export default function AccountStats() {
           of the actual error, which is exactly the kind of silently
           misleading result this is meant to prevent. */}
       {error && <p className="status-error">Couldn't load your stats: {error}</p>}
+      {historyIncomplete && (
+        <p className="muted">
+          {historyStatus === 'failed'
+            ? "Couldn't load your full history, so the numbers below may be incomplete — try refreshing."
+            : 'Still loading your full history — the numbers below may be incomplete until it finishes.'}
+        </p>
+      )}
 
       {groups.length === 0 && snapshots.length === 0 ? (
         <p className="empty-state">Join or create a group to start seeing your stats.</p>

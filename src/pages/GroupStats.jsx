@@ -8,7 +8,8 @@ import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupStatsCache } from '../lib/groupStatsCache'
 import { computeSpendingTotals } from '../lib/settlement'
 import { computeCategoryTotals } from '../lib/categoryStats'
-import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
+import { getPeriodRange, filterByDateRange, getStatsWindowStart, isViewCovered } from '../lib/timeRange'
+import { deriveBillsItemsShares } from '../lib/deriveBillData'
 import { comparePeriods } from '../lib/periodComparison'
 import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
 import { useCurrency } from '../context/CurrencyContext'
@@ -48,12 +49,40 @@ export default function GroupStats() {
   // same reasoning as AccountStats.jsx.
   const [defaultGranularity, setDefaultGranularity] = useState(() => getStatsPreferences().defaultGranularity)
   const [error, setError] = useState(null)
+  // 'loading' until the background backfill (see load() below) finishes,
+  // 'complete' once this group's full history is in rawBills, 'failed' if
+  // the backfill itself errored (the recent window it already has stays
+  // shown either way — this only ever adds to what's on screen, never
+  // takes anything away). historyWindowStart is the actual boundary the
+  // *current* rawBills data was fetched from — needed by isViewCovered
+  // below to know whether the selected period is fully within it.
+  const [historyStatus, setHistoryStatus] = useState('loading')
+  const [historyWindowStart, setHistoryWindowStart] = useState(null)
 
   const nameOf = (id) => members.find((m) => m.id === id)?.name || 'Someone'
 
   function handleSetDefaultGranularity(g) {
     setStatsPreferences({ defaultGranularity: g })
     setDefaultGranularity(g)
+  }
+
+  const BILLS_SELECT =
+    'id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+
+  function applyRawBills(rawBillsData) {
+    const { list, items, itemShares } = deriveBillsItemsShares(rawBillsData)
+    setRawBills(
+      list.map((b) => ({
+        id: b.id,
+        title: b.title,
+        created_at: b.created_at,
+        paid_by: b.paid_by,
+        payers: b.payers,
+        category_id: b.category_id,
+      }))
+    )
+    setRawItems(items)
+    setRawShares(itemShares)
   }
 
   // A failed fetch here used to just leave every number on this page at its
@@ -63,52 +92,59 @@ export default function GroupStats() {
   // one shot, since a group with a big imported history can have thousands
   // of bills — exactly the kind of request that's prone to silently timing
   // out before this had any error handling to catch it.
+  //
+  // The bills fetch itself is split into two phases: a "recent window"
+  // (this year plus last year — see getStatsWindowStart) fetched up front
+  // so the page can render immediately with genuinely correct numbers for
+  // any of today's default views, and the rest of this group's history
+  // backfilled afterward, in the background, without blocking first paint.
+  // isViewCovered (used below, in render) is how the page knows whether
+  // whatever's currently selected actually needs that backfill to have
+  // finished before its numbers can be trusted.
   const load = useCallback(async () => {
     try {
-      // Members, categories, and bills don't depend on each other — fetch
-      // all three at once instead of stacking three round-trips in a row
-      // before anything on this page can render.
-      const [membersData, categoriesData, rawBillsData] = await Promise.all([
+      const windowStart = getStatsWindowStart()
+      setHistoryWindowStart(windowStart)
+
+      // Members, categories, and the recent window of bills don't depend
+      // on each other — fetch all three at once instead of stacking three
+      // round-trips in a row before anything on this page can render.
+      const [membersData, categoriesData, recentBillsData] = await Promise.all([
         fetchAllGroupMembers(groupId),
         fetchCategories(groupId),
         fetchAllRows(() =>
           supabase
             .from('bills')
-            .select(
-              'id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)',
-              { count: 'exact' }
-            )
+            .select(BILLS_SELECT, { count: 'exact' })
             .eq('group_id', groupId)
+            .gte('created_at', windowStart.toISOString())
             .order('created_at', { ascending: true })
         ),
       ])
       setMembers(membersData)
       setCategories(categoriesData)
-
-      const list = rawBillsData.map((b) => ({ ...b, payers: b.bill_payers || [] }))
-      const items = []
-      const itemShares = []
-      for (const bill of list) {
-        for (const item of bill.items || []) {
-          items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price, category_id: item.category_id })
-          for (const share of item.item_shares || []) {
-            itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
-          }
-        }
-      }
-      setRawBills(
-        list.map((b) => ({
-          id: b.id,
-          title: b.title,
-          created_at: b.created_at,
-          paid_by: b.paid_by,
-          payers: b.payers,
-          category_id: b.category_id,
-        }))
-      )
-      setRawItems(items)
-      setRawShares(itemShares)
+      // Deliberately doesn't touch historyStatus here — if this group's
+      // full history was already cached from a previous visit (status
+      // already 'complete'), this recent-window refresh shouldn't flash
+      // it back to "still loading" for the moment before the backfill
+      // below re-confirms it; only the backfill's own outcome is allowed
+      // to change historyStatus.
+      applyRawBills(recentBillsData)
       setError(null)
+
+      try {
+        const olderBillsData = await fetchAllRows(() =>
+          supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).eq('group_id', groupId).lt('created_at', windowStart.toISOString())
+        )
+        applyRawBills([...olderBillsData, ...recentBillsData])
+        setHistoryStatus('complete')
+      } catch {
+        // The recent window above is still shown, correctly, for anything
+        // within it — this only means older history couldn't be reached,
+        // so the "still loading" notice below stays up rather than
+        // disappearing, but nothing already on screen is wrong.
+        setHistoryStatus('failed')
+      }
     } catch (err) {
       setError(loadErrorMessage(err))
     }
@@ -132,14 +168,34 @@ export default function GroupStats() {
       setRawBills(cached.rawBills)
       setRawItems(cached.rawItems)
       setRawShares(cached.rawShares)
+      setHistoryStatus(cached.historyStatus)
+      setHistoryWindowStart(cached.historyWindowStart)
     }
     load()
   }, [groupId, load])
 
   useEffect(() => {
     if (!members.length) return
-    groupStatsCache.set(groupId, { members, categories, rawBills, rawItems, rawShares })
-  }, [groupId, members, categories, rawBills, rawItems, rawShares])
+    groupStatsCache.set(groupId, {
+      members,
+      categories,
+      rawBills,
+      rawItems,
+      rawShares,
+      historyStatus,
+      historyWindowStart,
+    })
+  }, [groupId, members, categories, rawBills, rawItems, rawShares, historyStatus, historyWindowStart])
+
+  // Whether the currently selected period (and its "previous period"
+  // comparison, if it has one) is fully covered by whatever's actually in
+  // rawBills right now — true once history is 'complete', or true earlier
+  // if the view just happens to fall entirely within the recent window
+  // already fetched. Only matters while historyWindowStart is known at
+  // all; before that (the very first moment this page has fetched
+  // nothing yet) there's nothing meaningful to compare against.
+  const historyGapAffectsView =
+    historyStatus !== 'complete' && Boolean(historyWindowStart) && !isViewCovered(granularity, offset, historyWindowStart)
 
   const { start, end, label, yearLabel } = getPeriodRange(granularity, offset)
   const { bills, items, itemShares } = filterByDateRange(rawBills, rawItems, rawShares, start, end)
@@ -211,6 +267,13 @@ export default function GroupStats() {
       </header>
 
       {error && <p className="status-error">Couldn't load stats: {error}</p>}
+      {historyGapAffectsView && (
+        <p className="muted">
+          {historyStatus === 'failed'
+            ? "Couldn't load this group's full history, so numbers for this period may be incomplete — try refreshing."
+            : "Still loading this group's full history — numbers for this period may be incomplete until it finishes."}
+        </p>
+      )}
 
       <TimeRangeSelector
         granularity={granularity}

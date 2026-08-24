@@ -44,6 +44,36 @@ export function getPeriodRange(granularity, offset) {
   return { start: null, end: null, label: 'All time' }
 }
 
+// How far back a stats page's *first* fetch reaches, before it backfills
+// the rest of a group's history in the background — a whole current
+// calendar year plus a whole previous calendar year. That's chosen because
+// it's a superset of what every granularity's current-vs-previous
+// comparison (see comparePeriods/canCompare) ever needs: week and month
+// comparisons trivially fit inside a single year, and year's own
+// comparison needs exactly "this year plus last year," which is precisely
+// this boundary. Only 'all' time, or paging back further than a year,
+// reaches past it — see isViewCovered below, which is how a page decides
+// whether it's safe to trust what's fetched so far.
+export function getStatsWindowStart(now = new Date()) {
+  return new Date(now.getFullYear() - 1, 0, 1)
+}
+
+// Whether granularity/offset's own period — and its "previous period"
+// comparison, if it has one — are both fully inside [windowStart, now).
+// A page uses this to decide whether the numbers it can currently compute
+// (from whatever's been fetched so far) are trustworthy as final, or
+// whether they'd be silently missing bills older than the window and
+// should be shown as still-loading instead. 'all' always needs the full
+// history, so it's never "covered" by any bounded window.
+export function isViewCovered(granularity, offset, windowStart) {
+  if (granularity === 'all') return false
+  const { start } = getPeriodRange(granularity, offset)
+  if (!start) return false
+  const { start: prevStart } = getPeriodRange(granularity, offset - 1)
+  const earliestNeeded = prevStart && prevStart < start ? prevStart : start
+  return earliestNeeded >= windowStart
+}
+
 // Narrows a bills/items/itemShares dataset down to only what falls inside
 // [start, end). Passing nulls (the 'all time' case) returns everything
 // unchanged.

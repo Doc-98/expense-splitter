@@ -321,7 +321,7 @@ const GROUPS = [
       {
         id: 'stats',
         title: 'Stats',
-        keywords: 'stats statistics spending week month year category person',
+        keywords: 'stats statistics spending week month year category person loading history incomplete',
         body: (
           <>
             <p>
@@ -353,6 +353,13 @@ const GROUPS = [
               and the other way around. That, and where the "Spending thresholds" section sits on
               Your Stats (top or bottom of the page — a link right in that section switches it),
               are both saved only on this device, same as currency and dark mode.
+            </p>
+            <p>
+              On a group with a lot of history, both stats pages load the last year or two first so
+              they open quickly, then keep loading further back in the background — you'll only
+              notice if you jump to "All time" or page back further than that before it's finished,
+              in which case a small note says the numbers may still be incomplete until it catches
+              up.
             </p>
           </>
         ),
