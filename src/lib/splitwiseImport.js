@@ -1,4 +1,5 @@
 import { parseCsv } from './csv'
+import { computeBalances } from './settlement'
 
 // Splitwise's group export is: Date, Description, Category, Cost, Currency,
 // then one column per group member — where each person's cell is their NET
@@ -10,7 +11,7 @@ import { parseCsv } from './csv'
 export function parseSplitwiseCsv(text) {
   const rows = parseCsv(text)
   if (rows.length < 2) {
-    return { peopleNames: [], expenses: [], warnings: ['That file looks empty.'] }
+    return { peopleNames: [], expenses: [], needsReview: [], finalBalances: {}, warnings: ['That file looks empty.'] }
   }
 
   const header = rows[0].map((h) => h.trim())
@@ -27,6 +28,8 @@ export function parseSplitwiseCsv(text) {
     return {
       peopleNames: [],
       expenses: [],
+      needsReview: [],
+      finalBalances: {},
       warnings: ["This doesn't look like a Splitwise export — missing Date/Description/Cost columns."],
     }
   }
@@ -39,12 +42,35 @@ export function parseSplitwiseCsv(text) {
   const warnings = []
   const currenciesSeen = new Set()
   const expenses = []
+  // Rows where the net-balance numbers alone can't tell us who actually
+  // paid, or how a multi-person expense should split — either nobody has
+  // a positive net (a personal expense someone logged for their own
+  // tracking, where they paid and consumed the exact same amount, so
+  // their own net comes out to precisely 0 — indistinguishable in the
+  // numbers from "not involved at all"), or more than one person does (a
+  // real multiple-payer expense, but Splitwise's net-balance export
+  // doesn't say how much each of them actually put in). Both go to
+  // ImportBills.jsx's review step instead of being guessed at or silently
+  // dropped.
+  const needsReview = []
+  // Splitwise's own trailing "Total balance" row, one column per person —
+  // not a real expense, but the one place the CSV states each person's
+  // own all-time net directly, so it's captured here (not skipped) for
+  // checkImportBalances() below to compare the finished import against.
+  let finalBalances = {}
 
   for (const row of dataRows) {
     const description = row[descIdx]?.trim()
-    // Splitwise appends a trailing running-total row with no real expense
-    // in it — skip it rather than importing a fake bill.
-    if (!description || description.toLowerCase().includes('total balance')) continue
+    if (!description) continue
+
+    if (description.toLowerCase().includes('total balance')) {
+      for (const col of peopleColumns) {
+        const raw = row[col.index]
+        const value = raw === undefined || raw.trim() === '' ? 0 : Number(raw)
+        if (Number.isFinite(value)) finalBalances[col.name] = value
+      }
+      continue
+    }
 
     const cost = Number(row[costIdx])
     if (!Number.isFinite(cost) || cost <= 0) {
@@ -68,37 +94,21 @@ export function parseSplitwiseCsv(text) {
     }
     if (!rowOk) continue
 
-    // The person with the largest positive net fronted the money. This is
-    // the one place a single-payer assumption gets made — Splitwise's
-    // export only gives net balance per expense, not each payer's actual
-    // contributed amount, so there's no way to precisely reconstruct
-    // multiple payers' individual amounts from this file alone (that's a
-    // gap in the source data, not something parsing harder can fix). When
-    // more than one person shows a positive net on the same row — a real
-    // sign of multiple payers — this still imports using the biggest
-    // contributor, but flags it so it can be corrected by hand afterward,
-    // now that the app itself supports multiple payers on a bill.
-    let payerName = null
-    let payerNet = 0
-    let payersWithPositiveNet = 0
-    for (const [name, net] of Object.entries(netByPerson)) {
-      if (net > 0.001) payersWithPositiveNet++
-      if (net > payerNet) {
-        payerName = name
-        payerNet = net
-      }
-    }
+    const parsedDate = new Date(row[dateIdx])
+    const date = Number.isNaN(parsedDate.getTime()) ? null : parsedDate.toISOString()
+    const category = categoryIdx !== -1 ? row[categoryIdx]?.trim() : ''
 
-    if (!payerName) {
-      warnings.push(`Skipped "${description}" — couldn't tell who paid.`)
+    // The one person with a positive net fronted the money — this is the
+    // only shape Splitwise's per-row net balances can be reconstructed
+    // from with confidence. Zero such people, or more than one, both mean
+    // there's no way to tell from the numbers alone; see needsReview
+    // above for why, and ImportBills.jsx for how those get resolved.
+    const positivePayers = Object.entries(netByPerson).filter(([, net]) => net > 0.001)
+    if (positivePayers.length !== 1) {
+      needsReview.push({ date, description, category, cost, netByPerson })
       continue
     }
-
-    if (payersWithPositiveNet > 1) {
-      warnings.push(
-        `"${description}" looks like it had multiple payers in Splitwise — imported with ${payerName} credited the full amount. Edit this bill's "Paid by" to split it properly.`
-      )
-    }
+    const [payerName] = positivePayers[0]
 
     // Reconstruct each person's actual share of the cost (not their net
     // balance) — for the payer: what they paid minus what they netted;
@@ -117,15 +127,7 @@ export function parseSplitwiseCsv(text) {
       }
     }
 
-    const parsedDate = new Date(row[dateIdx])
-    expenses.push({
-      date: Number.isNaN(parsedDate.getTime()) ? null : parsedDate.toISOString(),
-      description,
-      category: categoryIdx !== -1 ? row[categoryIdx]?.trim() : '',
-      cost,
-      payerName,
-      shares,
-    })
+    expenses.push({ date, description, category, cost, payerName, shares })
   }
 
   if (currenciesSeen.size > 1) {
@@ -134,5 +136,41 @@ export function parseSplitwiseCsv(text) {
     )
   }
 
-  return { peopleNames: peopleColumns.map((c) => c.name), expenses, warnings }
+  return { peopleNames: peopleColumns.map((c) => c.name), expenses, needsReview, finalBalances, warnings }
+}
+
+// Compares what the app itself computes for each Splitwise name's balance,
+// from the bills actually imported, against Splitwise's own trailing
+// "Total balance" row (finalBalances, from parseSplitwiseCsv above) — a
+// proof-check that the import (automatic rows plus whatever the review
+// step resolved) reconstructs the same picture Splitwise itself had,
+// before the export's own history stops mattering and the group moves
+// forward inside this app instead.
+//
+// `bills`/`items`/`itemShares` are the same shapes computeBalances already
+// expects (see settlement.js) — pass everything imported this run, not
+// the group's full history, since finalBalances is itself only ever "as
+// of the moment this CSV was exported," not "as of right now." `nameToId`
+// maps each Splitwise name to the group_members.id it was resolved to
+// (the same mapping ImportBills.jsx builds while matching people), so a
+// balance keyed by group_members.id can be compared against one keyed by
+// Splitwise's own name.
+//
+// A tolerance of a few cents (rather than an exact match) absorbs
+// rounding drift that can accumulate over hundreds of reconstructed
+// shares — a couple of cents off across a thousand expenses isn't a sign
+// of a broken import the way being off by whole euros would be.
+export function checkImportBalances({ bills, items, itemShares, payments = [], finalBalances, nameToId }, tolerance = 0.05) {
+  const balances = computeBalances({ bills, items, itemShares, payments })
+  const rows = Object.entries(finalBalances).map(([name, expected]) => {
+    const id = nameToId[name]
+    const actual = id ? balances[id] || 0 : 0
+    return {
+      name,
+      expected: Math.round(expected * 100) / 100,
+      actual: Math.round(actual * 100) / 100,
+      matches: Math.abs(expected - actual) <= tolerance,
+    }
+  })
+  return { rows, allMatch: rows.every((r) => r.matches) }
 }

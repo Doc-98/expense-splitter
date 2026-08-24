@@ -301,7 +301,7 @@ const GROUPS = [
       {
         id: 'splitwise',
         title: 'Importing from Splitwise',
-        keywords: 'splitwise import migrate csv expense net balance',
+        keywords: 'splitwise import migrate csv expense net balance review multiple payers proof check total balance',
         body: (
           <>
             <p>
@@ -314,9 +314,22 @@ const GROUPS = [
             </p>
             <p>
               Splitwise only exports each person's net balance per expense, not each payer's exact
-              contribution — so an expense that genuinely had multiple payers in Splitwise imports
-              with one payer credited the full amount, flagged with a warning naming that specific
-              bill. Go fix that one bill's "Paid by" afterward using Multiple payers, above.
+              contribution. That's enough to reconstruct the overwhelming majority of expenses
+              automatically, but not a personal expense someone logged purely for their own
+              tracking (nets out to exactly 0, indistinguishable from "not involved"), or a real
+              multiple-payer expense (Splitwise doesn't say how much each payer put in). Anything
+              like that gets its own quick review step right after matching people — one expense
+              at a time, pick who paid and who it's split with — rather than being silently
+              guessed at or dropped. <strong>Skip for now</strong> is always there if you'd rather
+              come back to one later; either way it's tagged in the bill's own note, so the
+              group's search always finds it again.
+            </p>
+            <p>
+              If Splitwise's export includes its own trailing balance summary, the import finishes
+              with a quick proof-check: a green confirmation if this app's own math lands on the
+              same balance Splitwise had for everyone, or a red one listing exactly whose doesn't
+              match and by how much. Either way you can continue — it's there to help you spot a
+              problem, not to block you.
             </p>
           </>
         ),
