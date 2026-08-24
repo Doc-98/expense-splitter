@@ -29,6 +29,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Resetting the database](#resetting-the-database)
 - [Receipt scanning](#receipt-scanning)
 - [Editing items](#editing-items)
+- [Backdating (or postdating) a bill](#backdating-or-postdating-a-bill)
 - [Currency](#currency)
 - [Categories](#categories)
 - [Spending thresholds](#spending-thresholds)
@@ -275,6 +276,31 @@ two consistently (`updateItemField()` in `BillView.jsx`):
 For the overwhelmingly common quantity-1 case, editing the total and
 editing the unit price are the same operation by definition — there's
 only one number to edit either way.
+
+## Backdating (or postdating) a bill
+
+There's no separate "date" column on a bill — `created_at` already doubles
+as its date everywhere in the app (sorting, month/day grouping, stats),
+including for imported bills, whose `created_at` is deliberately set to the
+historical date rather than the moment the import ran (see "Importing from
+Splitwise" below). A bill's own click-to-edit date, in a bill's own page
+just above the item list (right next to "New items split with"), edits
+that same column directly — no new column, no migration, just a plain
+`UPDATE` on the field already doing this job (`src/lib/billDate.js`,
+`updateBillDate()` in `BillView.jsx`).
+
+Deliberately small and right-aligned rather than a prominent form field —
+most bills are added the same day they happened and never need this, so
+it stays out of the way for the common case. It's there for the rest: a
+bill added a few days late that would otherwise land in the wrong week's
+report, or fixing up a bill by hand after an import missed it. Editing it
+keeps the bill's original time-of-day, only swapping the calendar day, so
+it doesn't silently reorder relative to other bills from the same day by
+landing on midnight. Uses the same `InlineEditable` component as item
+editing above, extended with an `inputType` prop (`"date"` here, `"text"`
+everywhere else) so it gets the browser's native date picker rather than a
+free-text box — the one visible difference from an ordinary click-to-edit
+field.
 
 ## Currency
 
@@ -758,6 +784,53 @@ against an existing member of the group (real or guest) or create a new
 guest for them — names that already match exactly are pre-selected
 automatically.
 
+**When Splitwise's net balances alone aren't enough.** Reconstructing "who
+paid, and each person's share" from net balances only works when exactly
+one person on a row has a positive net — the overwhelming majority of
+rows. Two situations can't be resolved that way at all, and there's no
+way to tell them apart or guess correctly from the numbers alone:
+
+- **Nobody has a positive net.** A personal expense someone logged purely
+  for their own tracking — they paid it and it was entirely their own
+  share, so their net comes out to exactly 0, indistinguishable in the
+  numbers from "not involved at all."
+- **More than one person has a positive net.** A real multiple-payer
+  expense, but Splitwise's export only ever gives each person's net
+  balance, never how much each of several payers actually contributed —
+  that specific number simply isn't in the file to recover.
+
+Both kinds are collected during parsing (`needsReview` in
+`parseSplitwiseCsv()`) instead of being silently skipped or guessed at,
+and handled by a review step that appears after matching people, only if
+anything needs it — one expense at a time, wizard-style, the same feel as
+the people-matching step itself. For each: pick who paid (a plain dropdown
+for the common single-payer case, with a "Multiple payers…" option that
+opens the same amount-entry modal a bill's own page uses) and who it's
+split with (equal-share chips — finer per-person amounts on the consuming
+side stay available afterward through ordinary bill editing, same as any
+other bill). "Skip for now" imports the bill with no payer set rather than
+forcing a decision on the spot; either way, the bill's note gets a
+permanent, searchable tag (`Splitwise import: reviewed manually` or
+`Splitwise import: needs review — payer not set`) so it's findable again
+through the group's own bill search long after this one import session
+ends.
+
+**Proof-checking the result.** Splitwise's own export ends with a trailing
+"Total balance" row — not a real expense, but the one place the file
+states each person's own all-time net balance directly. `parseSplitwiseCsv()`
+captures it (`finalBalances`) instead of just skipping it as a non-expense
+row, and once the import finishes, `checkImportBalances()` runs the app's
+own `computeBalances()` (the exact same settlement math the group page
+itself trusts) over everything just imported and compares each person's
+reconstructed balance against Splitwise's own number for them, a few
+cents' tolerance absorbing any rounding drift accumulated across hundreds
+of reconstructed shares. A green confirmation means the two independently
+arrive at the same picture; a red one lists exactly whose balance doesn't
+match and by how much — informational either way, never a hard stop.
+"Continue anyway" is always right there, same reasoning as everywhere else
+this app avoids trapping you behind a check it runs on your behalf: you're
+the authority on your own financial history, not a validation rule.
+
 ## How the data model works
 
 | Table          | What it's for                                                   |
@@ -996,17 +1069,6 @@ time and interest allow.
 - PDF export goes through the browser's print dialog rather than a
   one-tap download — deliberate, to avoid a new dependency, but it is an
   extra step compared to Share recap.
-- Splitwise import still credits a single payer per expense (whoever has
-  the largest positive net balance) — this is a genuine limitation of
-  Splitwise's own export format, not something parsing harder could fix:
-  it only ever exports each person's *net balance* per expense, never each
-  payer's individually contributed amount, so multiple payers' exact
-  amounts aren't recoverable from the file at all. When a row shows signs
-  of having had more than one payer, it's now flagged with a warning
-  naming the specific expense — go fix that one bill's "Paid by" by hand
-  afterward, now that the app itself supports multiple payers. A row
-  where literally everyone's net balance is zero (no sharing happened at
-  all) is skipped with a warning rather than guessed at.
 - `groups.admin_id` changes are only supposed to happen through
   `transfer_admin()`, but the general "members can rename their group" RLS
   policy is a blanket per-row check, not a per-column one — so it can't
