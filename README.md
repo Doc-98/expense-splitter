@@ -35,6 +35,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Spending thresholds](#spending-thresholds)
 - [Period-over-period comparison](#period-over-period-comparison)
 - [Time period controls](#time-period-controls)
+- [Keyboard navigation](#keyboard-navigation)
 - [Recurring bills](#recurring-bills)
 - [What a bill row shows](#what-a-bill-row-shows)
 - [Searching and filtering bills](#searching-and-filtering-bills)
@@ -475,6 +476,62 @@ Both preferences above (default granularity, thresholds position) live in
 `localStorage` (`src/lib/statsPreferences.js`), the same per-device-only
 mechanism already used for currency and dark/light mode — they won't
 follow you to a different phone or browser.
+
+The ‹ / › single-step buttons above also respond to the ← / → arrow keys —
+see [Keyboard navigation](#keyboard-navigation).
+
+## Keyboard navigation
+
+Several places in the app respond to the keyboard, all opt-in in the sense
+that they only kick in once you've actually pressed one of the keys —
+nothing changes about how the page looks or behaves until then, and typing
+into a field (search, an amount, a filter) is never intercepted.
+
+- **A group's bill list, and the landing page's groups list**
+  (`src/pages/GroupView.jsx`, `src/pages/Groups.jsx`) — ↑ / ↓ move a
+  highlighted selection up and down the current page's rows (same visual
+  treatment as a hover, just keyboard-driven and stays put), Enter opens
+  whichever row is highlighted, and ← / → flip pages, same as clicking the
+  Pagination buttons below the list. Moving the mouse back over the list
+  drops the highlight again — the same "goes away until you touch the
+  keyboard again" convention as Gmail's j/k, so the first row isn't
+  sitting outlined for a mouse-only visit that never asked for it. Both
+  lists share one hook (`src/lib/useListKeyboardNav.js`) for this rather
+  than keeping two independent copies of the same behavior — the bill
+  list's version additionally turns itself off in select mode, where
+  arrow keys/Enter already mean something else (moving through
+  checkboxes). Recurring bills' own list (`/groups/:groupId/recurring`)
+  deliberately doesn't get this: unlike a bill or a group, a template row
+  has nothing to "open" — it's managed right there in the list (Pause /
+  Delete), not on a page of its own — so there's nowhere for Enter to go.
+- **A group's bill list, specifically** also gets `/` to jump straight to
+  the search box from anywhere on the page, same shortcut GitHub/Slack use
+  for their own search.
+- **Stats pages** (`TimeRangeSelector`, shared by Group Stats and Your
+  Stats) — ← / → step to the previous/next period, the same single step as
+  the ‹ / › buttons next to the period label. Doesn't cover the jump
+  tiers (a month or year at a time, see [Time period
+  controls](#time-period-controls) above) or "All time," where there's no
+  previous/next period to step to.
+- **Escape closes whatever's open** — the account menu, a bill's own
+  action menu, the member-count popover, the invite/share popovers, and
+  the bill list's filters panel. The first four all already close on an
+  outside click (`src/lib/useClickOutside.js`), which now also listens for
+  Escape (`src/lib/useEscapeKey.js`) rather than only a click; the filters
+  panel has no floating "outside" of its own to click away from — it's an
+  inline panel toggled by its own button — so it uses the Escape hook
+  directly instead.
+
+**Why the bill list's Pagination bar is sticky now:** a page of bills can
+run from a couple of rows to a full screen depending on how many day/month
+dividers land on it, so the ‹ / › buttons used to end up in a different
+spot on screen every time you flipped pages — sometimes below the fold,
+meaning a scroll just to find them again before you could flip once more.
+`.pagination` (`src/styles.css`) now sticks to the bottom of the viewport
+instead of sitting inline at the end of the list, floating as its own pill
+(same border/shadow as the account dropdown) so it's always in the same
+place. This applies everywhere `Pagination` is used, including the groups
+list on the landing page, not just the bill list.
 
 ## Recurring bills
 

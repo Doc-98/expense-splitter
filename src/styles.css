@@ -98,11 +98,20 @@ code {
   padding: var(--space-md) var(--space-md) 0;
 }
 .app-header-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-family: var(--font-display);
   font-size: 18px;
   font-weight: 600;
   color: var(--accent-dark);
   text-decoration: none;
+  line-height: 1.2;
+}
+.app-header-version {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 400;
 }
 .account-menu { position: relative; }
 .account-chip {
@@ -335,6 +344,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   font-weight: 500;
 }
 .card-list-item:hover { border-color: var(--accent); }
+/* The ↑/↓-selected row (src/lib/useListKeyboardNav.js, shared by
+   GroupView.jsx's bill list and Groups.jsx's group list) — same accent
+   used for hover/focus elsewhere in the app, just on the whole row
+   instead of only the border, so it's readable at a glance while
+   scanning down the list with the keyboard rather than a mouse. */
+.list-row-focused .card-list-item { border-color: var(--accent); background: var(--accent-light); }
 .chevron { color: var(--ink-soft); }
 .card-list-item-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .card-list-item-note {
@@ -983,12 +998,29 @@ input.item-editable-input {
    pass at this (font-size 16px, 2px padding, no inter-button gap) wasn't. */
 .time-range-nav .btn-icon.time-range-jump { font-size: 20px; color: var(--ink-soft); }
 
+/* Sticky to the bottom of the viewport rather than sitting inline at the
+   end of the list — a page's worth of bills can run from a couple of rows
+   to a full screen depending on how many day/month dividers fall on it, so
+   an inline pager landed in a different spot (sometimes off-screen below
+   the fold) every time you flipped pages. Anchored here, it's always in
+   the same place, no scrolling required to find it again. Floats as its
+   own pill (same border/shadow language as .account-dropdown) since it's
+   no longer part of the normal document flow the rest of the page sits in. */
 .pagination {
+  position: sticky;
+  bottom: calc(var(--space-md) + env(safe-area-inset-bottom, 0px));
+  z-index: 5;
   display: flex;
+  width: fit-content;
   align-items: center;
   justify-content: center;
   gap: var(--space-md);
-  margin: var(--space-md) 0 var(--space-lg);
+  margin: var(--space-md) auto var(--space-lg);
+  padding: 6px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
 }
 .pagination-label { font-size: 13px; color: var(--ink-soft); min-width: 90px; text-align: center; }
 .pagination .btn-icon { font-size: 22px; }

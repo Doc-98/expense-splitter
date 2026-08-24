@@ -6,6 +6,12 @@ import { useTheme } from '../context/ThemeContext'
 import { useCurrency, CURRENCIES } from '../context/CurrencyContext'
 import { useClickOutside } from '../lib/useClickOutside'
 
+// Bumped by hand with each PR — "1.<PR number>" rather than semver, since PRs
+// merge in order on this branch and are already a visible, monotonic counter
+// of what's shipped (cross-referenceable against GitHub directly). No CI
+// wires this automatically, so it's on whoever opens the next PR to bump it.
+const APP_VERSION = 'v1.15'
+
 export default function AppHeader() {
   const { user } = useAuth()
   const { theme, toggleTheme } = useTheme()
@@ -36,7 +42,8 @@ export default function AppHeader() {
   return (
     <div className="app-header">
       <Link to="/" className="app-header-brand">
-        Spesa
+        Expense Splitter
+        <span className="muted app-header-version">{APP_VERSION}</span>
       </Link>
       <div className="account-menu" ref={menuRef}>
         <button
