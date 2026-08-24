@@ -905,10 +905,23 @@ still counts, it's just not attributed to a category.
 
 Roughly in the order they're likely to land, though nothing here is
 promised on any particular timeline — this is a personal project, built as
-time and interest allow. Nothing currently sits in an "up next" tier — both
-items that were there (spending thresholds, period-over-period comparison
-on Your Stats) have shipped.
+time and interest allow.
 
+- Two performance options held in reserve for the group page and stats
+  pages, only worth doing if a per-page in-memory cache plus fetching
+  independent queries in parallel (both already in place) turn out not to
+  be enough on a genuinely large group:
+  - Merging `GroupView.jsx`'s two separate big bill fetches (`loadBills`
+    for the list, `loadSettlement` for balances) into one unified query —
+    they currently re-fetch essentially the same bills twice, just with
+    slightly different nested detail, which was originally kept separate
+    for code clarity rather than performance
+  - Moving the settlement/category-totals math into a Postgres function
+    instead of shipping every item/share row to the browser for
+    `computeSpendingTotals`/`computeCategoryTotals` to sum client-side —
+    the most scalable fix long-term, but a real lift (a new migration, a
+    SECURITY DEFINER function, RLS to think through), not something to
+    start speculatively
 - Group-level (or shared) spending thresholds, as a variant alongside the
   personal ones that exist today — very low priority; nothing about
   `spending_thresholds` being keyed by `user_id` rules this out later, it's

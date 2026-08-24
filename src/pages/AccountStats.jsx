@@ -9,6 +9,7 @@ import { mergeCategoriesByName } from '../lib/categories'
 import { fetchThresholds } from '../lib/thresholds'
 import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
+import { accountStatsCache } from '../lib/accountStatsCache'
 import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
 import { getPeriodRange, filterByDateRange, sumDailyInRange, sumCategoryDailyInRange, monthlyFromDaily } from '../lib/timeRange'
 import { comparePeriods } from '../lib/periodComparison'
@@ -70,43 +71,79 @@ export default function AccountStats() {
   const load = useCallback(async () => {
     setError(null)
     try {
-      const { data: memberRows, error: memberError } = await supabase
-        .from('group_members')
-        .select('id, group_id')
-        .eq('user_id', user.id)
-        .eq('active', true)
-      if (memberError) throw memberError
+      // None of these three depend on each other — group_members only needs
+      // user.id, and thresholds/departure snapshots are scoped to the
+      // account, not to any particular group — so all three fire at once
+      // instead of stacking three round-trips before anything else can even
+      // start (everything below this needs groupIds, which only comes from
+      // the first of these).
+      const [memberResult, thresholdsData, snapshotResult] = await Promise.all([
+        supabase.from('group_members').select('id, group_id').eq('user_id', user.id).eq('active', true),
+        fetchThresholds(user.id),
+        supabase.from('departure_snapshots').select('*').eq('user_id', user.id),
+      ])
+      if (memberResult.error) throw memberResult.error
+      if (snapshotResult.error) throw snapshotResult.error
+      const memberRows = memberResult.data
 
       const groupIds = (memberRows || []).map((r) => r.group_id)
       const participantByGroup = new Map((memberRows || []).map((r) => [r.group_id, r.id]))
       setMyParticipantByGroup(participantByGroup)
+      setThresholds(thresholdsData)
 
-      let groupsData = []
-      if (groupIds.length) {
-        const { data, error: groupsError } = await supabase.from('groups').select('id, name').in('id', groupIds)
-        if (groupsError) throw groupsError
-        groupsData = data || []
-      }
-      setGroups(groupsData)
+      // Departed groups' frozen records — a group you're back in shouldn't
+      // also show a stale snapshot, live data already covers it fully.
+      const snapshotData = snapshotResult.data || []
+      setSnapshots(snapshotData.filter((s) => !groupIds.includes(s.group_id)))
 
-      // Paged through fetchAllRows rather than one unbounded request — a
-      // group with a big imported history can have thousands of bills, and
-      // this used to be a single request with no error check at all, so a
-      // failure here (a timeout on that large a payload, most plausibly)
-      // silently looked identical to "you have no spending," rather than
-      // showing up as anything wrong.
-      const list = groupIds.length
-        ? (
-            await fetchAllRows(() =>
+      // Everything below only needs groupIds (known now) and none of it
+      // depends on any of the others' results either, so all four fetch at
+      // once rather than one after another. The bills query is paged
+      // through fetchAllRows rather than asked for in one shot — a group
+      // with a big imported history can have thousands of bills, exactly
+      // the kind of request that's prone to silently timing out (this used
+      // to be a single unchecked request, so a failure here silently
+      // looked identical to "you have no spending" rather than showing up
+      // as anything wrong).
+      const [groupsResult, rawBillsData, categoriesResult, paymentsResult] = await Promise.all([
+        groupIds.length
+          ? supabase.from('groups').select('id, name').in('id', groupIds)
+          : Promise.resolve({ data: [], error: null }),
+        groupIds.length
+          ? fetchAllRows(() =>
               supabase
                 .from('bills')
                 .select(
-                  'id, group_id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+                  'id, group_id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)',
+                  { count: 'exact' }
                 )
                 .in('group_id', groupIds)
             )
-          ).map((b) => ({ ...b, payers: b.bill_payers || [] }))
-        : []
+          : Promise.resolve([]),
+        // For the "Spending thresholds" section below — every category
+        // across every group I'm in (so same-named tags from different
+        // groups can be merged, see mergeCategoriesByName).
+        groupIds.length
+          ? supabase
+              .from('categories')
+              .select('id, name, color')
+              .in('group_id', groupIds)
+              .order('created_at', { ascending: true })
+          : Promise.resolve({ data: [], error: null }),
+        // For the overall-balance figure below — the live balance from
+        // every group still active in, on top of any not-yet-settled
+        // balance frozen from a group left (from snapshotData above).
+        groupIds.length
+          ? supabase.from('payments').select('id, group_id, from_member, to_member, amount').in('group_id', groupIds)
+          : Promise.resolve({ data: [], error: null }),
+      ])
+      if (groupsResult.error) throw groupsResult.error
+      if (categoriesResult.error) throw categoriesResult.error
+      if (paymentsResult.error) throw paymentsResult.error
+
+      setGroups(groupsResult.data || [])
+
+      const list = rawBillsData.map((b) => ({ ...b, payers: b.bill_payers || [] }))
       const items = []
       const itemShares = []
       for (const bill of list) {
@@ -130,49 +167,9 @@ export default function AccountStats() {
       )
       setRawItems(items)
       setRawShares(itemShares)
+      setRawCategories(categoriesResult.data || [])
 
-      // For the "Spending thresholds" section below — every category across
-      // every group I'm in (so same-named tags from different groups can be
-      // merged, see mergeCategoriesByName), plus my own saved threshold
-      // amounts. Neither is scoped to whatever period the rest of this page
-      // is showing — thresholds are always compared against the current
-      // calendar month specifically (see Thresholds.jsx for why).
-      let categoriesData = []
-      if (groupIds.length) {
-        const { data, error: categoriesError } = await supabase
-          .from('categories')
-          .select('id, name, color')
-          .in('group_id', groupIds)
-          .order('created_at', { ascending: true })
-        if (categoriesError) throw categoriesError
-        categoriesData = data || []
-      }
-      setRawCategories(categoriesData)
-      setThresholds(await fetchThresholds(user.id))
-
-      // Departed groups' frozen records — a group you're back in shouldn't
-      // also show a stale snapshot, live data already covers it fully.
-      const { data: snapshotRows, error: snapshotError } = await supabase
-        .from('departure_snapshots')
-        .select('*')
-        .eq('user_id', user.id)
-      if (snapshotError) throw snapshotError
-      const snapshotData = snapshotRows || []
-      setSnapshots(snapshotData.filter((s) => !groupIds.includes(s.group_id)))
-
-      // Overall balance is a running, "right now" figure — it isn't scoped to
-      // whatever time period is selected below. It's the live balance from
-      // every group you're still in, plus any not-yet-settled balance frozen
-      // from groups you've left.
-      let paymentsData = []
-      if (groupIds.length) {
-        const { data, error: paymentsError } = await supabase
-          .from('payments')
-          .select('id, group_id, from_member, to_member, amount')
-          .in('group_id', groupIds)
-        if (paymentsError) throw paymentsError
-        paymentsData = data || []
-      }
+      const paymentsData = paymentsResult.data || []
 
       let balanceSum = 0
       for (const groupId of groupIds) {
@@ -206,9 +203,55 @@ export default function AccountStats() {
     }
   }, [user.id])
 
+  // Same cache-then-revalidate pattern as GroupView.jsx/GroupStats.jsx:
+  // paint instantly from whatever Your Stats looked like last time this
+  // page was open (if anything), then always fetch fresh anyway — a
+  // revisit is never worse than today's plain reload, just sometimes
+  // faster to first paint. Depends only on [user.id, load] (not on the
+  // state it hydrates), so this fires once per account, not every time
+  // load() finishes populating that same state — the write-back effect
+  // just below stays in sync with it on every change instead.
   useEffect(() => {
+    const cached = accountStatsCache.get(user.id)
+    if (cached) {
+      setGroups(cached.groups)
+      setMyParticipantByGroup(cached.myParticipantByGroup)
+      setRawBills(cached.rawBills)
+      setRawItems(cached.rawItems)
+      setRawShares(cached.rawShares)
+      setRawCategories(cached.rawCategories)
+      setThresholds(cached.thresholds)
+      setSnapshots(cached.snapshots)
+      setOverallBalance(cached.overallBalance)
+    }
     load()
-  }, [load])
+  }, [user.id, load])
+
+  useEffect(() => {
+    if (!groups.length && !snapshots.length) return
+    accountStatsCache.set(user.id, {
+      groups,
+      myParticipantByGroup,
+      rawBills,
+      rawItems,
+      rawShares,
+      rawCategories,
+      thresholds,
+      snapshots,
+      overallBalance,
+    })
+  }, [
+    user.id,
+    groups,
+    myParticipantByGroup,
+    rawBills,
+    rawItems,
+    rawShares,
+    rawCategories,
+    thresholds,
+    snapshots,
+    overallBalance,
+  ])
 
   const { start, end, label, yearLabel } = getPeriodRange(granularity, offset)
   const { bills, items, itemShares } = filterByDateRange(rawBills, rawItems, rawShares, start, end)
