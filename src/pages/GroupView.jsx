@@ -14,6 +14,9 @@ import { shareOrCopyText } from '../lib/shareText'
 import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
 import { filterBills, billTotal } from '../lib/billFilters'
 import { useClickOutside } from '../lib/useClickOutside'
+import { useEscapeKey } from '../lib/useEscapeKey'
+import { isTypingTarget } from '../lib/isTypingTarget'
+import { useListKeyboardNav } from '../lib/useListKeyboardNav'
 import { useCurrency } from '../context/CurrencyContext'
 import { processDueRecurringBills } from '../lib/recurringBills'
 import { groupItemsByDate } from '../lib/dateGroups'
@@ -54,21 +57,7 @@ export default function GroupView() {
   useEffect(() => {
     billsRef.current = bills
   }, [bills])
-  // Points at whichever bill row is currently keyboard-focused (see
-  // focusedBillIndex), so the scroll-into-view effect below can reach it
-  // directly instead of re-querying the DOM.
-  const focusedRowRef = useRef(null)
   const [billsPage, setBillsPage] = useState(0)
-  // Keyboard list navigation (←/→ flip pages, ↑/↓ move this, Enter opens
-  // it) — an index into the current page's flat, on-screen bill order
-  // (visibleBills below), not a bill id, so it stays meaningful across a
-  // page flip without needing to be recomputed. Only shown once the
-  // keyboard's actually been used (keyboardNavActive) so a bill isn't
-  // sitting outlined on first load before anyone's touched an arrow key;
-  // moving the mouse back over the list drops it again, same as most
-  // list-with-a-mouse-and-keyboard UIs (Gmail's j/k, etc).
-  const [focusedBillIndex, setFocusedBillIndex] = useState(0)
-  const [keyboardNavActive, setKeyboardNavActive] = useState(false)
   const [newBillTitle, setNewBillTitle] = useState('')
   const [settlement, setSettlement] = useState(null)
   const [weekTotal, setWeekTotal] = useState(0)
@@ -87,7 +76,13 @@ export default function GroupView() {
   const [billPersonalTotals, setBillPersonalTotals] = useState({})
   const [categories, setCategories] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
+  // "/" jumps straight to this (see the keydown effect below), same
+  // shortcut GitHub/Slack use for their own search boxes — so it needs a
+  // real DOM node to call .focus() on, not just the value/onChange state
+  // every other input on this page gets away with.
+  const searchInputRef = useRef(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  useEscapeKey(() => setFiltersOpen(false), filtersOpen)
   const [selectedTagIds, setSelectedTagIds] = useState(new Set())
   const [tagMatchMode, setTagMatchMode] = useState('any')
   // null until initialized from real data (see the effect below) — the
@@ -285,76 +280,34 @@ export default function GroupView() {
     if (billsPage > maxPage) setBillsPage(maxPage)
   }, [bills, filteredBills.length, billsPage])
 
-  // The keyboard-selected row resets to the top on every page flip (arrows
-  // or the Pagination buttons alike — both just set billsPage), and is
-  // clamped if the page's own bill count shrinks out from under it (a
-  // filter narrowing the results while staying on the same page).
+  // "/" jumps straight to the search box, from anywhere on the page —
+  // independent of the list-navigation hook below (works in select mode,
+  // or with zero bills currently matching a filter, since the box itself
+  // is still there to change either of those).
   useEffect(() => {
-    setFocusedBillIndex(0)
-  }, [billsPage])
-  useEffect(() => {
-    setFocusedBillIndex((i) => Math.min(i, Math.max(0, visibleBills.length - 1)))
-  }, [visibleBills.length])
-
-  // Brings the keyboard-selected row into view as ↑/↓ moves it past the
-  // edge of the screen — the same "shouldn't have to go hunting for it"
-  // fix as the sticky pagination bar (see .pagination in styles.css),
-  // just for the row itself instead of the page controls.
-  useEffect(() => {
-    if (keyboardNavActive) focusedRowRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [focusedBillIndex, billsPage, keyboardNavActive])
-
-  // ←/→ flip pages, ↑/↓ move the selected bill, Enter opens it — mirrors
-  // exactly what the mouse-driven Pagination controls and bill links below
-  // already do, just from the keyboard. Ignored while typing into a field
-  // (the search box, a price bound, etc.) or in select mode, where arrow
-  // keys/Enter already mean something else (native text-field/checkbox
-  // behavior). Enter itself only fires once the keyboard's actually been
-  // used to move the selection (keyboardNavActive) — otherwise Tabbing to
-  // an unrelated button and pressing Enter to activate it would also,
-  // confusingly, jump to whatever bill happened to be at index 0.
-  useEffect(() => {
-    function isTypingTarget(el) {
-      return Boolean(el) && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
-    }
     function onKeyDown(e) {
-      if (e.key === 'Tab') {
-        setKeyboardNavActive(false)
-        return
-      }
-      if (selectMode || isTypingTarget(document.activeElement) || visibleBills.length === 0) return
-      const maxPage = Math.max(0, Math.ceil(filteredBills.length / BILLS_PAGE_SIZE) - 1)
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault()
-        setKeyboardNavActive(true)
-        setBillsPage((p) => Math.max(0, p - 1))
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault()
-        setKeyboardNavActive(true)
-        setBillsPage((p) => Math.min(maxPage, p + 1))
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        // The first ↑/↓ of a visit just reveals the highlight at whatever
-        // it's already sitting on (the top of the page, index 0) rather
-        // than immediately jumping past it to index 1 — otherwise the very
-        // first bill on a page could never actually be seen highlighted.
-        if (!keyboardNavActive) setKeyboardNavActive(true)
-        else setFocusedBillIndex((i) => Math.min(visibleBills.length - 1, i + 1))
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        if (!keyboardNavActive) setKeyboardNavActive(true)
-        else setFocusedBillIndex((i) => Math.max(0, i - 1))
-      } else if (e.key === 'Enter' && keyboardNavActive) {
-        const bill = visibleBills[focusedBillIndex]
-        if (bill) {
-          e.preventDefault()
-          navigate(`/groups/${groupId}/bills/${bill.id}`)
-        }
-      }
+      if (e.key !== '/' || isTypingTarget(document.activeElement)) return
+      e.preventDefault()
+      searchInputRef.current?.focus()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selectMode, visibleBills, focusedBillIndex, filteredBills.length, keyboardNavActive, groupId, navigate])
+  }, [])
+
+  // ←/→ flip pages, ↑/↓ move the selected bill, Enter opens it — see
+  // useListKeyboardNav.js. Disabled in select mode, where arrow keys/Enter
+  // already mean something else (moving through checkboxes).
+  const billNav = useListKeyboardNav({
+    page: billsPage,
+    setPage: setBillsPage,
+    maxPage: Math.max(0, Math.ceil(filteredBills.length / BILLS_PAGE_SIZE) - 1),
+    itemCount: visibleBills.length,
+    disabled: selectMode,
+    onOpen: (index) => {
+      const bill = visibleBills[index]
+      if (bill) navigate(`/groups/${groupId}/bills/${bill.id}`)
+    },
+  })
 
   // A fresh filter (or a changed price range) should start back on page 1
   // of its own results, not strand you on whatever page you happened to be
@@ -694,9 +647,10 @@ export default function GroupView() {
         <>
           <div className="receipt-tape bill-search-tape">
             <input
+              ref={searchInputRef}
               type="text"
               className="guide-search-input"
-              placeholder="Search bills…"
+              placeholder="Search bills… (/)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="Search bills"
@@ -831,7 +785,7 @@ export default function GroupView() {
         </p>
       )}
 
-      <div className="bill-groups" onMouseMove={() => keyboardNavActive && setKeyboardNavActive(false)}>
+      <div className="bill-groups" onMouseMove={billNav.onListMouseMove}>
         {billGroups.map((monthGroup) => (
           <div key={monthGroup.key} className="bill-month-group">
             <h3 className="bill-month-divider">{monthGroup.label}</h3>
@@ -870,12 +824,12 @@ export default function GroupView() {
                       </span>
                     )
                     const flatIndex = visibleBills.findIndex((b) => b.id === bill.id)
-                    const isFocused = keyboardNavActive && !selectMode && flatIndex === focusedBillIndex
+                    const isFocused = billNav.active && !selectMode && flatIndex === billNav.focusedIndex
                     return (
                       <li
                         key={bill.id}
-                        className={`bill-list-item${isFocused ? ' bill-row-focused' : ''}`}
-                        ref={isFocused ? focusedRowRef : null}
+                        className={`bill-list-item${isFocused ? ' list-row-focused' : ''}`}
+                        ref={isFocused ? billNav.rowRef : null}
                       >
                         {selectMode ? (
                           <label className="card-list-item bill-select-row">

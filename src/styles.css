@@ -344,6 +344,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   font-weight: 500;
 }
 .card-list-item:hover { border-color: var(--accent); }
+/* The ↑/↓-selected row (src/lib/useListKeyboardNav.js, shared by
+   GroupView.jsx's bill list and Groups.jsx's group list) — same accent
+   used for hover/focus elsewhere in the app, just on the whole row
+   instead of only the border, so it's readable at a glance while
+   scanning down the list with the keyboard rather than a mouse. */
+.list-row-focused .card-list-item { border-color: var(--accent); background: var(--accent-light); }
 .chevron { color: var(--ink-soft); }
 .card-list-item-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .card-list-item-note {
@@ -415,11 +421,6 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   gap: 8px;
 }
 .bill-list-item .card-list-item { flex: 1; }
-/* The ↑/↓-selected row (GroupView.jsx's keyboard nav) — same accent used
-   for hover/focus elsewhere in the app, just on the whole row instead of
-   only the border, so it's readable at a glance while scanning down the
-   list with the keyboard rather than a mouse. */
-.bill-row-focused .card-list-item { border-color: var(--accent); background: var(--accent-light); }
 
 .bill-list-controls { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); margin-bottom: var(--space-lg); }
 .bill-list-controls .import-link { margin-bottom: 0; }

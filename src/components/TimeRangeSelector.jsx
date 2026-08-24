@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { isTypingTarget } from '../lib/isTypingTarget'
 
 const GRANULARITIES = ['week', 'month', 'year', 'all']
 
@@ -52,9 +53,6 @@ export default function TimeRangeSelector({
   // not rendering there — there's no "previous all-time" to step to.
   useEffect(() => {
     if (granularity === 'all') return
-    function isTypingTarget(el) {
-      return Boolean(el) && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
-    }
     function onKeyDown(e) {
       if (isTypingTarget(document.activeElement)) return
       if (e.key === 'ArrowLeft') {
