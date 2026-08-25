@@ -1286,7 +1286,7 @@ input.item-editable-input {
 }
 .category-label { display: flex; align-items: center; }
 .category-add-form { flex-wrap: wrap; }
-.color-swatch-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.color-swatch-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .color-swatch {
   width: 22px;
   height: 22px;
@@ -1296,6 +1296,36 @@ input.item-editable-input {
   padding: 0;
 }
 .color-swatch.selected { border-color: var(--ink); }
+
+/* The native color-input "swatch" — styled to read as one more circle in
+   the row rather than the square, chrome-heavy default most browsers give
+   <input type="color">. */
+.color-swatch-custom {
+  -webkit-appearance: none;
+  appearance: none;
+  overflow: hidden;
+}
+.color-swatch-custom::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
+.color-swatch-custom::-webkit-color-swatch { border: none; border-radius: 50%; }
+.color-swatch-custom::-moz-color-swatch { border: none; border-radius: 50%; }
+
+/* The dot next to an existing category doubling as its color button —
+   .category-dot alone still covers every read-only dot elsewhere (item
+   rows, stats pages, filters); this only resets the extra chrome a real
+   <button> brings that a <span> never had. */
+.category-dot-button { border: none; padding: 0; cursor: pointer; }
+.category-color-picker-wrap { position: relative; display: inline-flex; }
+.category-color-popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: var(--space-sm);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  z-index: 10;
+}
 
 /* ---------- Recurring bills ---------- */
 .recurring-form { display: flex; flex-direction: column; gap: var(--space-sm); align-items: stretch; }

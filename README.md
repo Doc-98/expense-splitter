@@ -345,6 +345,16 @@ This lives entirely separate from `settlement.js` — category totals are a
 "where did the money go" question, nothing to do with who owes whom, so
 there was no reason to entangle the two.
 
+Every category has a color, shown as a small dot wherever the category
+itself is (Bill view, stats, this settings list). It's picked from a
+small ten-color preset row (`CATEGORY_COLORS` in `src/lib/categories.js`)
+plus the browser's own color picker for anything outside it
+(`ColorSwatchPicker.jsx`) — both when adding a category and, since a color
+picked at creation isn't necessarily one you're stuck with, afterward too:
+clicking an existing category's dot in Group Settings
+(`CategoryColorButton.jsx`) reopens the same picker in a small popover and
+applies whatever's chosen immediately, no separate save step.
+
 ## Spending thresholds
 
 A personal monthly budget per category, set at **account menu → Spending

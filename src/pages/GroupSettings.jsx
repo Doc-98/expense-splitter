@@ -10,10 +10,19 @@ import {
   requestClaimLink,
   deleteGuestPermanently,
 } from '../lib/members'
-import { fetchCategories, addCategory, renameCategory, deleteCategory, CATEGORY_COLORS } from '../lib/categories'
+import {
+  fetchCategories,
+  addCategory,
+  renameCategory,
+  deleteCategory,
+  updateCategoryColor,
+  CATEGORY_COLORS,
+} from '../lib/categories'
 import { shareOrCopyText } from '../lib/shareText'
 import { computeBalances, computeDailyTotalsForUser } from '../lib/settlement'
 import TypedConfirmModal from '../components/TypedConfirmModal'
+import ColorSwatchPicker from '../components/ColorSwatchPicker'
+import CategoryColorButton from '../components/CategoryColorButton'
 
 export default function GroupSettings() {
   const { groupId } = useParams()
@@ -175,6 +184,21 @@ export default function GroupSettings() {
       setEditingCategoryId(null)
       loadCategories()
     } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  // Applied straight away, no confirm step — same as picking a color when
+  // first adding a category, and easy enough to undo (click the dot again)
+  // that a confirmation would only be friction.
+  async function handleCategoryColorChange(categoryId, color) {
+    setError(null)
+    const previous = categories
+    setCategories((cats) => cats.map((c) => (c.id === categoryId ? { ...c, color } : c)))
+    try {
+      await updateCategoryColor(categoryId, color)
+    } catch (err) {
+      setCategories(previous)
       setError(err.message)
     }
   }
@@ -487,7 +511,10 @@ export default function GroupSettings() {
                   saveCategoryRename(cat.id)
                 }}
               >
-                <span className="category-dot" style={{ background: cat.color }} />
+                <CategoryColorButton
+                  color={cat.color}
+                  onChangeColor={(color) => handleCategoryColorChange(cat.id, color)}
+                />
                 <input
                   value={editingCategoryName}
                   onChange={(e) => setEditingCategoryName(e.target.value)}
@@ -503,7 +530,10 @@ export default function GroupSettings() {
             ) : (
               <>
                 <span className="category-label">
-                  <span className="category-dot" style={{ background: cat.color }} />
+                  <CategoryColorButton
+                    color={cat.color}
+                    onChangeColor={(color) => handleCategoryColorChange(cat.id, color)}
+                  />
                   {cat.name}
                 </span>
                 <span className="member-list-actions">
@@ -536,18 +566,7 @@ export default function GroupSettings() {
           onChange={(e) => setNewCategoryName(e.target.value)}
           placeholder="New category"
         />
-        <div className="color-swatch-row">
-          {CATEGORY_COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              className={`color-swatch ${newCategoryColor === c ? 'selected' : ''}`}
-              style={{ background: c }}
-              onClick={() => setNewCategoryColor(c)}
-              aria-label={`Choose color ${c}`}
-            />
-          ))}
-        </div>
+        <ColorSwatchPicker value={newCategoryColor} onChange={setNewCategoryColor} />
         <button type="submit" className="btn-primary">
           Add category
         </button>
