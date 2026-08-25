@@ -12,6 +12,32 @@ const PLOT_H = VIEW_H - MARGIN.top - MARGIN.bottom
 // unreadable at ~30 daily points crammed into 600 logical units wide.
 const MAX_LABELS = 7
 
+// Turns straight point-to-point segments into a smooth curve through every
+// point — a Catmull-Rom spline, converted to the cubic Beziers SVG paths
+// actually use (the standard way to draw one: each segment's two control
+// points come from its neighbors on either side, clamped to the curve's
+// own edges at the first/last point since there's no "point before the
+// start"/"point after the end" to lean on there). 1/8 is a gentle enough
+// tension that the curve won't visibly overshoot below zero at a sharp dip
+// between two tall points, while still reading as a real curve rather than
+// barely-rounded corners.
+function smoothPath(pts) {
+  if (pts.length < 2) return ''
+  const seg = [`M${pts[0][0]},${pts[0][1]}`]
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i]
+    const p1 = pts[i]
+    const p2 = pts[i + 1]
+    const p3 = pts[i + 2] || p2
+    const c1x = p1[0] + (p2[0] - p0[0]) / 8
+    const c1y = p1[1] + (p2[1] - p0[1]) / 8
+    const c2x = p2[0] - (p3[0] - p1[0]) / 8
+    const c2y = p2[1] - (p3[1] - p1[1]) / 8
+    seg.push(`C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`)
+  }
+  return seg.join(' ')
+}
+
 // A deliberately minimal line chart — no numeric y-axis (its only tick is
 // the max value, labeled directly above the highest point, since the
 // baseline at zero is already visually obvious) — hand-rolled SVG rather
@@ -35,8 +61,9 @@ export default function LineChart({ points, format, color = 'var(--accent)' }) {
   const y = (amount) => MARGIN.top + PLOT_H - (amount / maxAmount) * PLOT_H
   const baselineY = MARGIN.top + PLOT_H
 
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(p.amount)}`).join(' ')
-  const areaPath = `${linePath} L${x(points.length - 1)},${baselineY} L${x(0)},${baselineY} Z`
+  const coords = points.map((p, i) => [x(i), y(p.amount)])
+  const linePath = points.length === 1 ? '' : smoothPath(coords)
+  const areaPath = linePath ? `${linePath} L${x(points.length - 1)},${baselineY} L${x(0)},${baselineY} Z` : ''
 
   // Always show the first and last label (the range's own edges), plus
   // roughly MAX_LABELS - 2 more spread evenly between them — skipping
