@@ -182,6 +182,19 @@ code {
   flex: 1;
 }
 
+/* Wraps a title + a smaller subtitle line together as one flex item, for
+   pages that need both (currently just Group Stats: "Group Stats" plus
+   the group's own name underneath) — .page-header h1's own flex: 1 above
+   still applies to the nested <h1> here (it's a descendant of
+   .page-header either way), it's just inert since the <h1> itself isn't
+   a direct flex child of .page-header anymore; this wrapper is. */
+.page-header-titles { flex: 1; min-width: 0; }
+.page-header-subtitle { margin: 2px 0 0; font-size: 13px; font-weight: 400; color: var(--ink-soft); }
+/* A "See ___" link living in the header row itself rather than below it
+   (unlike .see-stats-link, which is a standalone block underneath a
+   page's content) — just needs to not wrap awkwardly next to the title. */
+.page-header-graphs-link { flex-shrink: 0; white-space: nowrap; }
+
 .brand {
   font-family: var(--font-display);
   font-size: 28px;
@@ -225,11 +238,13 @@ code {
 
 /* ---------- Buttons & inputs ---------- */
 .btn-primary, .btn-secondary, .btn-danger {
+  display: inline-block;
   border: none;
   border-radius: var(--radius);
   padding: 12px 18px;
   font-weight: 600;
   font-size: 15px;
+  text-decoration: none;
   cursor: pointer;
   transition: transform 0.05s ease, opacity 0.15s ease;
 }
@@ -430,14 +445,15 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    into where Select would have been. */
 .recurring-bills-btn {
   margin-left: auto;
-  /* A <Link> renders as a plain inline <a> by default (unlike a <button>,
-     which is inline-block on its own) — needs this to actually take
-     .btn-primary's padding rather than just wrapping tight to its text. */
-  display: inline-block;
-  /* Font size, padding, single line — everything else comes from
-     .btn-primary itself now, matching "Add" exactly. Longer label than
-     "Add" means a wider button; left alone deliberately rather than
-     shrinking the text back down to force it smaller. */
+  text-align: center;
+  line-height: 1.25;
+  /* Smaller than .btn-primary's own 15px default — two lines at that size
+     read as a noticeably bigger button than "Add" right above it, which
+     is the one thing this shouldn't do. Color still matches "Add"
+     (.btn-primary, inherited) — it's specifically the size/shape that
+     needs to stay smaller, not the color. */
+  font-size: 12px;
+  padding: 8px 16px;
 }
 
 /* Reuses the same "receipt tape" search bar treatment as the in-app
@@ -1427,6 +1443,9 @@ input.item-editable-input {
 
 .line-chart-wrap { width: 100%; margin-bottom: var(--space-lg); }
 .line-chart { width: 100%; height: auto; display: block; overflow: visible; }
+/* Same rough height a real chart would occupy, so the page doesn't jump
+   when a period with no bills renders this instead of the SVG. */
+.line-chart-empty { display: flex; align-items: center; justify-content: center; min-height: 140px; }
 .line-chart-max-label { font-size: 11px; fill: var(--ink-soft); font-family: var(--font-mono); }
 .line-chart-baseline { stroke: var(--border); stroke-width: 1; }
 .line-chart-x-label { font-size: 10px; fill: var(--ink-soft); }

@@ -50,7 +50,13 @@ export default function LineChart({ points, format, color = 'var(--accent)' }) {
   const [activeIndex, setActiveIndex] = useState(null)
   const gradientId = useId()
 
-  if (points.length === 0) return null
+  if (points.length === 0) {
+    return (
+      <div className="line-chart-wrap line-chart-empty">
+        <p className="muted">No bills in this period</p>
+      </div>
+    )
+  }
 
   // The real highest point, for the label — kept separate from the divide-
   // by-zero guard below, so an all-zero period honestly shows "€0.00" at
@@ -70,6 +76,14 @@ export default function LineChart({ points, format, color = 'var(--accent)' }) {
   // labels rather than shrinking or rotating text to fit.
   const labelStep = Math.max(1, Math.ceil(points.length / MAX_LABELS))
   const showLabel = (i) => i === 0 || i === points.length - 1 || i % labelStep === 0
+
+  // Shrinks the invisible hover/tap target once points sit closer together
+  // than its own default size would allow — a day-granularity chart over
+  // 4 months (~120 points) packs them a few logical units apart, and a
+  // fixed 10-unit-radius target would overlap several neighbors at once,
+  // making hover flicker between the wrong points. Half the gap between
+  // points, capped at the original 10, keeps neighbors from overlapping.
+  const hitRadius = points.length > 1 ? Math.min(10, PLOT_W / (points.length - 1) / 2) : 10
 
   const active = activeIndex !== null ? points[activeIndex] : null
   // Clamps the tooltip's own x so it never renders past the chart's edges
@@ -109,7 +123,7 @@ export default function LineChart({ points, format, color = 'var(--accent)' }) {
             <circle
               cx={x(i)}
               cy={y(p.amount)}
-              r={10}
+              r={hitRadius}
               fill="transparent"
               tabIndex={0}
               role="button"
