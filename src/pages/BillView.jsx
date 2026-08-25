@@ -291,15 +291,20 @@ export default function BillView() {
     // buildExtractionPrompt() in receipt-parsing/extractionPrompt.js), this
     // just covers the odd capitalization drift the same way
     // parseClassifyResponse() does for the bill-categorization wizard.
-    // Anything that doesn't match (including a plain missing/null category,
-    // e.g. from the OCR-only strategy, which never suggests one at all)
-    // falls back to uncategorized, same as every other item added by hand.
     const categoryIdByName = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]))
     for (const p of parsedItems) {
       const unitPrice = Number(p.unit_price) || 0
       const quantity = Number(p.quantity) || 1
-      const categoryId = typeof p.category === 'string' ? categoryIdByName.get(p.category.toLowerCase()) : null
-      await insertItemWithShares(p.name || 'Item', unitPrice, quantity, defaultBuyerIds, categoryId || null)
+      const matchedCategoryId = typeof p.category === 'string' ? categoryIdByName.get(p.category.toLowerCase()) : null
+      // Nothing the model was confident enough to name on its own (including
+      // every item from the OCR-only strategy, which never suggests one at
+      // all) falls back to whatever category was already set on the bill
+      // itself, if any — chosen by a person before scanning, presumably
+      // because most of what's on this particular receipt is that kind of
+      // thing. Only when the bill has no category either does the item end
+      // up genuinely uncategorized, same as before.
+      const categoryId = matchedCategoryId || bill?.category_id || null
+      await insertItemWithShares(p.name || 'Item', unitPrice, quantity, defaultBuyerIds, categoryId)
     }
     loadItems()
   }

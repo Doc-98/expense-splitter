@@ -231,11 +231,15 @@ counter reduced to one word like "DELI" or the Italian "GASTRONOMIA" is
 common, and the model's told explicitly that guessing the broad category
 is enough, it doesn't need to identify the literal product). A confident
 suggestion is applied straight to the new item, same as picking one by
-hand; an unconfident one is left uncategorized. Either way nothing is
-final — every scanned item already gets its own editable category picker
-in Bill view, the same one used for manual items, so a wrong or missing
-guess is a one-tap fix rather than a blocker. A group with no categories
-yet skips the whole category section of the prompt.
+hand. An unconfident one falls back to whatever category is already set
+on the bill itself, if any — chosen by a person before scanning,
+presumably because most of what's on that particular receipt is that
+kind of thing — and only ends up genuinely uncategorized when the bill
+has no category either. Either way nothing is final — every scanned item
+already gets its own editable category picker in Bill view, the same one
+used for manual items, so a wrong or missing guess is a one-tap fix
+rather than a blocker. A group with no categories yet skips the whole
+category section of the prompt.
 
 The **old, server-side approach still exists** in
 `supabase/functions/parse-receipt/` (calls Claude using a single shared,
