@@ -75,3 +75,67 @@ export function formatSettlementRecap(groupName, transactions, members, formatMo
 
   return lines.join('\n')
 }
+
+// Both stats recaps below take their rows already fully resolved (names
+// looked up, month keys turned into labels, etc.) — GroupStats.jsx and
+// AccountStats.jsx both already have all of that on hand from what's on
+// screen, so there's nothing left for these to look up themselves. Same
+// row shapes feed the printable versions of each (PrintableRecap.jsx),
+// built once per page rather than twice.
+export function formatGroupStatsRecap(
+  { groupName, periodLabel, groupTotal, billCount, avgBill, peopleRows, categoryRows, monthlyRows, biggestBills },
+  formatMoney
+) {
+  const lines = [`*Stats — ${groupName}*`, `_${periodLabel}_`, '']
+  lines.push(`Total spent: ${formatMoney(groupTotal)}`)
+  lines.push(`${billCount} bill${billCount === 1 ? '' : 's'} — avg ${formatMoney(avgBill)}`)
+
+  if (peopleRows.length > 0) {
+    lines.push('', '*By person*')
+    for (const p of peopleRows) lines.push(`${p.name} — fronted ${formatMoney(p.fronted)}, share ${formatMoney(p.share)}`)
+  }
+
+  if (categoryRows.length > 0) {
+    lines.push('', '*By category*')
+    for (const c of categoryRows) lines.push(`${c.name} — ${formatMoney(c.amount)}`)
+  }
+
+  if (monthlyRows.length > 0) {
+    lines.push('', '*By month*')
+    for (const m of monthlyRows) lines.push(`${m.label} — ${formatMoney(m.amount)}`)
+  }
+
+  if (biggestBills.length > 0) {
+    lines.push('', '*Biggest bills*')
+    for (const b of biggestBills) lines.push(`${b.title} (${b.paidByLabel}) — ${formatMoney(b.total)}`)
+  }
+
+  return lines.join('\n')
+}
+
+export function formatAccountStatsRecap(
+  { periodLabel, paid, consumed, overallBalance, categoryRows, byGroupRows, monthlyRows },
+  formatMoney
+) {
+  const lines = ['*Your stats*', `_${periodLabel}_`, '']
+  lines.push(`You fronted: ${formatMoney(paid)}`)
+  lines.push(`Your share: ${formatMoney(consumed)}`)
+  lines.push(`Overall balance (now): ${overallBalance >= 0 ? '+' : ''}${formatMoney(overallBalance)}`)
+
+  if (categoryRows.length > 0) {
+    lines.push('', '*By category*')
+    for (const c of categoryRows) lines.push(`${c.name} — ${formatMoney(c.amount)}`)
+  }
+
+  if (byGroupRows.length > 0) {
+    lines.push('', '*By group*')
+    for (const g of byGroupRows) lines.push(`${g.name} — fronted ${formatMoney(g.fronted)}, share ${formatMoney(g.share)}`)
+  }
+
+  if (monthlyRows.length > 0) {
+    lines.push('', '*By month (fronted)*')
+    for (const m of monthlyRows) lines.push(`${m.label} — ${formatMoney(m.amount)}`)
+  }
+
+  return lines.join('\n')
+}

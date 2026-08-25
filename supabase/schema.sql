@@ -673,6 +673,91 @@ end;
 $$;
 
 -- ============================================================================
+-- delete_guest_permanently: hard-deletes an *archived* guest's
+-- group_members row — unlike every other "guest is gone" path (see
+-- setGuestActive in members.js), this can't be undone, so it's both
+-- admin-gated and only allowed once the guest has zero history anywhere
+-- in the group: not a bill's paid_by, not a bill_payers row, not an
+-- item_shares row, not a payment on either side, not referenced by a
+-- recurring template.
+--
+-- That last check matters more than it looks. bills.paid_by, bill_payers,
+-- and payments all reference group_members.id with a plain (non-cascading)
+-- foreign key, so a raw delete against any of those would simply fail —
+-- annoying, but safe. item_shares.member_id is declared `on delete
+-- cascade`, though, specifically so deleting an *item* cleans up its own
+-- shares; deleting a *person* through that same cascade would instead
+-- silently vanish their share off of someone else's item, leaving its
+-- total_price divided among fewer people and quietly inflating what
+-- everyone else still on it owes — no error, just a wrong number the next
+-- time anyone looks. Requiring zero references everywhere, rather than
+-- leaning on whichever tables happen to have a blocking FK, is what
+-- actually makes this safe rather than safe-by-accident.
+--
+-- Restricted to an *archived* guest (active = false) on top of all that —
+-- one more small guard against deleting someone still genuinely part of
+-- the group's day-to-day, on the theory that "remove, then delete" is a
+-- deliberate two-step you had to mean, not "delete" alone catching
+-- somebody active by mistake.
+-- ============================================================================
+create function public.delete_guest_permanently(target_member_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_group_id uuid;
+  target_user_id uuid;
+  target_active boolean;
+  caller_participant_id uuid;
+  current_admin_id uuid;
+  has_history boolean;
+begin
+  select group_id, user_id, active into target_group_id, target_user_id, target_active
+    from group_members where id = target_member_id;
+
+  if target_group_id is null then
+    raise exception 'Guest not found';
+  end if;
+
+  if target_user_id is not null then
+    raise exception 'Only guests can be permanently deleted';
+  end if;
+
+  if target_active then
+    raise exception 'Remove this guest before deleting them permanently';
+  end if;
+
+  select id into caller_participant_id from group_members
+    where group_id = target_group_id and user_id = auth.uid() and active = true;
+
+  select admin_id into current_admin_id from groups where id = target_group_id;
+
+  if caller_participant_id is null or caller_participant_id <> current_admin_id then
+    raise exception 'Only the group admin can permanently delete a guest';
+  end if;
+
+  select
+    exists(select 1 from bills where paid_by = target_member_id)
+    or exists(select 1 from bill_payers where member_id = target_member_id)
+    or exists(select 1 from item_shares where member_id = target_member_id)
+    or exists(select 1 from payments where from_member = target_member_id or to_member = target_member_id)
+    or exists(
+      select 1 from recurring_bills
+      where paid_by = target_member_id or target_member_id = any(split_member_ids)
+    )
+  into has_history;
+
+  if has_history then
+    raise exception 'This guest is still on at least one bill, payment, or recurring template — remove them from those first';
+  end if;
+
+  delete from group_members where id = target_member_id;
+end;
+$$;
+
+-- ============================================================================
 -- delete_all_group_bills: wipes every bill in a group in one step, optionally
 -- taking its payment (settle-up) history along with it.
 --

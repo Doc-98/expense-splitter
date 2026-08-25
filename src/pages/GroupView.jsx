@@ -661,7 +661,7 @@ export default function GroupView() {
         {bills && bills.length > 0 && !searchOpen && (
           <button
             type="button"
-            className={`btn-secondary ${searchQuery || filtersActive ? 'bill-search-toggle-active' : ''}`}
+            className={`btn-secondary bill-search-toggle ${searchQuery || filtersActive ? 'bill-search-toggle-active' : ''}`}
             onClick={() => setSearchOpen(true)}
           >
             Search{searchQuery || filtersActive ? ' •' : ''}
@@ -780,14 +780,21 @@ export default function GroupView() {
       </form>
 
       <div className="bill-list-controls">
-        <Link to={`/groups/${groupId}/recurring`} className="btn-link import-link">
-          Recurring bills
-        </Link>
         {bills && bills.length > 0 && (
           <button type="button" className="btn-link" onClick={toggleSelectMode}>
             {selectMode ? 'Cancel' : 'Select'}
           </button>
         )}
+        {/* Same wording as the "Add" button above ("Add ___"), just the
+            generic noun instead of a specific bill — pill-styled like a
+            real button (was a bare btn-link, which read as passive inline
+            text rather than a button worth tapping) and pinned to the
+            right so it sits under "Add" rather than under "Select". */}
+        <Link to={`/groups/${groupId}/recurring`} className="btn-secondary recurring-bills-btn">
+          Add Recurring
+          <br />
+          Bill ↻
+        </Link>
       </div>
 
       {selectMode && (

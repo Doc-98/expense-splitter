@@ -12,9 +12,12 @@ import { getPeriodRange, filterByDateRange, getStatsWindowStart, isViewCovered }
 import { deriveBillsItemsShares } from '../lib/deriveBillData'
 import { comparePeriods } from '../lib/periodComparison'
 import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
+import { formatGroupStatsRecap } from '../lib/recapText'
 import { useCurrency } from '../context/CurrencyContext'
 import TimeRangeSelector from '../components/TimeRangeSelector'
 import ComparisonBadge from '../components/ComparisonBadge'
+import ShareButton from '../components/ShareButton'
+import { PrintableGroupStatsRecap } from '../components/PrintableRecap'
 
 function monthKey(dateStr) {
   const d = new Date(dateStr)
@@ -31,6 +34,12 @@ export default function GroupStats() {
   const { groupId } = useParams()
   const { format } = useCurrency()
 
+  // Only ever used for the printable/text recap's own title ("Stats —
+  // {name}") — the page itself never shows it, relying on the nav context
+  // you arrived through instead. Not worth its own cache-hydrated loading
+  // state on top of that; empty just means the recap's header is briefly
+  // titled "Stats" alone until this resolves.
+  const [groupName, setGroupName] = useState('')
   const [members, setMembers] = useState([])
   const [categories, setCategories] = useState([])
   const [rawBills, setRawBills] = useState([])
@@ -106,12 +115,14 @@ export default function GroupStats() {
       const windowStart = getStatsWindowStart()
       setHistoryWindowStart(windowStart)
 
-      // Members, categories, and the recent window of bills don't depend
-      // on each other — fetch all three at once instead of stacking three
-      // round-trips in a row before anything on this page can render.
-      const [membersData, categoriesData, recentBillsData] = await Promise.all([
+      // Members, categories, the group's own name, and the recent window
+      // of bills don't depend on each other — fetch all four at once
+      // instead of stacking round-trips in a row before anything on this
+      // page can render.
+      const [membersData, categoriesData, groupResult, recentBillsData] = await Promise.all([
         fetchAllGroupMembers(groupId),
         fetchCategories(groupId),
+        supabase.from('groups').select('name').eq('id', groupId).single(),
         fetchAllRows(() =>
           supabase
             .from('bills')
@@ -123,6 +134,7 @@ export default function GroupStats() {
       ])
       setMembers(membersData)
       setCategories(categoriesData)
+      if (groupResult.data) setGroupName(groupResult.data.name)
       // Deliberately doesn't touch historyStatus here — if this group's
       // full history was already cached from a previous visit (status
       // already 'complete'), this recent-window refresh shouldn't flash
@@ -163,6 +175,7 @@ export default function GroupStats() {
   useEffect(() => {
     const cached = groupStatsCache.get(groupId)
     if (cached) {
+      setGroupName(cached.groupName || '')
       setMembers(cached.members)
       setCategories(cached.categories)
       setRawBills(cached.rawBills)
@@ -177,6 +190,7 @@ export default function GroupStats() {
   useEffect(() => {
     if (!members.length) return
     groupStatsCache.set(groupId, {
+      groupName,
       members,
       categories,
       rawBills,
@@ -185,7 +199,7 @@ export default function GroupStats() {
       historyStatus,
       historyWindowStart,
     })
-  }, [groupId, members, categories, rawBills, rawItems, rawShares, historyStatus, historyWindowStart])
+  }, [groupId, groupName, members, categories, rawBills, rawItems, rawShares, historyStatus, historyWindowStart])
 
   // Whether the currently selected period (and its "previous period"
   // comparison, if it has one) is fully covered by whatever's actually in
@@ -256,6 +270,32 @@ export default function GroupStats() {
   const biggestBills = [...billTotals].sort((a, b) => b.total - a.total).slice(0, 5)
 
   const peopleWithData = members.filter((m) => totals[m.id])
+
+  // Feeds both the "Share as text" and "Download as PDF" recap options
+  // (see ShareButton/PrintableGroupStatsRecap below) — one object, built
+  // once from whatever's already on screen, rather than each of those two
+  // re-deriving the same rows in its own format.
+  const recap = {
+    groupName,
+    periodLabel: yearLabel ? `${yearLabel} — ${label}` : label,
+    groupTotal,
+    billCount,
+    avgBill,
+    peopleRows: peopleWithData.map((m) => ({
+      id: m.id,
+      name: m.name,
+      fronted: totals[m.id]?.paid || 0,
+      share: totals[m.id]?.consumed || 0,
+    })),
+    categoryRows,
+    monthlyRows: showMonthly ? monthlyRows.map(([key, amount]) => ({ key, label: monthLabel(key), amount })) : [],
+    biggestBills: biggestBills.map((b) => ({
+      id: b.id,
+      title: b.title,
+      paidByLabel: b.payers?.length > 0 ? b.payers.map((p) => nameOf(p.member_id)).join(', ') : nameOf(b.paid_by),
+      total: b.total,
+    })),
+  }
 
   return (
     <div className="page">
@@ -394,6 +434,15 @@ export default function GroupStats() {
           </ul>
         </>
       )}
+
+      <div className="recap-actions">
+        <ShareButton
+          label="Share recap"
+          title={`Stats — ${groupName || 'group'}`}
+          getText={() => formatGroupStatsRecap(recap, format)}
+        />
+      </div>
+      <PrintableGroupStatsRecap recap={recap} />
     </div>
   )
 }

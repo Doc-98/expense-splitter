@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
 import { fetchGroupMembers, addGuest } from '../lib/members'
+import { fetchAllRows } from '../lib/fetchAllRows'
 import { parseSplitwiseCsv, checkImportBalances } from '../lib/splitwiseImport'
 import { splitEvenly } from '../lib/splitEvenly'
 import MultiPayerModal from '../components/MultiPayerModal'
@@ -391,12 +392,27 @@ export default function ImportBills() {
       // if the export had one — comparing what this import just produced
       // against what Splitwise itself last calculated, so the two either
       // visibly agree or visibly don't rather than silently maybe-not.
+      //
+      // Folds in this group's existing payments (any settle-up already
+      // recorded before this import — including, awkwardly, one left
+      // behind by a previous import whose bills were deleted without also
+      // checking "delete payments too") rather than checking the fresh
+      // bills in isolation. The live Settle Up page always includes every
+      // payment in the group; a check that didn't would happily report
+      // "matches" here and then visibly disagree with that page the
+      // moment you actually look at it — a real, if confusing, way for
+      // this to have looked right immediately after import and wrong five
+      // minutes later.
       let balanceCheck = null
       if (Object.keys(parsed.finalBalances).length > 0) {
+        const existingPayments = await fetchAllRows(() =>
+          supabase.from('payments').select('from_member, to_member, amount', { count: 'exact' }).eq('group_id', groupId)
+        )
         balanceCheck = checkImportBalances({
           bills: insertedBills,
           items: insertedItems,
           itemShares: insertedShares,
+          payments: existingPayments.map((p) => ({ from_user: p.from_member, to_user: p.to_member, amount: p.amount })),
           finalBalances: parsed.finalBalances,
           nameToId: ids,
         })

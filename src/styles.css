@@ -422,8 +422,26 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .bill-list-item .card-list-item { flex: 1; }
 
-.bill-list-controls { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); margin-bottom: var(--space-lg); }
-.bill-list-controls .import-link { margin-bottom: 0; }
+.bill-list-controls { display: flex; align-items: center; gap: var(--space-md); margin-bottom: var(--space-lg); }
+/* Pinned to the row's right edge regardless of whether "Select" (its own
+   sibling here, left-aligned by just being first in source order) is
+   currently rendered at all — an empty group hides Select entirely, and
+   this should still land under "Add" above either way, not drift left
+   into where Select would have been. */
+.recurring-bills-btn {
+  margin-left: auto;
+  /* A <Link> renders as a plain inline <a> by default (unlike a <button>,
+     which is inline-block on its own) — needs this to actually take the
+     padding/centering below rather than just wrapping tight to its text. */
+  display: inline-block;
+  text-align: center;
+  line-height: 1.25;
+  /* Smaller than .btn-primary/.btn-secondary's own 15px default — two
+     lines of that size read as a noticeably bigger button than "Add"
+     right above it, which is the one thing this shouldn't do. */
+  font-size: 12px;
+  padding: 8px 16px;
+}
 
 /* Reuses the same "receipt tape" search bar treatment as the in-app
    guide's own search (.guide-search-input) — same torn-edge look, same
@@ -437,7 +455,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    for it. */
 .bill-search-collapse { flex-shrink: 0; }
 /* The "Search" toggle in .group-actions that opens the section back up —
-   same "•" convention as .bill-filter-toggle-active for "something's set
+   pushed to the row's right edge (margin-left: auto, the standard flex
+   trick for it) rather than sitting immediately next to the member-count
+   button, so it reads as its own thing on the opposite side of the row
+   instead of crowding Invite/member-count on the left. */
+.bill-search-toggle { margin-left: auto; }
+/* Same "•" convention as .bill-filter-toggle-active for "something's set
    even though you can't see it right now." Just weight, not color — a
    .btn-secondary's text is already accent-dark by default (same as
    Invite), so color alone wouldn't read as a distinct "active" state
@@ -1050,30 +1073,47 @@ input.item-editable-input {
   margin-left: 6px;
 }
 
-/* ---------- Print / PDF recaps ---------- */
-.print-only { display: none; }
+/* ---------- Print / PDF recaps ----------
+   Rendered via PrintPortal (src/components/PrintPortal.jsx) into
+   #print-root, a sibling of #root in index.html rather than nested inside
+   it — see that file's own comment for why. #print-root stays hidden on
+   screen and only appears for the print stylesheet below; #root does the
+   opposite, staying visible on screen and hidden for print. Both being
+   plain `display: none` (not the old `visibility: hidden` on everything
+   under #root) is what actually collapses the app's layout at print
+   time, rather than just making it invisible while still occupying every
+   bit of its normal height — that mismatch was the trailing blank page:
+   an invisible #root taller than one sheet of paper still got paginated,
+   even with nothing visible on any page after the first. */
+#print-root { display: none; }
 
 @media print {
-  body * { visibility: hidden; }
-  .print-only, .print-only * { visibility: visible; }
-  .print-only {
+  #root { display: none !important; }
+  #print-root {
     display: block;
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
     padding: 20px;
     color: #000;
     background: #fff;
     font-family: var(--font-body);
   }
+  /* Consistent margins regardless of the browser's own print defaults
+     (which vary enough — some browsers default to near-zero) — and named
+     once here rather than fought with per-element padding. */
+  @page { margin: 1.5cm; }
   .print-only h1 {
     font-family: var(--font-display);
     font-size: 22px;
-    margin: 0 0 8px;
+    margin: 0 0 4px;
   }
+  .print-only .print-subtitle { margin: 0 0 8px; color: #444; font-size: 13px; }
   .print-only .print-note { font-style: italic; color: #444; }
-  .print-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  .print-only h2 {
+    font-family: var(--font-display);
+    font-size: 15px;
+    margin: 24px 0 8px;
+  }
+  .print-only h2:first-of-type { margin-top: 20px; }
+  .print-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
   .print-table th, .print-table td {
     text-align: left;
     padding: 6px 8px;
@@ -1081,6 +1121,10 @@ input.item-editable-input {
     font-size: 13px;
   }
   .print-table th { font-weight: 600; }
+  /* Keeps a single row from being split across a page break — a bill's
+     name landing on one page and its amount on the next is worse than
+     just pushing the whole row onto the next page a little early. */
+  .print-table tr { break-inside: avoid; }
   .print-total { font-size: 16px; font-weight: 700; margin-top: 16px; text-align: right; }
   .print-footer { margin-top: 32px; font-size: 11px; color: #888; }
 }

@@ -2,7 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
-import { fetchAllGroupMembers, addGuest, setGuestActive, renameGuest, requestClaimLink } from '../lib/members'
+import {
+  fetchAllGroupMembers,
+  addGuest,
+  setGuestActive,
+  renameGuest,
+  requestClaimLink,
+  deleteGuestPermanently,
+} from '../lib/members'
 import { fetchCategories, addCategory, renameCategory, deleteCategory, CATEGORY_COLORS } from '../lib/categories'
 import { shareOrCopyText } from '../lib/shareText'
 import { computeBalances, computeDailyTotalsForUser } from '../lib/settlement'
@@ -30,6 +37,11 @@ export default function GroupSettings() {
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false)
   const [deletingAllBills, setDeletingAllBills] = useState(false)
   const [deletePaymentsToo, setDeletePaymentsToo] = useState(false)
+  // The archived guest currently up for permanent deletion, or null — a
+  // member object rather than just an id, so the confirm modal below has
+  // their name to show/type without a second lookup.
+  const [deleteGuestTarget, setDeleteGuestTarget] = useState(null)
+  const [deletingGuest, setDeletingGuest] = useState(false)
 
   const myParticipantId = members.find((m) => m.userId === user.id)?.id
   const isAdmin = myParticipantId && myParticipantId === adminId
@@ -101,6 +113,29 @@ export default function GroupSettings() {
       loadMembers()
     } catch (err) {
       setError(err.message)
+    }
+  }
+
+  // The actual safety check (zero bills, payments, or recurring templates
+  // still referencing this guest) lives server-side, in
+  // delete_guest_permanently itself — this just surfaces whatever it
+  // says, same as handleDeleteAllBills does for its own RPC. The modal
+  // stays open on failure (only a successful delete closes it), so
+  // exactly why it was rejected — visible in the page's own error banner,
+  // showing dimmed through the modal backdrop — is still right there
+  // rather than needing the dialog reopened to see it again.
+  async function confirmDeleteGuestPermanently() {
+    if (!deleteGuestTarget) return
+    setDeletingGuest(true)
+    setError(null)
+    try {
+      await deleteGuestPermanently(deleteGuestTarget.id)
+      setDeleteGuestTarget(null)
+      loadMembers()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeletingGuest(false)
     }
   }
 
@@ -549,19 +584,52 @@ export default function GroupSettings() {
         <>
           <h2 className="settings-section-title">Archived guests</h2>
           <p className="muted">
-            Kept on old bills, but won't be offered for new ones. Restore any time.
+            Kept on old bills, but won't be offered for new ones. Restore any time — or, if the
+            group's admin, delete one permanently instead. That only works once they're not on any
+            bill, payment, or recurring template anymore; otherwise it's blocked rather than
+            silently leaving something broken behind.
           </p>
           <ul className="member-list">
             {archivedGuests.map((m) => (
               <li key={m.id} className="member-list-item former">
                 <span>{m.name}</span>
-                <button type="button" className="btn-link" onClick={() => toggleGuestActive(m, true)}>
-                  Restore
-                </button>
+                <span className="member-list-actions">
+                  <button type="button" className="btn-link" onClick={() => toggleGuestActive(m, true)}>
+                    Restore
+                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      className="btn-link dropdown-item-warn"
+                      onClick={() => setDeleteGuestTarget(m)}
+                    >
+                      Delete permanently
+                    </button>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
         </>
+      )}
+
+      {deleteGuestTarget && (
+        <TypedConfirmModal
+          title="Delete guest permanently"
+          body={
+            <p>
+              This permanently deletes <strong>{deleteGuestTarget.name}</strong> from{' '}
+              <strong>{name}</strong> — this can't be undone. Only works if they're not on any
+              bill, payment, or recurring template anymore; if they are, this is blocked and says
+              so rather than leaving something broken behind.
+            </p>
+          }
+          confirmWord={deleteGuestTarget.name}
+          confirmLabel="Delete permanently"
+          pending={deletingGuest}
+          onConfirm={confirmDeleteGuestPermanently}
+          onCancel={() => setDeleteGuestTarget(null)}
+        />
       )}
 
       <h2 className="settings-section-title">Danger zone</h2>
