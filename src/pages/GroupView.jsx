@@ -790,7 +790,7 @@ export default function GroupView() {
             real button (was a bare btn-link, which read as passive inline
             text rather than a button worth tapping) and pinned to the
             right so it sits under "Add" rather than under "Select". */}
-        <Link to={`/groups/${groupId}/recurring`} className="btn-secondary recurring-bills-btn">
+        <Link to={`/groups/${groupId}/recurring`} className="btn-primary recurring-bills-btn">
           Add Recurring
           <br />
           Bill ↻
