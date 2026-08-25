@@ -1,3 +1,5 @@
+import { toDateInputValue } from './billDate'
+
 // Turns a set of bills/items into "how much was spent per category" — kept
 // separate from settlement.js entirely, since nothing here is about who
 // owes whom, just where the money went.
@@ -102,4 +104,44 @@ export function mergeCategorySpend(first, second) {
     }
   }
   return merged
+}
+
+// The whole-group counterpart of computeDailyTotalsForUser()
+// (settlement.js) — same "bucket by local calendar day" idea, feeding the
+// spending-graphs line/pie charts (src/pages/GroupGraphs.jsx), but with no
+// notion of "mine": every item's full total_price counts, on whichever day
+// its bill falls, regardless of who paid or who it's split with. Bucketed
+// by category *id* rather than name (see computeCategoryTotals above) —
+// this is always scoped to one group's own categories table, unlike the
+// personal version, which has to merge the same category name across
+// several different groups' tables.
+//
+// Uses toDateInputValue() (billDate.js) for the day key rather than
+// reimplementing the same "YYYY-MM-DD, local calendar" formatting a second
+// time — every other day-bucketed dataset in this app (this one included)
+// needs to agree on that exact format to line up when combined or compared.
+export function computeDailyTotalsForGroup({ bills, items }) {
+  const billById = new Map(bills.map((b) => [b.id, b]))
+  const daily = {}
+
+  for (const item of items) {
+    const bill = billById.get(item.bill_id)
+    if (!bill) continue
+    const key = toDateInputValue(bill.created_at)
+    if (!daily[key]) daily[key] = { total: 0, categories: {} }
+
+    const amount = Number(item.total_price)
+    daily[key].total += amount
+    const categoryId = item.category_id || bill.category_id || 'uncategorized'
+    daily[key].categories[categoryId] = (daily[key].categories[categoryId] || 0) + amount
+  }
+
+  for (const key of Object.keys(daily)) {
+    daily[key].total = Math.round(daily[key].total * 100) / 100
+    for (const categoryId of Object.keys(daily[key].categories)) {
+      daily[key].categories[categoryId] = Math.round(daily[key].categories[categoryId] * 100) / 100
+    }
+  }
+
+  return daily
 }

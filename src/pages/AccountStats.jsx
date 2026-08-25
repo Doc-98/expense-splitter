@@ -585,6 +585,10 @@ export default function AccountStats() {
         <h1>Your stats</h1>
       </header>
 
+      <Link to="/stats/graphs" className="btn-link see-stats-link">
+        See graphs →
+      </Link>
+
       {/* Rendered above the groups.length check below, not inside it — a
           failed load() leaves groups at its empty initial state, and that
           check alone would otherwise show "Join or create a group" instead

@@ -27,6 +27,12 @@ const ImportBills = lazy(() => import('./pages/ImportBills'))
 // Same reasoning as ImportBills above — a wizard almost nobody opens more
 // than once, right after a big import.
 const CategorizeBills = lazy(() => import('./pages/CategorizeBills'))
+// A second, more visual stats page most people will never open at all —
+// deliberately a separate page from Your Stats/Group Stats rather than
+// folded into them, so its charts (and the SVG chart components they pull
+// in) never cost anyone who just wants the plain numbers anything.
+const AccountGraphs = lazy(() => import('./pages/AccountGraphs'))
+const GroupGraphs = lazy(() => import('./pages/GroupGraphs'))
 
 function RequireAuth({ children }) {
   const { session } = useAuth()
@@ -72,12 +78,32 @@ function Shell() {
       <Route path="/about" element={<RequireAuth><About /></RequireAuth>} />
       <Route path="/guide" element={<RequireAuth><Guide /></RequireAuth>} />
       <Route path="/stats" element={<RequireAuth><AccountStats /></RequireAuth>} />
+      <Route
+        path="/stats/graphs"
+        element={
+          <RequireAuth>
+            <Suspense fallback={<div className="page-loading">Loading…</div>}>
+              <AccountGraphs />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
       <Route path="/scan-settings" element={<RequireAuth><ScanSettings /></RequireAuth>} />
       <Route path="/thresholds" element={<RequireAuth><Thresholds /></RequireAuth>} />
       <Route path="/" element={<RequireAuth><Groups /></RequireAuth>} />
       <Route path="/groups/:groupId" element={<RequireAuth><GroupView /></RequireAuth>} />
       <Route path="/groups/:groupId/settings" element={<RequireAuth><GroupSettings /></RequireAuth>} />
       <Route path="/groups/:groupId/stats" element={<RequireAuth><GroupStats /></RequireAuth>} />
+      <Route
+        path="/groups/:groupId/stats/graphs"
+        element={
+          <RequireAuth>
+            <Suspense fallback={<div className="page-loading">Loading…</div>}>
+              <GroupGraphs />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
       <Route
         path="/groups/:groupId/import"
         element={

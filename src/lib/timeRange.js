@@ -44,6 +44,35 @@ export function getPeriodRange(granularity, offset) {
   return { start: null, end: null, label: 'All time' }
 }
 
+// Same calendar-anchored, offset-paged idea as getPeriodRange, but for a
+// fixed *span* of consecutive months rather than one calendar unit — used
+// by the spending-graphs page's "Last N months" tab, where a single month
+// or a whole year are already exactly what getPeriodRange itself covers.
+// offset steps by one whole span at a time (offset -1 = the monthCount
+// months immediately before the current span, contiguous with it, no gap
+// or overlap) — same "page a whole period, not one unit within it"
+// convention as month/year already use elsewhere in this app.
+//
+// offset 0's span always *ends* on the current calendar month (inclusive)
+// — e.g. monthCount=4 in August gives May–August — since "last 4 months"
+// means "up to and including now," not a span that stops short of it.
+export function getMultiMonthRange(monthCount, offset) {
+  const now = new Date()
+  const endMonthIndex = now.getMonth() + offset * monthCount // 0-based, relative to now's year; may fall outside 0-11
+  const start = new Date(now.getFullYear(), endMonthIndex - monthCount + 1, 1)
+  const end = new Date(now.getFullYear(), endMonthIndex + 1, 1)
+  const lastMonth = new Date(end.getFullYear(), end.getMonth() - 1, 1)
+
+  const startLabel = start.toLocaleDateString(undefined, { month: 'short' })
+  const endLabel = lastMonth.toLocaleDateString(undefined, { month: 'short' })
+  const label =
+    start.getFullYear() === lastMonth.getFullYear()
+      ? `${startLabel} – ${endLabel} ${start.getFullYear()}`
+      : `${startLabel} ${start.getFullYear()} – ${endLabel} ${lastMonth.getFullYear()}`
+
+  return { start, end, label }
+}
+
 // How far back a stats page's *first* fetch reaches, before it backfills
 // the rest of a group's history in the background — a whole current
 // calendar year plus a whole previous calendar year. That's chosen because

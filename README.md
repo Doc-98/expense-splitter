@@ -35,6 +35,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Spending thresholds](#spending-thresholds)
 - [Period-over-period comparison](#period-over-period-comparison)
 - [Time period controls](#time-period-controls)
+- [Spending graphs](#spending-graphs)
 - [Keyboard navigation](#keyboard-navigation)
 - [Recurring bills](#recurring-bills)
 - [What a bill row shows](#what-a-bill-row-shows)
@@ -517,6 +518,63 @@ follow you to a different phone or browser.
 
 The ‹ / › single-step buttons above also respond to the ← / → arrow keys —
 see [Keyboard navigation](#keyboard-navigation).
+
+## Spending graphs
+
+A line chart of spending over time, and a donut chart of spending by
+category — a separate page from Your Stats/Group Stats rather than folded
+into either, reached via a "See graphs →" link from both. It's not for
+everyone (most people just want the numbers), so it's kept out of the way
+by default and lazy-loaded (`AccountGraphs.jsx`/`GroupGraphs.jsx`) —
+nobody who never clicks through pays anything for it.
+
+Its own period control (`GraphsPeriodSelector.jsx`) is deliberately
+separate from `TimeRangeSelector` — three tabs, **This month**, **Last 4
+months**, **This year** (year is the default: the point of this page is a
+birds-eye view), calendar-anchored and paged with ‹ / › (and ← / →) like
+every other period control in this app, just without week's own jump
+tiers (nothing here is ever more than 12 steps away). Month view plots one
+point per day; the other two plot one point per calendar month — a whole
+year of individual days would be an unreadable wall of dots, and a single
+month has too few weeks to say anything as a monthly rollup. "Last 4
+months" needed a new kind of range the app didn't have yet
+(`getMultiMonthRange()` in `src/lib/timeRange.js`) — a fixed-size span of
+consecutive months rather than one calendar unit, paged a whole span at a
+time as usual.
+
+A category dropdown above the line chart switches its y-axis between total
+spending and one specific category — reading that category's own slice of
+each day/month instead of the day's/month's total. `buildSeries()`
+(`src/lib/timeSeries.js`) is what turns a day-keyed totals map into an
+ordered, zero-filled array of chart points for either granularity; the
+same day-keyed shape already existed for the personal side
+(`computeDailyTotalsForUser()` in settlement.js, built for departure
+snapshots) — the group-wide version (`computeDailyTotalsForGroup()` in
+`categoryStats.js`) is the one new piece of actual data plumbing this
+feature needed. Selecting a category recolors the line to that category's
+own color, and clicking a slice of the donut chart below sets the same
+filter — the two charts share one selection, not two separate ones.
+
+Both charts are hand-rolled SVG, not a charting library — no new UI
+dependency, consistent with the rest of this app (Your Stats/Group Stats'
+own "by month" breakdown is already a plain-CSS bar chart, same reasoning).
+The line chart has no numeric y-axis of its own — its only label is the
+period's highest value, shown above the peak, since the baseline at zero
+is already visually obvious; hovering (or tapping) a point shows its exact
+date and amount. The donut chart is stroke-dasharray segments on one
+circle rather than individually computed arc paths, the standard trick for
+avoiding SVG's large-arc-flag edge cases entirely.
+
+**Personal graphs only reflect groups you're currently active in** — unlike
+Your Stats, this page doesn't merge in departed groups' frozen snapshot
+history, and neither page backfills older bills the way Your
+Stats/Group Stats do: both fetch a fixed two-calendar-year window
+(`getStatsWindowStart()`) once, and paging further back than that shows a
+small note that older history isn't included rather than silently
+incomplete numbers. Both are reasonable simplifications for what this page
+is for (a recent trend at a glance) rather than a drop-in replacement for
+the two main stats pages' own completeness — worth revisiting if "graphs
+going back years" turns out to matter more than expected.
 
 ## Keyboard navigation
 
