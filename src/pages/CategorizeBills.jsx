@@ -6,6 +6,7 @@ import { fetchCategories } from '../lib/categories'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { billTotal } from '../lib/billFilters'
 import { useCurrency } from '../context/CurrencyContext'
+import { getReceiptSettings, setReceiptSettings } from '../lib/receiptSettings'
 import { buildTitleGroups, applyAiSuggestions } from '../lib/billCategorization/plan'
 import { classifyTitles, resolveClassifyStrategy } from '../lib/billCategorization'
 import { findKeywordClusters } from '../lib/billCategorization/keywordClusters'
@@ -52,6 +53,10 @@ export default function CategorizeBills() {
   const [selections, setSelections] = useState({})
   const [applying, setApplying] = useState(false)
   const [appliedCount, setAppliedCount] = useState(0)
+  // Free-text context for the AI pass (language, ambiguous-word notes,
+  // recurring-bill shorthand) — saved via receiptSettings so it's filled
+  // in once and applies to every group's run, not retyped each time.
+  const [hint, setHint] = useState(() => getReceiptSettings().categorizeHint)
 
   useEffect(() => {
     let cancelled = false
@@ -100,8 +105,11 @@ export default function CategorizeBills() {
 
       if (unresolvedTitles.length > 0 && classifyStrategy) {
         const categoryNames = categories.map((c) => c.name)
-        const aiResults = await classifyTitles(unresolvedTitles, categoryNames, (done, total) =>
-          setProgress({ done, total })
+        const aiResults = await classifyTitles(
+          unresolvedTitles,
+          categoryNames,
+          (done, total) => setProgress({ done, total }),
+          hint
         )
         nextGroups = applyAiSuggestions(nextGroups, aiResults, categories)
       }
@@ -133,6 +141,13 @@ export default function CategorizeBills() {
   // "Apply" is clicked — the per-row selects below stay the single source of truth
   // for what's actually going to be saved.
   const [clusterPicks, setClusterPicks] = useState({})
+  // keyword -> the category id that was actually applied, so the row can show
+  // "Applied ✓" feedback — otherwise a click had no visible effect at all
+  // beyond the (easy to miss) row selects further down the page changing.
+  // Cleared implicitly: it's only ever compared against the current pick, so
+  // changing the picker after applying makes the feedback disappear on its
+  // own without needing a separate reset.
+  const [appliedClusterPicks, setAppliedClusterPicks] = useState({})
 
   function applyToKeywordCluster(cluster) {
     const categoryId = clusterPicks[cluster.keyword]
@@ -142,6 +157,7 @@ export default function CategorizeBills() {
       for (const key of cluster.groupKeys) next[key] = categoryId
       return next
     })
+    setAppliedClusterPicks((a) => ({ ...a, [cluster.keyword]: categoryId }))
   }
 
   const resolvedBillCount = groups.reduce((sum, g) => (selections[g.key] ? sum + g.billIds.length : sum), 0)
@@ -221,6 +237,22 @@ export default function CategorizeBills() {
                   receipts) for AI help with the rest too.
                 </p>
               )}
+              {classifyStrategy && (
+                <label className="categorize-hint-label">
+                  Anything worth telling the AI before it guesses? (optional — saved for next time)
+                  <textarea
+                    className="categorize-hint"
+                    rows={3}
+                    value={hint}
+                    onChange={(e) => setHint(e.target.value)}
+                    onBlur={() => setReceiptSettings({ categorizeHint: hint })}
+                    placeholder={
+                      'e.g. Titles are mostly Italian. "Gas" means the gas utility bill, not fuel. ' +
+                      '"Iliad" is our internet bill, "Crunchy" is a Crunchyroll subscription.'
+                    }
+                  />
+                </label>
+              )}
               <button type="button" className="btn-primary confirm-btn" onClick={runCategorization}>
                 Categorize bills
               </button>
@@ -249,7 +281,9 @@ export default function CategorizeBills() {
               <p className="muted">
                 These words show up across several differently-titled bills — likely the same merchant
                 typed a bit differently each time (a date, a location, a note). Pick a category and apply
-                it to every one of them at once; you can still change any individual row afterward.
+                it to every one of them at once; you can still change any individual row afterward. A word
+                that shows up in most of your bills is left out here on purpose — it's more likely a
+                connector than a merchant name.
               </p>
               <ul className="member-list">
                 {keywordClusters.map((cluster) => (
@@ -285,6 +319,12 @@ export default function CategorizeBills() {
                       >
                         Apply to all
                       </button>
+                      {appliedClusterPicks[cluster.keyword] &&
+                        appliedClusterPicks[cluster.keyword] === clusterPicks[cluster.keyword] && (
+                          <span className="categorize-cluster-applied">
+                            Applied to {cluster.billCount} bill{cluster.billCount === 1 ? '' : 's'} ✓
+                          </span>
+                        )}
                     </span>
                   </li>
                 ))}

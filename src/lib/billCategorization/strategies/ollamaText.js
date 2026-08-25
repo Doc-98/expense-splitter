@@ -46,9 +46,9 @@ export const ollamaTextStrategy = {
   // choice just for this one occasional wizard wasn't worth the extra
   // Scan settings field.
   isConfigured: () => true,
-  async classify(titles, categoryNames) {
+  async classify(titles, categoryNames, extraContext) {
     const { ollamaUrl, ollamaModel } = getReceiptSettings()
-    const prompt = buildClassifyPrompt(categoryNames, titles)
+    const prompt = buildClassifyPrompt(categoryNames, titles, extraContext)
     const raw = await callOllamaText(prompt, ollamaUrl || DEFAULT_URL, ollamaModel || DEFAULT_MODEL)
     return parseClassifyResponse(raw, titles, categoryNames)
   },

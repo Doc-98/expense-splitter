@@ -62,7 +62,7 @@ body {
 }
 
 button { font-family: inherit; font-size: inherit; }
-input, select { font-family: inherit; font-size: 16px; } /* 16px prevents iOS zoom-on-focus */
+input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px prevents iOS zoom-on-focus */
 
 .mono { font-family: var(--font-mono); }
 
@@ -930,6 +930,14 @@ input.item-editable-input {
   white-space: nowrap;
 }
 .categorize-row-select { flex-shrink: 0; max-width: 45%; margin-left: var(--space-sm); }
+
+.categorize-hint-label { display: block; font-size: 13px; margin: var(--space-sm) 0 var(--space-lg); }
+.categorize-hint { width: 100%; margin-top: 6px; resize: vertical; }
+
+/* Sits inline next to a "Common patterns" row's Apply button — the only
+   feedback that a click actually did something, since the effect itself
+   (rows further down the page changing) is easy to miss entirely. */
+.categorize-cluster-applied { color: var(--accent-dark); font-size: 12px; white-space: nowrap; }
 
 .threshold-row { gap: var(--space-sm); }
 .threshold-input-wrap { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }

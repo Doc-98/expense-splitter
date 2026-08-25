@@ -41,10 +41,10 @@ export const claudeTextStrategy = {
   id: 'claude',
   label: 'Anthropic Claude (your API key)',
   isConfigured: () => Boolean(getReceiptSettings().claudeApiKey),
-  async classify(titles, categoryNames) {
+  async classify(titles, categoryNames, extraContext) {
     const { claudeApiKey, claudeModel } = getReceiptSettings()
     if (!claudeApiKey) throw new Error('No Claude API key saved yet — add one in Scan settings.')
-    const prompt = buildClassifyPrompt(categoryNames, titles)
+    const prompt = buildClassifyPrompt(categoryNames, titles, extraContext)
     const raw = await callClaudeText(prompt, claudeApiKey, claudeModel || DEFAULT_MODEL)
     return parseClassifyResponse(raw, titles, categoryNames)
   },

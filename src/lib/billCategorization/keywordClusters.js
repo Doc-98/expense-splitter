@@ -8,31 +8,51 @@
 // matching 'lidl'" as a single action, rather than clicking through each
 // slightly-different title on its own.
 //
-// Deliberately not fed into the AI pass or used to auto-apply anything —
-// this only ever *surfaces a suggestion*; a person still picks the
-// category and clicks apply. Word significance is judged purely by
-// "shows up in enough different titles to be worth surfacing," not by
-// meaning — no stopword list, no language assumption (this app's own
-// bill titles are as likely to be Italian as English) — a short/common
-// word that happens to recur is still shown; a person skims past a
-// meaningless one for free, but a hand-curated stopword list would
-// silently hide a real pattern in a language it didn't anticipate.
-// `minTokenLength` alone is what keeps single/double-letter noise out.
+// Word significance is judged purely by "shows up in enough different
+// titles to be worth surfacing, but not in so many that it's clearly just
+// a connector," not by meaning — no stopword list, no language assumption
+// (this app's own bill titles are as likely to be Italian as English). A
+// hand-curated stopword list would silently hide a real pattern in a
+// language it didn't anticipate; `maxGroupShare` below is the
+// language-agnostic substitute — a statistical cap, not a word list.
 const DEFAULT_OPTIONS = {
   minTokenLength: 4,
   minGroups: 2,
   maxClusters: 15,
+  // A token sitting in more than this fraction of *all* distinct titles
+  // is far more likely a connector shared across unrelated merchants
+  // (a weekday, "via", "presso", a generic "bolletta"/"ricevuta" prefix)
+  // than an actual merchant name — and applying one category to that many
+  // groups at once from a single click is exactly the kind of surprise
+  // this feature shouldn't spring on anyone. Only kicks in once there are
+  // enough groups for "share of the total" to mean anything.
+  maxGroupShare: 0.25,
+  minGroupsForShareCap: 8,
 }
 
 function tokenize(title) {
-  return title
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u) // split on anything that isn't a letter/digit, Unicode-aware (accented letters included)
-    .filter((token) => token.length > 0 && !/^\d+$/.test(token)) // pure numbers are dates/invoice numbers, not merchant names
+  return (
+    title
+      .toLowerCase()
+      // Insert a boundary between a letter and an adjacent digit first —
+      // titles are often typed with no separator between a merchant name
+      // and an attached date or number ("Lidl24Agosto", "Conad12"), and
+      // without this the merchant name never re-forms as the same token
+      // twice: every occurrence gets fused to whatever number sits next to
+      // it that time, fragmenting one real, big pattern into many
+      // one-off ones that never reach `minGroups`.
+      .replace(/(\p{L})(\p{N})/gu, '$1 $2')
+      .replace(/(\p{N})(\p{L})/gu, '$1 $2')
+      .split(/[^\p{L}\p{N}]+/u) // split on anything that isn't a letter/digit, Unicode-aware (accented letters included)
+      .filter((token) => token.length > 0 && !/^\d+$/.test(token)) // pure numbers are dates/invoice numbers, not merchant names
+  )
 }
 
 export function findKeywordClusters(groups, options = {}) {
-  const { minTokenLength, minGroups, maxClusters } = { ...DEFAULT_OPTIONS, ...options }
+  const { minTokenLength, minGroups, maxClusters, maxGroupShare, minGroupsForShareCap } = {
+    ...DEFAULT_OPTIONS,
+    ...options,
+  }
   const groupKeysByToken = new Map() // token -> Set of group keys
 
   for (const group of groups) {
@@ -44,9 +64,11 @@ export function findKeywordClusters(groups, options = {}) {
   }
 
   const groupByKey = new Map(groups.map((g) => [g.key, g]))
+  const shareCapApplies = groups.length >= minGroupsForShareCap
   const clusters = []
   for (const [keyword, groupKeySet] of groupKeysByToken) {
     if (groupKeySet.size < minGroups) continue
+    if (shareCapApplies && groupKeySet.size / groups.length > maxGroupShare) continue
     const groupKeys = [...groupKeySet]
     const billCount = groupKeys.reduce((sum, key) => sum + (groupByKey.get(key)?.billIds.length || 0), 0)
     clusters.push({ keyword, groupKeys, billCount })

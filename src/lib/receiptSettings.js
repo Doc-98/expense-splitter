@@ -14,6 +14,16 @@ const DEFAULTS = {
   ollamaUrl: 'http://localhost:11434',
   ollamaModel: 'qwen2.5vl',
   ocrLanguage: 'eng+ita',
+  // Free-text, entirely optional — read by the bill-categorization wizard
+  // (see billCategorization/classifyPrompt.js) alongside every title batch
+  // it sends. Exists because the model has nothing to go on beyond the
+  // titles and category names themselves: it doesn't know what language a
+  // household's bills are typically written in, which of its own words are
+  // ambiguous between languages ("gas" reads as fuel in English but is
+  // often a gas *utility* bill in Italian), or which one-word titles are
+  // shorthand for a recurring bill. A household fills this in once and it
+  // applies to every group's run, not just one.
+  categorizeHint: '',
 }
 
 export function getReceiptSettings() {

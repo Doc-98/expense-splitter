@@ -32,7 +32,7 @@ export const CLASSIFY_BATCH_SIZE = 150
 // unresolved (null), same as a title the model itself wasn't confident
 // about. `onProgress(done, total)` reports title counts, not batch
 // counts, so it stays meaningful regardless of batch size.
-export async function classifyTitles(titles, categoryNames, onProgress) {
+export async function classifyTitles(titles, categoryNames, onProgress, extraContext) {
   const strategy = resolveClassifyStrategy()
   if (!strategy) {
     throw new Error('No AI service configured — set one up in Scan settings first, or skip the AI pass entirely.')
@@ -46,7 +46,7 @@ export async function classifyTitles(titles, categoryNames, onProgress) {
     const batch = titles.slice(start, start + CLASSIFY_BATCH_SIZE)
     let batchResults
     try {
-      batchResults = await strategy.classify(batch, categoryNames)
+      batchResults = await strategy.classify(batch, categoryNames, extraContext)
     } catch {
       // This batch's titles stay unresolved rather than aborting the
       // whole run — a transient failure on one chunk of a thousand-plus
