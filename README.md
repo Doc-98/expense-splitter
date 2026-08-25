@@ -986,6 +986,27 @@ real account leaving, there's no login-gated access to protect, so no
 snapshot is involved, and they can be restored any time from Group
 Settings.
 
+**Deleting one permanently** is a separate, further step from Archived
+guests — the group admin only, and only once that guest is off every
+bill, payment, and recurring template in the group; otherwise it's
+rejected outright rather than left half-broken. That check is enforced
+server-side (`delete_guest_permanently()`, `supabase/schema.sql`), not
+just in the UI, and for a real reason beyond "trust the client": most of
+`group_members.id`'s references — `bills.paid_by`, `bill_payers`,
+`payments` — are plain foreign keys, so a raw delete against a guest
+still on one of those would simply fail. `item_shares.member_id` isn't
+plain, though; it's declared `on delete cascade` so that deleting an
+*item* cleans up its own shares, and that same cascade would just as
+happily fire for deleting the *person* — silently dropping their share
+off of someone else's item and quietly inflating what everyone else on
+it owes, no error, just a wrong number the next time anyone looks.
+Checking every table by hand rather than leaning on whichever ones
+happen to have a blocking FK is what makes this actually safe. The
+confirm step itself asks you to type the guest's own name, the same
+"deliberately slower than a plain confirm" pattern Danger Zone's own
+"Delete all bills" uses for the same reason: this one can't be walked
+back either.
+
 The `user_id` column being nullable, rather than a guest being a
 fundamentally different kind of row, is deliberate: it leaves room for a
 future "claim this profile" flow, where a guest who decides to actually

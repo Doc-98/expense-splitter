@@ -86,6 +86,18 @@ export async function renameGuest(participantId, displayName) {
   if (error) throw error
 }
 
+// Hard-deletes an *archived* guest's row — unlike setGuestActive above,
+// this can't be undone, so it goes through the delete_guest_permanently
+// RPC rather than a plain client delete. That function is also the actual
+// security/safety boundary (admin-only, and only once the guest has zero
+// history anywhere in the group); this is just the thin client wrapper,
+// same relationship the other admin-gated RPCs (remove_group_member,
+// delete_all_group_bills) already have with their own callers.
+export async function deleteGuestPermanently(participantId) {
+  const { error } = await supabase.rpc('delete_guest_permanently', { target_member_id: participantId })
+  if (error) throw error
+}
+
 // Returns a one-time claim link for a specific guest, letting them sign up
 // for a real account later without losing their existing history — the
 // row just gains a user_id, it never gets relinked. Reuses an
