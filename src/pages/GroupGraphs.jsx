@@ -36,6 +36,12 @@ export default function GroupGraphs() {
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [windowStart, setWindowStart] = useState(null)
+  // 'loading' until the background backfill below finishes, 'complete'
+  // once this group's full history is in `bills`, 'failed' if the
+  // backfill itself errored — same three-state convention as GroupStats.jsx.
+  // The recent window fetched up front stays shown regardless; this only
+  // gates whether paging further back than it is safe to trust yet.
+  const [historyStatus, setHistoryStatus] = useState('loading')
 
   // Defaults to the year view — the whole point of this page is a
   // birds-eye "how does my spending look" glance, and a year is the widest
@@ -46,29 +52,54 @@ export default function GroupGraphs() {
   // so it plugs directly into a <select>'s value without a translation step.
   const [categoryFilter, setCategoryFilter] = useState('')
 
+  const BILLS_SELECT = 'id, created_at, category_id, items(id, total_price, category_id)'
+
+  function applyRawBills(rawBillsData) {
+    const { list, items: derivedItems } = deriveBillsItemsShares(rawBillsData)
+    setBills(list)
+    setItems(derivedItems)
+  }
+
+  // Same two-phase load as GroupStats.jsx: the recent window (this year
+  // plus last) fetches first so the page renders real, correct numbers
+  // immediately for This month/Last 4 months/most of This year, then the
+  // rest of this group's history backfills in the background. Only once
+  // that finishes can paging further back than the window be trusted.
   const load = useCallback(async () => {
     try {
       const start = getStatsWindowStart()
       setWindowStart(start)
-      const [{ data: groupRow }, categoriesData, rawBills] = await Promise.all([
+      const [{ data: groupRow }, categoriesData, recentBillsData] = await Promise.all([
         supabase.from('groups').select('name').eq('id', groupId).single(),
         fetchCategories(groupId),
         fetchAllRows(() =>
-          supabase
-            .from('bills')
-            .select('id, created_at, category_id, items(id, total_price, category_id)', { count: 'exact' })
-            .eq('group_id', groupId)
-            .gte('created_at', start.toISOString())
+          supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).eq('group_id', groupId).gte('created_at', start.toISOString())
         ),
       ])
       setGroupName(groupRow?.name || '')
       setCategories(categoriesData)
-      const { list, items: derivedItems } = deriveBillsItemsShares(rawBills)
-      setBills(list)
-      setItems(derivedItems)
+      applyRawBills(recentBillsData)
+      setError(null)
+      // First paint happens now, with real (if possibly incomplete)
+      // numbers — the backfill below runs after, in the background, not
+      // blocking this. A `finally` here would defeat the entire point of
+      // the two-phase fetch by keeping the loading spinner up until the
+      // backfill (which can mean paging through years of bills) finishes.
+      setLoading(false)
+
+      try {
+        const olderBillsData = await fetchAllRows(() =>
+          supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).eq('group_id', groupId).lt('created_at', start.toISOString())
+        )
+        applyRawBills([...olderBillsData, ...recentBillsData])
+        setHistoryStatus('complete')
+      } catch {
+        // The recent window above is still shown, correctly, for anything
+        // within it — this only means older history couldn't be reached.
+        setHistoryStatus('failed')
+      }
     } catch (err) {
       setError(loadErrorMessage(err))
-    } finally {
       setLoading(false)
     }
   }, [groupId])
@@ -85,10 +116,12 @@ export default function GroupGraphs() {
 
   const range = rangeForTab(tab, offset)
   const granularity = GRANULARITY_BY_TAB[tab]
-  // Only the fetched window (this year plus last) is guaranteed complete —
-  // paging further back than that shows real but incomplete numbers rather
-  // than silently wrong ones, so it's called out rather than left unsaid.
-  const historyIncomplete = Boolean(windowStart) && range.start && range.start < windowStart
+  // Only matters once the background backfill has actually finished (or
+  // failed) — while it's still in flight, paging back past the initial
+  // window is exactly the case that note exists for; once historyStatus
+  // is 'complete', everything's loaded regardless of how far back you go.
+  const historyIncomplete =
+    historyStatus !== 'complete' && Boolean(windowStart) && range.start && range.start < windowStart
 
   const points = buildSeries(daily, {
     start: range.start,
@@ -129,7 +162,9 @@ export default function GroupGraphs() {
           <GraphsPeriodSelector tab={tab} setTab={setTab} offset={offset} setOffset={setOffset} label={range.label} />
           {historyIncomplete && (
             <p className="muted graphs-history-note">
-              Older bills outside this group's last two calendar years aren't included here yet.
+              {historyStatus === 'failed'
+                ? "Couldn't load this group's full history, so numbers for this period may be incomplete — try refreshing."
+                : "Still loading this group's full history — numbers for this period may be incomplete until it finishes."}
             </p>
           )}
 

@@ -69,9 +69,20 @@ export default function AccountGraphs() {
 
   const [rawCategories, setRawCategories] = useState([]) // every category across every active group, own id/color kept
   const [perGroupData, setPerGroupData] = useState([]) // [{ myId, bills, items, itemShares }]
+  // Departed groups' frozen daily_totals — already in the exact
+  // { dayKey: { consumed, categories: { name: amount } } } shape
+  // computeDailyTotalsForUser() itself produces (see settlement.js), so no
+  // separate merge path is needed for these; they fold into the same
+  // mergeDailyMaps() call as every live group's own output.
+  const [snapshots, setSnapshots] = useState([])
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [windowStart, setWindowStart] = useState(null)
+  // Same three-state convention as GroupGraphs.jsx/GroupStats.jsx — only
+  // covers the live-bills backfill below; snapshots are always fetched in
+  // full up front (there's only ever one small row per departed group, no
+  // windowing needed), same as AccountStats.jsx treats them.
+  const [historyStatus, setHistoryStatus] = useState('loading')
 
   const [tab, setTab] = useState('year')
   const [offset, setOffset] = useState(0)
@@ -80,58 +91,78 @@ export default function AccountGraphs() {
   // every category combined.
   const [categoryFilter, setCategoryFilter] = useState('')
 
+  const BILLS_SELECT =
+    'id, group_id, created_at, category_id, items(id, total_price, category_id, item_shares(member_id, shares))'
+
+  function deriveByGroup(rawBills, groupIds, participantByGroup) {
+    const { list, items, itemShares } = deriveBillsItemsShares(rawBills)
+    return groupIds.map((groupId) => {
+      const myId = participantByGroup.get(groupId)
+      const groupBills = list.filter((b) => b.group_id === groupId)
+      const groupItems = items.filter((it) => groupBills.some((b) => b.id === it.bill_id))
+      const groupShares = itemShares.filter((s) => groupItems.some((it) => it.id === s.item_id))
+      return { myId, bills: groupBills, items: groupItems, itemShares: groupShares }
+    })
+  }
+
+  // Same two-phase load as GroupGraphs.jsx/GroupStats.jsx: the recent
+  // window (this year plus last) fetches first, across every active
+  // group, so the page renders real numbers immediately; the rest of
+  // every group's history backfills in the background afterward.
   const load = useCallback(async () => {
     try {
       const start = getStatsWindowStart()
       setWindowStart(start)
 
-      const memberResult = await supabase
-        .from('group_members')
-        .select('id, group_id')
-        .eq('user_id', user.id)
-        .eq('active', true)
+      const [memberResult, snapshotResult] = await Promise.all([
+        supabase.from('group_members').select('id, group_id').eq('user_id', user.id).eq('active', true),
+        supabase.from('departure_snapshots').select('group_id, daily_totals').eq('user_id', user.id),
+      ])
       if (memberResult.error) throw memberResult.error
+      if (snapshotResult.error) throw snapshotResult.error
       const memberRows = memberResult.data || []
       const groupIds = memberRows.map((r) => r.group_id)
       const participantByGroup = new Map(memberRows.map((r) => [r.group_id, r.id]))
 
+      // A group you're back in shouldn't also count its old snapshot on
+      // top of live data — live data already covers it fully.
+      setSnapshots((snapshotResult.data || []).filter((s) => !groupIds.includes(s.group_id)))
+
       if (groupIds.length === 0) {
         setPerGroupData([])
         setRawCategories([])
+        setHistoryStatus('complete')
         setLoading(false)
         return
       }
 
-      const [categoriesResult, rawBills] = await Promise.all([
+      const [categoriesResult, recentBillsData] = await Promise.all([
         supabase.from('categories').select('id, name, color, group_id').in('group_id', groupIds),
         fetchAllRows(() =>
-          supabase
-            .from('bills')
-            .select(
-              'id, group_id, created_at, category_id, items(id, total_price, category_id, item_shares(member_id, shares))',
-              { count: 'exact' }
-            )
-            .in('group_id', groupIds)
-            .gte('created_at', start.toISOString())
+          supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).in('group_id', groupIds).gte('created_at', start.toISOString())
         ),
       ])
       if (categoriesResult.error) throw categoriesResult.error
       const categoriesData = categoriesResult.data || []
       setRawCategories(categoriesData)
+      setPerGroupData(deriveByGroup(recentBillsData, groupIds, participantByGroup))
+      setError(null)
+      // First paint happens now — see the matching comment in
+      // GroupGraphs.jsx for why this can't be a `finally` after the
+      // backfill below.
+      setLoading(false)
 
-      const { list, items, itemShares } = deriveBillsItemsShares(rawBills)
-
-      const perGroup = groupIds.map((groupId) => {
-        const myId = participantByGroup.get(groupId)
-        const groupBills = list.filter((b) => b.group_id === groupId)
-        const groupItems = items.filter((it) => groupBills.some((b) => b.id === it.bill_id))
-        const groupShares = itemShares.filter((s) => groupItems.some((it) => it.id === s.item_id))
-        return { myId, bills: groupBills, items: groupItems, itemShares: groupShares }
-      })
-      setPerGroupData(perGroup)
+      try {
+        const olderBillsData = await fetchAllRows(() =>
+          supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).in('group_id', groupIds).lt('created_at', start.toISOString())
+        )
+        setPerGroupData(deriveByGroup([...olderBillsData, ...recentBillsData], groupIds, participantByGroup))
+        setHistoryStatus('complete')
+      } catch {
+        setHistoryStatus('failed')
+      }
     } catch (err) {
       setError(loadErrorMessage(err))
-    } finally {
       setLoading(false)
     }
   }, [user.id])
@@ -142,19 +173,28 @@ export default function AccountGraphs() {
 
   // Independent of tab/offset, same reasoning as GroupGraphs.jsx's own
   // `daily` — computed once from everything fetched, windowed afterward by
-  // buildSeries() itself.
+  // buildSeries() itself. Every active group's own computeDailyTotalsForUser()
+  // output, plus every departed group's frozen daily_totals (already the
+  // same shape), all folded into one map together — a person's total
+  // personal spend shouldn't quietly drop a group just because they left it.
   const daily = useMemo(() => {
+    const categoryNameById = new Map(rawCategories.map((c) => [c.id, c.name]))
     const perGroupDailies = perGroupData.map(({ myId, bills, items, itemShares }) =>
-      computeDailyTotalsForUser(myId, { bills, items, itemShares, categoryNameById: new Map(rawCategories.map((c) => [c.id, c.name])) })
+      computeDailyTotalsForUser(myId, { bills, items, itemShares, categoryNameById })
     )
-    return mergeDailyMaps(perGroupDailies)
-  }, [perGroupData, rawCategories])
+    const snapshotDailies = snapshots.map((s) => s.daily_totals || {})
+    return mergeDailyMaps([...perGroupDailies, ...snapshotDailies])
+  }, [perGroupData, rawCategories, snapshots])
 
   const mergedCategories = useMemo(() => mergeCategoriesByName(rawCategories), [rawCategories])
 
   const range = rangeForTab(tab, offset)
   const granularity = GRANULARITY_BY_TAB[tab]
-  const historyIncomplete = Boolean(windowStart) && range.start && range.start < windowStart
+  // Only about the live-bills backfill (see load()) — departed groups'
+  // snapshot totals are always complete from the first render, nothing
+  // about them is ever "still loading."
+  const historyIncomplete =
+    historyStatus !== 'complete' && Boolean(windowStart) && range.start && range.start < windowStart
 
   const points = buildSeries(daily, {
     start: range.start,
@@ -206,7 +246,9 @@ export default function AccountGraphs() {
           <GraphsPeriodSelector tab={tab} setTab={setTab} offset={offset} setOffset={setOffset} label={range.label} />
           {historyIncomplete && (
             <p className="muted graphs-history-note">
-              Older bills outside your last two calendar years aren't included here yet.
+              {historyStatus === 'failed'
+                ? "Couldn't load your full history, so numbers for this period may be incomplete — try refreshing."
+                : 'Still loading your full history — numbers for this period may be incomplete until it finishes.'}
             </p>
           )}
 

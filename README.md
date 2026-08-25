@@ -565,16 +565,20 @@ date and amount. The donut chart is stroke-dasharray segments on one
 circle rather than individually computed arc paths, the standard trick for
 avoiding SVG's large-arc-flag edge cases entirely.
 
-**Personal graphs only reflect groups you're currently active in** — unlike
-Your Stats, this page doesn't merge in departed groups' frozen snapshot
-history, and neither page backfills older bills the way Your
-Stats/Group Stats do: both fetch a fixed two-calendar-year window
-(`getStatsWindowStart()`) once, and paging further back than that shows a
-small note that older history isn't included rather than silently
-incomplete numbers. Both are reasonable simplifications for what this page
-is for (a recent trend at a glance) rather than a drop-in replacement for
-the two main stats pages' own completeness — worth revisiting if "graphs
-going back years" turns out to matter more than expected.
+Both pages match the two main stats pages' own completeness, not a
+trimmed-down version of it: personal graphs fold in every departed
+group's frozen `daily_totals` snapshot alongside live groups (a person's
+total personal spend shouldn't quietly drop a group just because they
+left it — same reasoning `mergeCategorySpend()` already uses on Your
+Stats), and both pages use the same two-phase load as Your Stats/Group
+Stats — a recent two-calendar-year window fetches first so the page
+renders real numbers immediately, then the rest of the history backfills
+in the background (`historyStatus` — `'loading'` → `'complete'`/
+`'failed'`). Paging back further than the initial window before that
+backfill finishes shows a small note rather than silently incomplete
+numbers, same wording and same trigger (`historyStatus !== 'complete'`
+and the selected range reaching earlier than the window) as the existing
+pages already use.
 
 ## Keyboard navigation
 
