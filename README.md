@@ -564,9 +564,16 @@ own "by month" breakdown is already a plain-CSS bar chart, same reasoning).
 The line chart has no numeric y-axis of its own — its only label is the
 period's highest value, shown above the peak, since the baseline at zero
 is already visually obvious; hovering (or tapping) a point shows its exact
-date and amount. The donut chart is stroke-dasharray segments on one
-circle rather than individually computed arc paths, the standard trick for
-avoiding SVG's large-arc-flag edge cases entirely.
+date and amount. The donut chart is filled wedge `<path>`s (outer arc, in
+along the inner radius, inner arc back, close), each computed with the
+large-arc-flag handled properly rather than sidestepped — an earlier
+version used stroke-dasharray segments on one shared circle instead
+(avoiding that math entirely), but a slice thinner than the stroke itself
+(a 1% category is only a few logical units of a 30-unit stroke) has its
+dash segment's own flat end-caps cross over each other there, rendering
+as a self-intersecting bowtie instead of a small clean wedge. A filled
+closed shape has no stroke caps to go wrong, so it stays correct no
+matter how thin the wedge is.
 
 Both pages match the two main stats pages' own completeness, not a
 trimmed-down version of it: personal graphs fold in every departed

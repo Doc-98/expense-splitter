@@ -1452,7 +1452,12 @@ input.item-editable-input {
   margin-bottom: var(--space-lg);
 }
 .pie-chart { width: 160px; height: 160px; flex-shrink: 0; }
-.pie-chart-slice { cursor: pointer; transition: stroke-width 0.1s ease; }
+/* A filled wedge (see donutWedgePath() in PieChart.jsx), so "highlight the
+   hovered one" is a transform now rather than the stroke-width bump a
+   stroked circle used — transform-origin at the donut's own center keeps
+   the pop centered on the ring instead of drifting toward a corner. */
+.pie-chart-slice { cursor: pointer; transform-origin: 100px 100px; transition: transform 0.1s ease; }
+.pie-chart-slice.active { transform: scale(1.05); }
 .pie-chart-total-amount { font-size: 15px; fill: var(--ink); font-weight: 600; }
 .pie-chart-total-label { font-size: 11px; fill: var(--ink-soft); }
 .pie-chart-empty { flex-direction: column; align-items: flex-start; gap: var(--space-sm); }
