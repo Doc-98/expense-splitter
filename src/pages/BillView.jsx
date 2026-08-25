@@ -102,7 +102,7 @@ export default function BillView() {
   const payerSum = billPayers.reduce((sum, p) => sum + Number(p.amount), 0)
   const payerMismatch = isMultiPayer && Math.abs(payerSum - total) > 0.01
 
-  async function insertItemWithShares(name, unitPrice, quantity, buyerIds) {
+  async function insertItemWithShares(name, unitPrice, quantity, buyerIds, categoryId = null) {
     const { data: inserted } = await supabase
       .from('items')
       .insert({
@@ -111,6 +111,7 @@ export default function BillView() {
         unit_price: unitPrice,
         quantity,
         total_price: Math.round(unitPrice * quantity * 100) / 100,
+        category_id: categoryId,
       })
       .select()
       .single()
@@ -285,10 +286,20 @@ export default function BillView() {
 
   async function handleScanned(parsedItems) {
     setScanning(false)
+    // Case-insensitive match against this group's actual categories — the
+    // model's already constrained to these exact names (see
+    // buildExtractionPrompt() in receipt-parsing/extractionPrompt.js), this
+    // just covers the odd capitalization drift the same way
+    // parseClassifyResponse() does for the bill-categorization wizard.
+    // Anything that doesn't match (including a plain missing/null category,
+    // e.g. from the OCR-only strategy, which never suggests one at all)
+    // falls back to uncategorized, same as every other item added by hand.
+    const categoryIdByName = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]))
     for (const p of parsedItems) {
       const unitPrice = Number(p.unit_price) || 0
       const quantity = Number(p.quantity) || 1
-      await insertItemWithShares(p.name || 'Item', unitPrice, quantity, defaultBuyerIds)
+      const categoryId = typeof p.category === 'string' ? categoryIdByName.get(p.category.toLowerCase()) : null
+      await insertItemWithShares(p.name || 'Item', unitPrice, quantity, defaultBuyerIds, categoryId || null)
     }
     loadItems()
   }
@@ -469,6 +480,7 @@ export default function BillView() {
         setScanning={setScanning}
         onScanned={handleScanned}
         onError={setScanError}
+        categories={categories}
       />
       <button type="button" className="btn-link sample-link" onClick={trySampleReceipt}>
         Try sample items instead (no API key needed)

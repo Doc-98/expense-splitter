@@ -1,10 +1,10 @@
 import { getReceiptSettings } from '../../receiptSettings'
-import { EXTRACTION_PROMPT, extractJsonItems } from '../extractionPrompt'
+import { buildExtractionPrompt, extractJsonItems } from '../extractionPrompt'
 
 const DEFAULT_MODEL = 'claude-sonnet-5'
 const ANTHROPIC_VERSION = '2023-06-01'
 
-async function callClaude(imageBase64, mediaType, apiKey, model) {
+async function callClaude(imageBase64, mediaType, apiKey, model, categoryNames) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -26,7 +26,7 @@ async function callClaude(imageBase64, mediaType, apiKey, model) {
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
-            { type: 'text', text: EXTRACTION_PROMPT },
+            { type: 'text', text: buildExtractionPrompt(categoryNames) },
           ],
         },
       ],
@@ -40,18 +40,18 @@ async function callClaude(imageBase64, mediaType, apiKey, model) {
 
   const data = await response.json()
   const textBlock = data.content?.find((block) => block.type === 'text')
-  return extractJsonItems(textBlock?.text)
+  return extractJsonItems(textBlock?.text, categoryNames)
 }
 
 export const claudeStrategy = {
   id: 'claude',
   label: 'Anthropic Claude (your API key)',
   isConfigured: () => Boolean(getReceiptSettings().claudeApiKey),
-  parse: (imageBase64, mediaType) => {
+  parse: (imageBase64, mediaType, onProgress, categoryNames = []) => {
     const { claudeApiKey, claudeModel } = getReceiptSettings()
     if (!claudeApiKey) {
       throw new Error('No Claude API key saved yet — add one in Scan settings.')
     }
-    return callClaude(imageBase64, mediaType, claudeApiKey, claudeModel || DEFAULT_MODEL)
+    return callClaude(imageBase64, mediaType, claudeApiKey, claudeModel || DEFAULT_MODEL, categoryNames)
   },
 }

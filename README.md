@@ -211,15 +211,31 @@ settings** (account menu → Scan settings), stored only on that device.
 Adding yet another provider (OpenAI, Mistral, anything else) means writing
 one more file under `src/lib/receipt-parsing/strategies/` that matches the
 existing shape (`id`, `label`, `isConfigured()`, `parse(imageBase64,
-mediaType)`), and listing it in `src/lib/receipt-parsing/index.js`.
-`spatialStrategy` always stays available as the no-config fallback, so
-scanning never fails outright even with nothing else set up. All three
-cloud/local model strategies share one prompt
-(`src/lib/receipt-parsing/extractionPrompt.js`), which — unlike the
-rule-based OCR path — asks the model to actually merge a discount into the
-item it belongs to when that's clear from the photo, falling back to a
-separate negative-price line only when it can't confidently tell which item
-a discount applies to.
+mediaType, onProgress, categoryNames)`), and listing it in
+`src/lib/receipt-parsing/index.js`. `spatialStrategy` always stays
+available as the no-config fallback, so scanning never fails outright even
+with nothing else set up (it ignores `categoryNames` entirely — no
+language model behind it to ask). All three cloud/local model strategies
+share one prompt (`src/lib/receipt-parsing/extractionPrompt.js`), which —
+unlike the rule-based OCR path — asks the model to actually merge a
+discount into the item it belongs to when that's clear from the photo,
+falling back to a separate negative-price line only when it can't
+confidently tell which item a discount applies to.
+
+Since a vision model is already looking at the photo to extract items, the
+same call also asks it to suggest each item's category — from the group's
+own category list only, same "never invent one" contract as the
+bill-categorization wizard, and null whenever it isn't reasonably
+confident (receipts abbreviate and generalize constantly — a whole deli
+counter reduced to one word like "DELI" or the Italian "GASTRONOMIA" is
+common, and the model's told explicitly that guessing the broad category
+is enough, it doesn't need to identify the literal product). A confident
+suggestion is applied straight to the new item, same as picking one by
+hand; an unconfident one is left uncategorized. Either way nothing is
+final — every scanned item already gets its own editable category picker
+in Bill view, the same one used for manual items, so a wrong or missing
+guess is a one-tap fix rather than a blocker. A group with no categories
+yet skips the whole category section of the prompt.
 
 The **old, server-side approach still exists** in
 `supabase/functions/parse-receipt/` (calls Claude using a single shared,

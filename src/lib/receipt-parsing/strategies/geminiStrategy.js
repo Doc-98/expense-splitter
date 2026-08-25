@@ -1,9 +1,9 @@
 import { getReceiptSettings } from '../../receiptSettings'
-import { EXTRACTION_PROMPT, extractJsonItems } from '../extractionPrompt'
+import { buildExtractionPrompt, extractJsonItems } from '../extractionPrompt'
 
 const DEFAULT_MODEL = 'gemini-2.5-flash'
 
-async function callGemini(imageBase64, mediaType, apiKey, model) {
+async function callGemini(imageBase64, mediaType, apiKey, model, categoryNames) {
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
@@ -17,7 +17,7 @@ async function callGemini(imageBase64, mediaType, apiKey, model) {
           {
             parts: [
               { inline_data: { mime_type: mediaType, data: imageBase64 } },
-              { text: EXTRACTION_PROMPT },
+              { text: buildExtractionPrompt(categoryNames) },
             ],
           },
         ],
@@ -33,18 +33,18 @@ async function callGemini(imageBase64, mediaType, apiKey, model) {
 
   const data = await response.json()
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text
-  return extractJsonItems(raw)
+  return extractJsonItems(raw, categoryNames)
 }
 
 export const geminiStrategy = {
   id: 'gemini',
   label: 'Google Gemini (your API key)',
   isConfigured: () => Boolean(getReceiptSettings().geminiApiKey),
-  parse: (imageBase64, mediaType) => {
+  parse: (imageBase64, mediaType, onProgress, categoryNames = []) => {
     const { geminiApiKey, geminiModel } = getReceiptSettings()
     if (!geminiApiKey) {
       throw new Error('No Gemini API key saved yet — add one in Scan settings.')
     }
-    return callGemini(imageBase64, mediaType, geminiApiKey, geminiModel || DEFAULT_MODEL)
+    return callGemini(imageBase64, mediaType, geminiApiKey, geminiModel || DEFAULT_MODEL, categoryNames)
   },
 }
