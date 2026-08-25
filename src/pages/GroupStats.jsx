@@ -306,6 +306,10 @@ export default function GroupStats() {
         <h1>Stats</h1>
       </header>
 
+      <Link to={`/groups/${groupId}/stats/graphs`} className="btn-link see-stats-link">
+        See graphs →
+      </Link>
+
       {error && <p className="status-error">Couldn't load stats: {error}</p>}
       {historyGapAffectsView && (
         <p className="muted">

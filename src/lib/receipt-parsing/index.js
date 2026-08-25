@@ -14,9 +14,12 @@ function resolveStrategy() {
   return STRATEGIES.find((s) => s.id === strategyId && s.isConfigured()) || spatialStrategy
 }
 
-export async function parseReceipt(imageBase64, mediaType, onProgress) {
+// `categoryNames` is optional — a group with no categories yet (or a
+// caller with no group context, like the sample-receipt demo) just gets
+// plain item extraction, same as before this existed.
+export async function parseReceipt(imageBase64, mediaType, onProgress, categoryNames = []) {
   const strategy = resolveStrategy()
-  const items = await strategy.parse(imageBase64, mediaType, onProgress)
+  const items = await strategy.parse(imageBase64, mediaType, onProgress, categoryNames)
   return { items, strategyLabel: strategy.label }
 }
 

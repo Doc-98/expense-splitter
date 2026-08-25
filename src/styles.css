@@ -431,16 +431,13 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .recurring-bills-btn {
   margin-left: auto;
   /* A <Link> renders as a plain inline <a> by default (unlike a <button>,
-     which is inline-block on its own) — needs this to actually take the
-     padding/centering below rather than just wrapping tight to its text. */
+     which is inline-block on its own) — needs this to actually take
+     .btn-primary's padding rather than just wrapping tight to its text. */
   display: inline-block;
-  text-align: center;
-  line-height: 1.25;
-  /* Smaller than .btn-primary/.btn-secondary's own 15px default — two
-     lines of that size read as a noticeably bigger button than "Add"
-     right above it, which is the one thing this shouldn't do. */
-  font-size: 12px;
-  padding: 8px 16px;
+  /* Font size, padding, single line — everything else comes from
+     .btn-primary itself now, matching "Add" exactly. Longer label than
+     "Add" means a wider button; left alone deliberately rather than
+     shrinking the text back down to force it smaller. */
 }
 
 /* Reuses the same "receipt tape" search bar treatment as the in-app
@@ -1412,3 +1409,62 @@ input.item-editable-input {
    gives the label a bit of hit-target padding, since a bare number is a
    small tap target otherwise. */
 .range-slider-label { padding: 2px 0; }
+
+/* ---------- Spending graphs (AccountGraphs.jsx / GroupGraphs.jsx) ----------
+   GraphsPeriodSelector itself reuses .time-range/.tab-row/.tab/
+   .time-range-nav/.btn-icon from TimeRangeSelector's own styles above —
+   nothing new needed just for that part. */
+.graphs-history-note { margin-bottom: var(--space-sm); }
+.graphs-category-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 14px;
+  margin-bottom: var(--space-md);
+}
+.graphs-category-filter select { flex: 1; max-width: 260px; }
+.graphs-period-total { font-size: 15px; margin-bottom: var(--space-sm); }
+
+.line-chart-wrap { width: 100%; margin-bottom: var(--space-lg); }
+.line-chart { width: 100%; height: auto; display: block; overflow: visible; }
+.line-chart-max-label { font-size: 11px; fill: var(--ink-soft); font-family: var(--font-mono); }
+.line-chart-baseline { stroke: var(--border); stroke-width: 1; }
+.line-chart-x-label { font-size: 10px; fill: var(--ink-soft); }
+.line-chart-tooltip rect { fill: var(--ink); opacity: 0.92; }
+.line-chart-tooltip-label { font-size: 10px; fill: var(--bg); text-anchor: middle; }
+.line-chart-tooltip-amount { font-size: 11px; fill: var(--bg); text-anchor: middle; font-weight: 600; }
+
+.pie-chart-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+.pie-chart { width: 160px; height: 160px; flex-shrink: 0; }
+.pie-chart-slice { cursor: pointer; transition: stroke-width 0.1s ease; }
+.pie-chart-total-amount { font-size: 15px; fill: var(--ink); font-weight: 600; }
+.pie-chart-total-label { font-size: 11px; fill: var(--ink-soft); }
+.pie-chart-empty { flex-direction: column; align-items: flex-start; gap: var(--space-sm); }
+.pie-chart-empty-label { font-size: 14px; }
+
+.pie-chart-legend { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 200px; }
+.pie-chart-legend-item.active { background: var(--surface-tint); border-radius: var(--radius); }
+.pie-chart-legend-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  padding: 4px 6px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.pie-chart-legend-btn:disabled { cursor: default; }
+.pie-chart-legend-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pie-chart-legend-amount { flex-shrink: 0; }
+.pie-chart-legend-percent { flex-shrink: 0; width: 36px; text-align: right; }

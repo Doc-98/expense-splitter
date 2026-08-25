@@ -35,6 +35,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Spending thresholds](#spending-thresholds)
 - [Period-over-period comparison](#period-over-period-comparison)
 - [Time period controls](#time-period-controls)
+- [Spending graphs](#spending-graphs)
 - [Keyboard navigation](#keyboard-navigation)
 - [Recurring bills](#recurring-bills)
 - [What a bill row shows](#what-a-bill-row-shows)
@@ -211,15 +212,35 @@ settings** (account menu → Scan settings), stored only on that device.
 Adding yet another provider (OpenAI, Mistral, anything else) means writing
 one more file under `src/lib/receipt-parsing/strategies/` that matches the
 existing shape (`id`, `label`, `isConfigured()`, `parse(imageBase64,
-mediaType)`), and listing it in `src/lib/receipt-parsing/index.js`.
-`spatialStrategy` always stays available as the no-config fallback, so
-scanning never fails outright even with nothing else set up. All three
-cloud/local model strategies share one prompt
-(`src/lib/receipt-parsing/extractionPrompt.js`), which — unlike the
-rule-based OCR path — asks the model to actually merge a discount into the
-item it belongs to when that's clear from the photo, falling back to a
-separate negative-price line only when it can't confidently tell which item
-a discount applies to.
+mediaType, onProgress, categoryNames)`), and listing it in
+`src/lib/receipt-parsing/index.js`. `spatialStrategy` always stays
+available as the no-config fallback, so scanning never fails outright even
+with nothing else set up (it ignores `categoryNames` entirely — no
+language model behind it to ask). All three cloud/local model strategies
+share one prompt (`src/lib/receipt-parsing/extractionPrompt.js`), which —
+unlike the rule-based OCR path — asks the model to actually merge a
+discount into the item it belongs to when that's clear from the photo,
+falling back to a separate negative-price line only when it can't
+confidently tell which item a discount applies to.
+
+Since a vision model is already looking at the photo to extract items, the
+same call also asks it to suggest each item's category — from the group's
+own category list only, same "never invent one" contract as the
+bill-categorization wizard, and null whenever it isn't reasonably
+confident (receipts abbreviate and generalize constantly — a whole deli
+counter reduced to one word like "DELI" or the Italian "GASTRONOMIA" is
+common, and the model's told explicitly that guessing the broad category
+is enough, it doesn't need to identify the literal product). A confident
+suggestion is applied straight to the new item, same as picking one by
+hand. An unconfident one falls back to whatever category is already set
+on the bill itself, if any — chosen by a person before scanning,
+presumably because most of what's on that particular receipt is that
+kind of thing — and only ends up genuinely uncategorized when the bill
+has no category either. Either way nothing is final — every scanned item
+already gets its own editable category picker in Bill view, the same one
+used for manual items, so a wrong or missing guess is a one-tap fix
+rather than a blocker. A group with no categories yet skips the whole
+category section of the prompt.
 
 The **old, server-side approach still exists** in
 `supabase/functions/parse-receipt/` (calls Claude using a single shared,
@@ -497,6 +518,67 @@ follow you to a different phone or browser.
 
 The ‹ / › single-step buttons above also respond to the ← / → arrow keys —
 see [Keyboard navigation](#keyboard-navigation).
+
+## Spending graphs
+
+A line chart of spending over time, and a donut chart of spending by
+category — a separate page from Your Stats/Group Stats rather than folded
+into either, reached via a "See graphs →" link from both. It's not for
+everyone (most people just want the numbers), so it's kept out of the way
+by default and lazy-loaded (`AccountGraphs.jsx`/`GroupGraphs.jsx`) —
+nobody who never clicks through pays anything for it.
+
+Its own period control (`GraphsPeriodSelector.jsx`) is deliberately
+separate from `TimeRangeSelector` — three tabs, **This month**, **Last 4
+months**, **This year** (year is the default: the point of this page is a
+birds-eye view), calendar-anchored and paged with ‹ / › (and ← / →) like
+every other period control in this app, just without week's own jump
+tiers (nothing here is ever more than 12 steps away). Month view plots one
+point per day; the other two plot one point per calendar month — a whole
+year of individual days would be an unreadable wall of dots, and a single
+month has too few weeks to say anything as a monthly rollup. "Last 4
+months" needed a new kind of range the app didn't have yet
+(`getMultiMonthRange()` in `src/lib/timeRange.js`) — a fixed-size span of
+consecutive months rather than one calendar unit, paged a whole span at a
+time as usual.
+
+A category dropdown above the line chart switches its y-axis between total
+spending and one specific category — reading that category's own slice of
+each day/month instead of the day's/month's total. `buildSeries()`
+(`src/lib/timeSeries.js`) is what turns a day-keyed totals map into an
+ordered, zero-filled array of chart points for either granularity; the
+same day-keyed shape already existed for the personal side
+(`computeDailyTotalsForUser()` in settlement.js, built for departure
+snapshots) — the group-wide version (`computeDailyTotalsForGroup()` in
+`categoryStats.js`) is the one new piece of actual data plumbing this
+feature needed. Selecting a category recolors the line to that category's
+own color, and clicking a slice of the donut chart below sets the same
+filter — the two charts share one selection, not two separate ones.
+
+Both charts are hand-rolled SVG, not a charting library — no new UI
+dependency, consistent with the rest of this app (Your Stats/Group Stats'
+own "by month" breakdown is already a plain-CSS bar chart, same reasoning).
+The line chart has no numeric y-axis of its own — its only label is the
+period's highest value, shown above the peak, since the baseline at zero
+is already visually obvious; hovering (or tapping) a point shows its exact
+date and amount. The donut chart is stroke-dasharray segments on one
+circle rather than individually computed arc paths, the standard trick for
+avoiding SVG's large-arc-flag edge cases entirely.
+
+Both pages match the two main stats pages' own completeness, not a
+trimmed-down version of it: personal graphs fold in every departed
+group's frozen `daily_totals` snapshot alongside live groups (a person's
+total personal spend shouldn't quietly drop a group just because they
+left it — same reasoning `mergeCategorySpend()` already uses on Your
+Stats), and both pages use the same two-phase load as Your Stats/Group
+Stats — a recent two-calendar-year window fetches first so the page
+renders real numbers immediately, then the rest of the history backfills
+in the background (`historyStatus` — `'loading'` → `'complete'`/
+`'failed'`). Paging back further than the initial window before that
+backfill finishes shows a small note rather than silently incomplete
+numbers, same wording and same trigger (`historyStatus !== 'complete'`
+and the selected range reaching earlier than the window) as the existing
+pages already use.
 
 ## Keyboard navigation
 

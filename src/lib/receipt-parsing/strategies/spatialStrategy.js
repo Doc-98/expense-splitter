@@ -65,6 +65,12 @@ export const spatialStrategy = {
   label: 'Free OCR (runs on this device, no account needed)',
   // Always available — this is the guaranteed fallback, nothing to configure.
   isConfigured: () => true,
+  // categoryNames is deliberately unused — this reads pixels off the photo,
+  // there's no language model behind it to ask "what category is this,"
+  // same reasoning as its exclusion from the bill-categorization wizard's
+  // own AI pass (see resolveClassifyStrategy() in billCategorization/index.js).
+  // Items come back with no `category` field at all, same as before this
+  // feature existed — plain undefined, nothing for the caller to resolve.
   parse: (imageBase64, mediaType, onProgress) => {
     const { ocrLanguage } = getReceiptSettings()
     return runSpatialOCR(imageBase64, mediaType, ocrLanguage, onProgress)

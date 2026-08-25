@@ -25,3 +25,17 @@ expectations, etc.) — read that first, every session.
 - This is why the dance happened once already: a PR merged mid-session,
   more commits landed on the same branch before anyone noticed, and the
   next PR needed a rebase to reconcile. Subscribing closes that gap.
+
+## Product conventions
+
+- "Spent" / "expenses" — for a *personal* figure, unless a request
+  explicitly says otherwise, this means the person's own proportional
+  share of what they're actually responsible for (the `consumed` half of
+  the paid/consumed split, e.g. `computeMyCategorySpend()`,
+  `computeDailyTotalsForUser()`'s `.consumed`), never how much they
+  fronted out of pocket for a whole bill (`.paid`) — standing preference,
+  confirmed 2026-08-25. A few existing places on the stats pages do show
+  "fronted" specifically (e.g. Your Stats' "By month (fronted)" chart,
+  clearly labeled as such) — those stay as they are; this rule is about
+  what a *new*, unlabeled "how much did you spend" figure should default
+  to when it isn't specified otherwise.

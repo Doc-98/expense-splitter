@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { parseReceipt, currentStrategyLabel } from '../lib/receipt-parsing'
 
-export default function ScanReceiptButton({ scanning, setScanning, onScanned, onError }) {
+export default function ScanReceiptButton({ scanning, setScanning, onScanned, onError, categories = [] }) {
   const inputRef = useRef(null)
   const [progress, setProgress] = useState(null)
 
@@ -17,7 +17,8 @@ export default function ScanReceiptButton({ scanning, setScanning, onScanned, on
 
     try {
       const base64 = await fileToBase64(file)
-      const { items } = await parseReceipt(base64, file.type, (p) => setProgress(Math.round(p * 100)))
+      const categoryNames = categories.map((c) => c.name)
+      const { items } = await parseReceipt(base64, file.type, (p) => setProgress(Math.round(p * 100)), categoryNames)
       if (!items?.length) {
         throw new Error('No items found on that receipt — try a clearer photo, or add items manually.')
       }
