@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { fetchAllRows } from '../lib/fetchAllRows'
 import { fetchCategories } from '../lib/categories'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
+import { billTotal } from '../lib/billFilters'
+import { useCurrency } from '../context/CurrencyContext'
 import { buildTitleGroups, applyAiSuggestions } from '../lib/billCategorization/plan'
 import { classifyTitles, resolveClassifyStrategy } from '../lib/billCategorization'
+import { findKeywordClusters } from '../lib/billCategorization/keywordClusters'
 
 // Supabase/Postgres queries have a practical limit on how many IDs belong
 // in one `.in(...)` — a single category can end up covering bills from
@@ -34,6 +37,7 @@ const TIER_LABELS = {
 
 export default function CategorizeBills() {
   const { groupId } = useParams()
+  const { format } = useCurrency()
 
   // 'loading' -> 'landing' -> 'running' -> 'review' -> 'done'
   const [step, setStep] = useState('loading')
@@ -58,14 +62,19 @@ export default function CategorizeBills() {
           fetchAllRows(() =>
             supabase
               .from('bills')
-              .select('id, title, note', { count: 'exact' })
+              .select('id, title, note, items(total_price)', { count: 'exact' })
               .eq('group_id', groupId)
               .is('category_id', null)
           ),
         ])
         if (cancelled) return
         setCategories(categoriesData)
-        setBills(billsData)
+        // Each bill's total is only needed as human-facing context on the
+        // review screen (see the doc comment on buildTitleGroups() in
+        // plan.js for why it's deliberately never sent to the AI) —
+        // computed once here with the same billTotal() helper every other
+        // page uses, rather than carrying the raw `items` rows around.
+        setBills(billsData.map((bill) => ({ ...bill, total: billTotal(bill) })))
         setStep('landing')
       } catch (err) {
         if (cancelled) return
@@ -113,6 +122,26 @@ export default function CategorizeBills() {
 
   function updateSelection(key, categoryId) {
     setSelections((s) => ({ ...s, [key]: categoryId }))
+  }
+
+  // Recomputed whenever the groups change, not on every render — findKeywordClusters()
+  // walks every group's title each time it runs, and groups themselves only change once
+  // (when runCategorization() finishes).
+  const keywordClusters = useMemo(() => findKeywordClusters(groups), [groups])
+  // keyword -> category id chosen in that cluster's own picker, kept separate from
+  // `selections` so picking a bulk category doesn't itself change anything until
+  // "Apply" is clicked — the per-row selects below stay the single source of truth
+  // for what's actually going to be saved.
+  const [clusterPicks, setClusterPicks] = useState({})
+
+  function applyToKeywordCluster(cluster) {
+    const categoryId = clusterPicks[cluster.keyword]
+    if (!categoryId) return
+    setSelections((s) => {
+      const next = { ...s }
+      for (const key of cluster.groupKeys) next[key] = categoryId
+      return next
+    })
   }
 
   const resolvedBillCount = groups.reduce((sum, g) => (selections[g.key] ? sum + g.billIds.length : sum), 0)
@@ -214,6 +243,55 @@ export default function CategorizeBills() {
             nothing is saved until you confirm.
           </p>
 
+          {keywordClusters.length > 0 && (
+            <div>
+              <h2 className="settings-section-title">Common patterns</h2>
+              <p className="muted">
+                These words show up across several differently-titled bills — likely the same merchant
+                typed a bit differently each time (a date, a location, a note). Pick a category and apply
+                it to every one of them at once; you can still change any individual row afterward.
+              </p>
+              <ul className="member-list">
+                {keywordClusters.map((cluster) => (
+                  <li key={cluster.keyword} className="member-list-item">
+                    <span className="categorize-row-title">
+                      "{cluster.keyword}"
+                      <span className="muted">
+                        {' '}
+                        ({cluster.groupKeys.length} titles, {cluster.billCount} bill
+                        {cluster.billCount === 1 ? '' : 's'})
+                      </span>
+                    </span>
+                    <span className="member-list-actions">
+                      <select
+                        className="categorize-row-select"
+                        value={clusterPicks[cluster.keyword] || ''}
+                        onChange={(e) =>
+                          setClusterPicks((p) => ({ ...p, [cluster.keyword]: e.target.value }))
+                        }
+                      >
+                        <option value="">Choose category…</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn-link"
+                        disabled={!clusterPicks[cluster.keyword]}
+                        onClick={() => applyToKeywordCluster(cluster)}
+                      >
+                        Apply to all
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {['splitwise', 'ai', 'none'].map((tier) => {
             const tierGroups = groups.filter((g) => g.source === tier)
             if (tierGroups.length === 0) return null
@@ -227,7 +305,8 @@ export default function CategorizeBills() {
                         {group.title}
                         <span className="muted">
                           {' '}
-                          ({group.billIds.length} bill{group.billIds.length === 1 ? '' : 's'})
+                          ({group.billIds.length} bill{group.billIds.length === 1 ? '' : 's'}, total{' '}
+                          {format(group.totalAmount)})
                         </span>
                       </span>
                       <select

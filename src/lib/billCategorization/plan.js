@@ -10,10 +10,21 @@ function normalizeTitle(title) {
 
 // Groups every uncategorized bill by its (normalized) title and runs the
 // free Splitwise-note pass on each group in the same walk — no I/O, fully
-// synchronous and testable on its own. `bills` need only `id`, `title`,
-// `note`. A title-less bill (shouldn't exist, but bills.title has no not-
-// null constraint enforced beyond the app's own default) is skipped
-// rather than grouped under an empty string.
+// synchronous and testable on its own. `bills` need `id`, `title`, `note`,
+// and `total` (each bill's own total cost, in currency units — see
+// billTotal() in src/lib/billFilters.js, the same helper every other page
+// uses to derive it from items). A title-less bill (shouldn't exist, but
+// bills.title has no not-null constraint enforced beyond the app's own
+// default) is skipped rather than grouped under an empty string.
+//
+// `total` is *not* fed to the AI pass — a category is a nominal judgment
+// about what kind of merchant this is, not something a single euro amount
+// reliably signals (a €15 charge could be groceries, a cheap dinner, or a
+// subscription, with nothing to tell those apart). It's kept here purely
+// for the review screen, in each group's own `totalAmount` — a person
+// recognizing "oh, that one was ~€40 three times" is often exactly the
+// context a cryptic or joking title needs, even when the title alone
+// gives an AI nothing to go on.
 //
 // Each group's source/suggestedCategoryId reflects the *first* bill in
 // the group with a matchable Splitwise category — bills sharing an exact
@@ -33,12 +44,14 @@ export function buildTitleGroups(bills, categories) {
         key,
         title: bill.title.trim(),
         billIds: [],
+        totalAmount: 0,
         source: 'none', // 'splitwise' | 'ai' | 'none'
         suggestedCategoryId: null,
       })
     }
     const group = groups.get(key)
     group.billIds.push(bill.id)
+    group.totalAmount += Number(bill.total) || 0
 
     if (group.source === 'none') {
       const splitwiseCategory = extractSplitwiseCategoryFromNote(bill.note)

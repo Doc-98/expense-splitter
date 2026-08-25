@@ -14,7 +14,7 @@ export function buildClassifyPrompt(categoryNames, titles) {
   const categoryList = categoryNames.map((name) => `"${name}"`).join(', ')
   const titleList = titles.map((t, i) => `${i}. ${JSON.stringify(t)}`).join('\n')
 
-  return `You are categorizing a list of expense bill titles for a household expense-tracking app. Each title is usually a short store or merchant name, sometimes with a date, note, or location attached.
+  return `You are categorizing a list of expense bill titles for a household expense-tracking app. Each title is usually a short store or merchant name, sometimes with a date, note, or location attached — but some were typed by hand years ago and may be an in-joke, a nickname, or a personal reference between the people in the household rather than a literal merchant name (titles may be in any language). If a title doesn't clearly name a recognizable kind of business or expense, treat it as unclear rather than guessing from tone, wordplay, or a vague association — return null for it.
 
 Categories available — choose ONLY from this exact list, or null if none clearly fit:
 [${categoryList}]

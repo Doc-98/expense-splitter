@@ -997,7 +997,20 @@ screen:
   ending up with a pile of near-duplicate tags nobody asked for. Whatever
   it isn't confident about comes back `null` rather than a guess, since a
   person reviews every suggestion anyway and a wrong guess sitting there
-  pre-selected is worse than an honest "needs your input."
+  pre-selected is worse than an honest "needs your input." A title alone
+  isn't always a literal merchant name — years of hand-typed titles
+  include the odd in-joke or nickname between whoever's in the group — so
+  the prompt is told to return `null` for anything that doesn't clearly
+  name a recognizable kind of business or expense rather than guess from
+  tone or wordplay.
+
+A bill's own total is never sent to the AI — a single euro amount is a
+weak signal for what *kind* of merchant something is (a €15 charge could
+be groceries, a cheap dinner, or a subscription), and a wrong steer from
+it would be worse than no steer at all. It's still shown next to every
+group on the review screen, though: a person recognizing "oh, that one
+was always around €40" is often exactly the context a cryptic or joking
+title needs, even when the title gives the AI nothing to go on.
 
 Titles are deduplicated before any of this runs
 (`buildTitleGroups()` in `src/lib/billCategorization/plan.js`) — every
@@ -1011,10 +1024,27 @@ one call per bill. A thousand-plus bills might mean a few hundred API
 calls one-bill-at-a-time; deduplicated and batched, it's usually a
 handful.
 
+Even after deduplication, the same real merchant often shows up as
+several different title groups — "Lidl - martedì", "LIDL 12/03", "Lidl
+via Roma" are three distinct exact titles, and so three separate rows,
+even though a person recognizes all three as one supermarket at a
+glance. The review screen finds words that recur across several
+*different* title groups (`findKeywordClusters()` in
+`src/lib/billCategorization/keywordClusters.js`) — no stopword list or
+language assumption, just "appears in enough distinct titles to be
+worth surfacing," since this app's own bill titles are as likely to be
+Italian as English — and lists them in a "Common patterns" section above
+the usual tiers, each with its own category picker and an "Apply to
+all" that sets every matching group's dropdown at once. It's purely a
+convenience for filling in the per-row dropdowns faster: nothing here is
+fed to the AI or applied on its own, and any row it touches can still be
+changed individually afterward, same as any other suggestion.
+
 The review screen groups every suggestion by how it was reached — from
 Splitwise, from AI, or needing a person's own input — in that order of
-trust, each with an editable dropdown (including "leave uncategorized")
-before the one batched write that actually applies them.
+trust, each with an editable dropdown (including "leave uncategorized"),
+the group's total spend shown alongside it for context, before the one
+batched write that actually applies them.
 
 ## How the data model works
 
