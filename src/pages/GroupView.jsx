@@ -786,14 +786,12 @@ export default function GroupView() {
           </button>
         )}
         {/* Same wording as the "Add" button above ("Add ___"), just the
-            generic noun instead of a specific bill — pill-styled like a
-            real button (was a bare btn-link, which read as passive inline
-            text rather than a button worth tapping) and pinned to the
+            generic noun instead of a specific bill — same btn-primary style
+            as that button too now (font size, padding, single line), for
+            full visual consistency between the two — and pinned to the
             right so it sits under "Add" rather than under "Select". */}
         <Link to={`/groups/${groupId}/recurring`} className="btn-primary recurring-bills-btn">
-          Add Recurring
-          <br />
-          Bill ↻
+          Add Recurring Bill ↻
         </Link>
       </div>
 

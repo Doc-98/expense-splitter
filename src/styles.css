@@ -431,16 +431,13 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .recurring-bills-btn {
   margin-left: auto;
   /* A <Link> renders as a plain inline <a> by default (unlike a <button>,
-     which is inline-block on its own) — needs this to actually take the
-     padding/centering below rather than just wrapping tight to its text. */
+     which is inline-block on its own) — needs this to actually take
+     .btn-primary's padding rather than just wrapping tight to its text. */
   display: inline-block;
-  text-align: center;
-  line-height: 1.25;
-  /* Smaller than .btn-primary/.btn-secondary's own 15px default — two
-     lines of that size read as a noticeably bigger button than "Add"
-     right above it, which is the one thing this shouldn't do. */
-  font-size: 12px;
-  padding: 8px 16px;
+  /* Font size, padding, single line — everything else comes from
+     .btn-primary itself now, matching "Add" exactly. Longer label than
+     "Add" means a wider button; left alone deliberately rather than
+     shrinking the text back down to force it smaller. */
 }
 
 /* Reuses the same "receipt tape" search bar treatment as the in-app
