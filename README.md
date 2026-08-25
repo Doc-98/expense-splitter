@@ -227,6 +227,14 @@ hardcoded `ANTHROPIC_API_KEY` secret) but isn't wired up to anything
 anymore — kept only as a reference/starting point if you'd rather run a
 centralized paid option for your own household than rely on BYOK.
 
+The same Scan settings/BYOK setup also powers a second, unrelated feature
+— guessing spending categories for a batch of uncategorized bills by
+title alone, no image involved. See ["Categorizing bills after an
+import"](#categorizing-bills-after-an-import) below; `src/lib/billCategorization/`
+is deliberately independent of everything above (its own prompt, its own
+small per-provider callers) rather than reshaping this scanning code to
+also handle a plain-text prompt.
+
 ## Editing items
 
 Every value on an item's row — its name, and (see below) its unit price,
@@ -954,6 +962,89 @@ hard stop. "Continue anyway" is always right there, same reasoning as
 everywhere else this app avoids trapping you behind a check it runs on
 your behalf: you're the authority on your own financial history, not a
 validation rule.
+
+### Categorizing bills after an import
+
+An import lands every bill uncategorized — Splitwise's own categories
+don't line up with this app's, and guessing wrong at import time would be
+worse than just leaving it blank. `/groups/:groupId/categorize` (from
+Group Settings, next to the import link itself) is a separate wizard for
+catching up on those afterward, since doing it one bill at a time isn't
+realistic once there are hundreds of them.
+
+Two passes, run in order, both producing only *suggestions* — nothing
+about any bill changes until they're reviewed and confirmed on one
+screen:
+
+- **Free and instant.** Every bill imported from Splitwise already has
+  Splitwise's own original category sitting right there in its note
+  (`Imported from Splitwise (Category)` — see "Importing from Splitwise"
+  above), a person's real judgment at the time, not a guess. This pass
+  just reads it back out and matches it against the group's own category
+  *names* — exact match first, then a small alias table
+  (`src/lib/billCategorization/categoryMatch.js`) for the common
+  near-misses (Splitwise's "Dining out" → this app's "Eating out," and
+  so on). No API call, no cost, and it alone resolves a large share of a
+  typical import before AI ever gets involved.
+- **AI, for whatever's left.** Bills with no Splitwise category to begin
+  with, or one that didn't match anything the group actually has, get
+  classified by title instead — using whichever provider is already
+  configured in Scan settings (Claude, Gemini, or Ollama; the zero-config
+  "Free OCR" fallback has no language model behind it, so it has nothing
+  to offer here and is skipped entirely). Both passes only ever choose
+  from the group's *existing* category names, exactly like the free pass
+  — the AI is never allowed to invent a new one, so there's no risk of
+  ending up with a pile of near-duplicate tags nobody asked for. Whatever
+  it isn't confident about comes back `null` rather than a guess, since a
+  person reviews every suggestion anyway and a wrong guess sitting there
+  pre-selected is worse than an honest "needs your input." A title alone
+  isn't always a literal merchant name — years of hand-typed titles
+  include the odd in-joke or nickname between whoever's in the group — so
+  the prompt is told to return `null` for anything that doesn't clearly
+  name a recognizable kind of business or expense rather than guess from
+  tone or wordplay.
+
+A bill's own total is never sent to the AI — a single euro amount is a
+weak signal for what *kind* of merchant something is (a €15 charge could
+be groceries, a cheap dinner, or a subscription), and a wrong steer from
+it would be worse than no steer at all. It's still shown next to every
+group on the review screen, though: a person recognizing "oh, that one
+was always around €40" is often exactly the context a cryptic or joking
+title needs, even when the title gives the AI nothing to go on.
+
+Titles are deduplicated before any of this runs
+(`buildTitleGroups()` in `src/lib/billCategorization/plan.js`) — every
+bill sharing the exact same title (case/whitespace-insensitive) is
+treated as one group with one suggestion, both because a long history
+tends to repeat the same handful of merchants over and over, and because
+it's what makes the AI pass cheap: distinct *titles* are batched, roughly
+150 at a time, into a small number of model calls
+(`classifyTitles()` in `src/lib/billCategorization/index.js`) rather than
+one call per bill. A thousand-plus bills might mean a few hundred API
+calls one-bill-at-a-time; deduplicated and batched, it's usually a
+handful.
+
+Even after deduplication, the same real merchant often shows up as
+several different title groups — "Lidl - martedì", "LIDL 12/03", "Lidl
+via Roma" are three distinct exact titles, and so three separate rows,
+even though a person recognizes all three as one supermarket at a
+glance. The review screen finds words that recur across several
+*different* title groups (`findKeywordClusters()` in
+`src/lib/billCategorization/keywordClusters.js`) — no stopword list or
+language assumption, just "appears in enough distinct titles to be
+worth surfacing," since this app's own bill titles are as likely to be
+Italian as English — and lists them in a "Common patterns" section above
+the usual tiers, each with its own category picker and an "Apply to
+all" that sets every matching group's dropdown at once. It's purely a
+convenience for filling in the per-row dropdowns faster: nothing here is
+fed to the AI or applied on its own, and any row it touches can still be
+changed individually afterward, same as any other suggestion.
+
+The review screen groups every suggestion by how it was reached — from
+Splitwise, from AI, or needing a person's own input — in that order of
+trust, each with an editable dropdown (including "leave uncategorized"),
+the group's total spend shown alongside it for context, before the one
+batched write that actually applies them.
 
 ## How the data model works
 

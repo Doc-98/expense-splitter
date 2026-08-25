@@ -24,6 +24,9 @@ import Thresholds from './pages/Thresholds'
 // the CSV/Splitwise parsing logic it pulls in, is only fetched by whoever
 // actually opens it.
 const ImportBills = lazy(() => import('./pages/ImportBills'))
+// Same reasoning as ImportBills above — a wizard almost nobody opens more
+// than once, right after a big import.
+const CategorizeBills = lazy(() => import('./pages/CategorizeBills'))
 
 function RequireAuth({ children }) {
   const { session } = useAuth()
@@ -87,6 +90,16 @@ function Shell() {
       />
       <Route path="/groups/:groupId/bills/:billId" element={<RequireAuth><BillView /></RequireAuth>} />
       <Route path="/groups/:groupId/recurring" element={<RequireAuth><RecurringBills /></RequireAuth>} />
+      <Route
+        path="/groups/:groupId/categorize"
+        element={
+          <RequireAuth>
+            <Suspense fallback={<div className="page-loading">Loading…</div>}>
+              <CategorizeBills />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

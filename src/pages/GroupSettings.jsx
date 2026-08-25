@@ -561,6 +561,9 @@ export default function GroupSettings() {
       <Link to={`/groups/${groupId}/import`} className="btn-link import-link">
         Import bills from Splitwise (CSV)
       </Link>
+      <Link to={`/groups/${groupId}/categorize`} className="btn-link import-link">
+        Categorize uncategorized bills
+      </Link>
 
       {formerRealMembers.length > 0 && (
         <>
