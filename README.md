@@ -533,47 +533,30 @@ separate from `TimeRangeSelector` — three tabs, **This month**, **Last 4
 months**, **This year** (year is the default: the point of this page is a
 birds-eye view), calendar-anchored and paged with ‹ / › (and ← / →) like
 every other period control in this app, just without week's own jump
-tiers (nothing here is ever more than 12 steps away). Each tab plots at
-the finest granularity that stays readable at its own width: This month
-is one point per *bill* (each actual transaction), Last 4 months is one
-point per day, and This year is one point per Monday-anchored week —
-finer than that and the wider views would be an unreadable wall of
-points; coarser and the narrower ones wouldn't say much more than the
-period total already does. `buildSeries()` (`src/lib/timeSeries.js`)
-builds the day/week/month points from a day-keyed totals map, zero-filled
-so the x-axis never has a silent gap; `buildBillPoints()` in the same
-file handles the finest tier instead, since "one point per transaction"
-doesn't fit that same "one point per fixed calendar unit" model — it
-takes already-assembled `{date, amount}` records (each page works out its
-own "amount per bill," since a bill's own total vs. a person's share of
-one is different math), filters to the visible range, and drops anything
-at zero rather than showing a flat dot for an irrelevant bill. LineChart's
-invisible hover/tap target also shrinks itself once points sit closer
-together than its default size — the daily view over 4 months packs
-~120 of them into one chart, and a fixed-size target would overlap
-several neighbors and make hovering flicker between the wrong ones.
+tiers (nothing here is ever more than 12 steps away). Month view plots one
+point per day; the other two plot one point per calendar month — a whole
+year of individual days would be an unreadable wall of dots, and a single
+month has too few weeks to say anything as a monthly rollup. (A finer
+per-week/per-bill tier was tried for the wider views, but even with
+LineChart's own curve smoothing it read as too spiky to actually be more
+useful than this coarser version — reverted back to it everywhere.)
+"Last 4 months" needed a new kind of range the app didn't have yet
+(`getMultiMonthRange()` in `src/lib/timeRange.js`) — a fixed-size span of
+consecutive months rather than one calendar unit, paged a whole span at a
+time as usual.
 
-A departed group has no per-bill record left to plot at that finest
-tier — only its frozen day-by-day snapshot — so This month's per-bill
-view stands in one point per day such a group actually had matching
-spending, alongside the real per-bill points from live groups in the
-same chronological order, rather than silently dropping that spending
-from this one view. "Last 4 months" itself needed a new kind of range
-the app didn't have yet (`getMultiMonthRange()` in
-`src/lib/timeRange.js`) — a fixed-size span of consecutive months rather
-than one calendar unit, paged a whole span at a time as usual.
-
-A category dropdown above the line chart switches its y-axis between
-total spending and one specific category — reading that category's own
-slice of each point instead of its total. The same day-keyed shape
-buildSeries() reads already existed for the personal side
+A category dropdown above the line chart switches its y-axis between total
+spending and one specific category — reading that category's own slice of
+each day/month instead of the day's/month's total. `buildSeries()`
+(`src/lib/timeSeries.js`) is what turns a day-keyed totals map into an
+ordered, zero-filled array of chart points for either granularity; the
+same day-keyed shape already existed for the personal side
 (`computeDailyTotalsForUser()` in settlement.js, built for departure
 snapshots) — the group-wide version (`computeDailyTotalsForGroup()` in
-`categoryStats.js`) is the one new piece of actual data plumbing the
-day/week/month tiers needed. Selecting a category recolors the line to
-that category's own color, and clicking a slice of the donut chart below
-sets the same filter — the two charts share one selection, not two
-separate ones.
+`categoryStats.js`) is the one new piece of actual data plumbing this
+feature needed. Selecting a category recolors the line to that category's
+own color, and clicking a slice of the donut chart below sets the same
+filter — the two charts share one selection, not two separate ones.
 
 Both charts are hand-rolled SVG, not a charting library — no new UI
 dependency, consistent with the rest of this app (Your Stats/Group Stats'

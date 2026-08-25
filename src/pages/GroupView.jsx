@@ -785,16 +785,15 @@ export default function GroupView() {
             {selectMode ? 'Cancel' : 'Select bills'}
           </button>
         )}
-        {/* Same wording as the "Add" button above ("Add ___"), just the
-            generic noun instead of a specific bill — same accent color as
-            that button (.btn-primary), but its own smaller, two-line
-            layout so it doesn't read as an equally-big second "Add" —
-            pinned to the right so it sits under "Add" rather than under
-            "Select bills". */}
-        <Link to={`/groups/${groupId}/recurring`} className="btn-primary recurring-bills-btn">
-          Add Recurring
-          <br />
-          Bill ↻
+        {/* Several rounds of pill-button styling (colored, two-line,
+            single-line, every size in between) all ended up either too
+            big or too fussy next to "Add" — a secondary, occasional
+            action doesn't need button chrome at all. Plain text, same
+            style as "Select bills" right next to it (.btn-link), pinned
+            to the opposite edge of the same row — matches that link's own
+            visual weight instead of competing with "Add" for it. */}
+        <Link to={`/groups/${groupId}/recurring`} className="btn-link recurring-bills-btn">
+          Add recurring bill ↻
         </Link>
       </div>
 

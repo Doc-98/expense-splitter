@@ -438,23 +438,14 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .bill-list-item .card-list-item { flex: 1; }
 
 .bill-list-controls { display: flex; align-items: center; gap: var(--space-md); margin-bottom: var(--space-lg); }
-/* Pinned to the row's right edge regardless of whether "Select" (its own
-   sibling here, left-aligned by just being first in source order) is
-   currently rendered at all — an empty group hides Select entirely, and
-   this should still land under "Add" above either way, not drift left
-   into where Select would have been. */
-.recurring-bills-btn {
-  margin-left: auto;
-  text-align: center;
-  line-height: 1.25;
-  /* Smaller than .btn-primary's own 15px default — two lines at that size
-     read as a noticeably bigger button than "Add" right above it, which
-     is the one thing this shouldn't do. Color still matches "Add"
-     (.btn-primary, inherited) — it's specifically the size/shape that
-     needs to stay smaller, not the color. */
-  font-size: 12px;
-  padding: 8px 16px;
-}
+/* Pinned to the row's right edge, opposite "Select bills" (its own sibling
+   here, left-aligned by just being first in source order) regardless of
+   whether that one's currently rendered at all — an empty group hides it
+   entirely, and this should still land at the row's right edge either
+   way. Plain .btn-link now (see the JSX comment for why) — nothing else
+   to override, its own font-size/color/weight already match
+   "Select bills" exactly. */
+.recurring-bills-btn { margin-left: auto; }
 
 /* Reuses the same "receipt tape" search bar treatment as the in-app
    guide's own search (.guide-search-input) — same torn-edge look, same
