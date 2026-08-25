@@ -918,6 +918,19 @@ input.item-editable-input {
 .guest-rename-form { display: flex; gap: 8px; align-items: center; flex: 1; }
 .guest-rename-form input { flex: 1; }
 
+/* CategorizeBills.jsx's review rows — a bill title can run considerably
+   longer than a member/category name (the only other things this list
+   style has shown so far), so unlike every other .member-list-item this
+   one actually needs to handle overflow: the title truncates with an
+   ellipsis instead of pushing its row's <select> off screen. */
+.categorize-row-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.categorize-row-select { flex-shrink: 0; max-width: 45%; margin-left: var(--space-sm); }
+
 .threshold-row { gap: var(--space-sm); }
 .threshold-input-wrap { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .threshold-input-wrap input { width: 90px; text-align: right; font-family: var(--font-mono); }

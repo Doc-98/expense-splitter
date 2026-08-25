@@ -1,3 +1,5 @@
+import { parseJsonResponse } from '../parseJsonResponse'
+
 // Shared by every cloud/local vision-model strategy (Gemini, Claude, Ollama)
 // — kept in one place so the three don't quietly drift out of sync.
 export const EXTRACTION_PROMPT = `You are reading a photo of a shopping/grocery receipt. Extract every purchased line item.
@@ -13,16 +15,6 @@ Rules:
 - Some receipts show a discount as its own line with a negative price, right after the item it applies to (e.g. "-0.50" or "SCONTO -0.50"). When it's clearly tied to one specific item, subtract it from that item's unit_price directly instead of listing it separately. If you can't confidently tell which item a discount belongs to, include it as its own line with a negative unit_price and a name like "Discount" — never drop it silently.
 - If you cannot read the receipt at all, return {"items": []}.`
 
-// Every strategy asks for a bare JSON object, but models occasionally wrap
-// it in a markdown code fence anyway — this strips that defensively before
-// JSON.parse, rather than trusting each provider's instruction-following.
 export function extractJsonItems(rawText) {
-  const cleaned = (rawText || '{}').trim().replace(/^```json\s*|^```\s*|```$/g, '')
-  let parsed
-  try {
-    parsed = JSON.parse(cleaned)
-  } catch {
-    throw new Error("Could not parse the model's response as JSON")
-  }
-  return parsed.items || []
+  return parseJsonResponse(rawText).items || []
 }
