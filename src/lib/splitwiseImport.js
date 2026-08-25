@@ -150,11 +150,22 @@ export function parseSplitwiseCsv(text) {
 // `bills`/`items`/`itemShares` are the same shapes computeBalances already
 // expects (see settlement.js) — pass everything imported this run, not
 // the group's full history, since finalBalances is itself only ever "as
-// of the moment this CSV was exported," not "as of right now." `nameToId`
-// maps each Splitwise name to the group_members.id it was resolved to
-// (the same mapping ImportBills.jsx builds while matching people), so a
-// balance keyed by group_members.id can be compared against one keyed by
-// Splitwise's own name.
+// of the moment this CSV was exported," not "as of right now."
+//
+// `payments`, unlike those three, should be the group's *actual current*
+// payments (defaulting to none, for a plain "just the bills" check) —
+// Splitwise's own finalBalances has no notion of this app's local
+// settle-up records at all, but the live Settle Up page always includes
+// every one of them regardless of when they were recorded. Passing only
+// this run's own inserts (or, worse, silently omitting real ones already
+// on the group) would let this report "matches" and then visibly disagree
+// with that page the moment you look at it — most confusingly right after
+// deleting a group's bills without also clearing its payments and
+// re-importing into the same, no-longer-quite-empty group.
+// `nameToId` maps each Splitwise name to the group_members.id it was
+// resolved to (the same mapping ImportBills.jsx builds while matching
+// people), so a balance keyed by group_members.id can be compared against
+// one keyed by Splitwise's own name.
 //
 // A tolerance of a few cents (rather than an exact match) absorbs
 // rounding drift that can accumulate over hundreds of reconstructed

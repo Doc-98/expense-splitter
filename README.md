@@ -913,15 +913,24 @@ states each person's own all-time net balance directly. `parseSplitwiseCsv()`
 captures it (`finalBalances`) instead of just skipping it as a non-expense
 row, and once the import finishes, `checkImportBalances()` runs the app's
 own `computeBalances()` (the exact same settlement math the group page
-itself trusts) over everything just imported and compares each person's
-reconstructed balance against Splitwise's own number for them, a few
-cents' tolerance absorbing any rounding drift accumulated across hundreds
-of reconstructed shares. A green confirmation means the two independently
-arrive at the same picture; a red one lists exactly whose balance doesn't
-match and by how much — informational either way, never a hard stop.
-"Continue anyway" is always right there, same reasoning as everywhere else
-this app avoids trapping you behind a check it runs on your behalf: you're
-the authority on your own financial history, not a validation rule.
+itself trusts) over everything just imported *plus* the group's existing
+payments — any settle-up already recorded before this import — and
+compares each person's reconstructed balance against Splitwise's own
+number for them, a few cents' tolerance absorbing any rounding drift
+accumulated across hundreds of reconstructed shares. Existing payments
+matter here even though Splitwise's own number has no notion of them:
+the live Settle Up page always includes every payment in the group, so a
+check that only looked at the freshly imported bills could report a clean
+match here and then visibly disagree with that page the moment you look
+at it — most confusingly after deleting a group's bills without also
+checking "delete payments too" and re-importing into the same,
+no-longer-quite-empty group. A green confirmation means the two
+independently arrive at the same picture; a red one lists exactly whose
+balance doesn't match and by how much — informational either way, never a
+hard stop. "Continue anyway" is always right there, same reasoning as
+everywhere else this app avoids trapping you behind a check it runs on
+your behalf: you're the authority on your own financial history, not a
+validation rule.
 
 ## How the data model works
 
