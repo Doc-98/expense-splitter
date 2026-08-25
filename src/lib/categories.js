@@ -25,6 +25,11 @@ export async function renameCategory(categoryId, name) {
   if (error) throw error
 }
 
+export async function updateCategoryColor(categoryId, color) {
+  const { error } = await supabase.from('categories').update({ color }).eq('id', categoryId)
+  if (error) throw error
+}
+
 export async function deleteCategory(categoryId) {
   // Bills/items that used this category fall back to "uncategorized"
   // automatically (on delete set null on both FK columns) — nothing else

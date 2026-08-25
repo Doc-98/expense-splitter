@@ -34,10 +34,10 @@ export const geminiTextStrategy = {
   id: 'gemini',
   label: 'Google Gemini (your API key)',
   isConfigured: () => Boolean(getReceiptSettings().geminiApiKey),
-  async classify(titles, categoryNames) {
+  async classify(titles, categoryNames, extraContext) {
     const { geminiApiKey, geminiModel } = getReceiptSettings()
     if (!geminiApiKey) throw new Error('No Gemini API key saved yet — add one in Scan settings.')
-    const prompt = buildClassifyPrompt(categoryNames, titles)
+    const prompt = buildClassifyPrompt(categoryNames, titles, extraContext)
     const raw = await callGeminiText(prompt, geminiApiKey, geminiModel || DEFAULT_MODEL)
     return parseClassifyResponse(raw, titles, categoryNames)
   },

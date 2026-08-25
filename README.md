@@ -345,6 +345,16 @@ This lives entirely separate from `settlement.js` — category totals are a
 "where did the money go" question, nothing to do with who owes whom, so
 there was no reason to entangle the two.
 
+Every category has a color, shown as a small dot wherever the category
+itself is (Bill view, stats, this settings list). It's picked from a
+small ten-color preset row (`CATEGORY_COLORS` in `src/lib/categories.js`)
+plus the browser's own color picker for anything outside it
+(`ColorSwatchPicker.jsx`) — both when adding a category and, since a color
+picked at creation isn't necessarily one you're stuck with, afterward too:
+clicking an existing category's dot in Group Settings
+(`CategoryColorButton.jsx`) reopens the same picker in a small popover and
+applies whatever's chosen immediately, no separate save step.
+
 ## Spending thresholds
 
 A personal monthly budget per category, set at **account menu → Spending
@@ -1012,6 +1022,16 @@ group on the review screen, though: a person recognizing "oh, that one
 was always around €40" is often exactly the context a cryptic or joking
 title needs, even when the title gives the AI nothing to go on.
 
+The landing screen has one optional field: free text telling the AI
+something about *this* household's bills specifically — what language
+titles tend to be in, a word that means something different here than it
+does generically ("gas" as a household utility rather than fuel), what a
+one-word title like "Iliad" or "Crunchy" actually is. The model has
+nothing beyond the titles and category names themselves, so anything a
+person would know at a glance but a stranger wouldn't is worth typing in
+once — it's saved (`categorizeHint` in `src/lib/receiptSettings.js`) and
+reused for every future run, not retyped per group.
+
 Titles are deduplicated before any of this runs
 (`buildTitleGroups()` in `src/lib/billCategorization/plan.js`) — every
 bill sharing the exact same title (case/whitespace-insensitive) is
@@ -1035,10 +1055,22 @@ language assumption, just "appears in enough distinct titles to be
 worth surfacing," since this app's own bill titles are as likely to be
 Italian as English — and lists them in a "Common patterns" section above
 the usual tiers, each with its own category picker and an "Apply to
-all" that sets every matching group's dropdown at once. It's purely a
-convenience for filling in the per-row dropdowns faster: nothing here is
-fed to the AI or applied on its own, and any row it touches can still be
-changed individually afterward, same as any other suggestion.
+all" that sets every matching group's dropdown at once, with a small
+"Applied ✓" note next to the button once it's run so the (otherwise easy
+to miss) effect on the rows further down the page is actually visible.
+It's purely a convenience for filling in the per-row dropdowns faster:
+nothing here is fed to the AI or applied on its own, and any row it
+touches can still be changed individually afterward, same as any other
+suggestion. Two things keep the word list itself meaningful rather than
+noisy: titles are tokenized on letter/digit boundaries as well as
+punctuation, so a merchant name glued directly to a date with no
+separator ("Lidl24Agosto") still yields the same "lidl" token as every
+other occurrence instead of a one-off fragment that never repeats; and a
+word sitting in an unusually large share of *all* the group's titles is
+left out on the assumption that it's a connector (a weekday, "via," a
+generic "ricevuta"/"bolletta" prefix) rather than a merchant name — a
+statistical cap rather than a hand-curated word list, so it doesn't
+depend on guessing the household's language either.
 
 The review screen groups every suggestion by how it was reached — from
 Splitwise, from AI, or needing a person's own input — in that order of

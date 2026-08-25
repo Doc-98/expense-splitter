@@ -10,15 +10,20 @@ import { parseJsonResponse } from '../parseJsonResponse'
 // ellipsis, extra whitespace) would silently break a match-by-title-text
 // mapping back to the original bills; an index into the same numbered
 // list it was given has nothing to get subtly wrong.
-export function buildClassifyPrompt(categoryNames, titles) {
+export function buildClassifyPrompt(categoryNames, titles, extraContext) {
   const categoryList = categoryNames.map((name) => `"${name}"`).join(', ')
   const titleList = titles.map((t, i) => `${i}. ${JSON.stringify(t)}`).join('\n')
+  const trimmedContext = (extraContext || '').trim()
 
-  return `You are categorizing a list of expense bill titles for a household expense-tracking app. Each title is usually a short store or merchant name, sometimes with a date, note, or location attached — but some were typed by hand years ago and may be an in-joke, a nickname, or a personal reference between the people in the household rather than a literal merchant name (titles may be in any language). If a title doesn't clearly name a recognizable kind of business or expense, treat it as unclear rather than guessing from tone, wordplay, or a vague association — return null for it.
+  return `You are categorizing a list of expense bill titles for a household expense-tracking app. Each title is usually a short store or merchant name, sometimes with a date, note, or location attached — but some were typed by hand years ago and may be an in-joke, a nickname, or a personal reference between the people in the household rather than a literal merchant name (titles may be in any language — don't assume English just because these instructions are in English). If a title doesn't clearly name a recognizable kind of business or expense, treat it as unclear rather than guessing from tone, wordplay, or a vague association — return null for it.
 
 Categories available — choose ONLY from this exact list, or null if none clearly fit:
 [${categoryList}]
-
+${
+  trimmedContext
+    ? `\nContext from this household, telling you something about their own bills specifically — trust this over a generic assumption whenever the two disagree:\n${trimmedContext}\n`
+    : ''
+}
 For each numbered title below, pick the single best-fitting category from the list above based on what kind of merchant or expense it most likely names (e.g. a supermarket chain → a groceries-type category, a restaurant name → an eating-out-type category). Use null whenever you're not reasonably confident — guessing wrong is worse than leaving it blank, since a person reviews every suggestion before anything is saved.
 
 Return ONLY a JSON object, no other text, no markdown fences, in exactly this shape:
