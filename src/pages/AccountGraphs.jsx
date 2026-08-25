@@ -9,12 +9,14 @@ import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { deriveBillsItemsShares } from '../lib/deriveBillData'
 import { getPeriodRange, getMultiMonthRange, getStatsWindowStart } from '../lib/timeRange'
-import { buildSeries } from '../lib/timeSeries'
+import { buildSeries, buildBillPoints } from '../lib/timeSeries'
 import GraphsPeriodSelector from '../components/GraphsPeriodSelector'
 import LineChart from '../components/LineChart'
 import PieChart from '../components/PieChart'
 
-const GRANULARITY_BY_TAB = { month: 'day', quad: 'month', year: 'month' }
+// tab -> the chart's own point granularity, finest first — same reasoning
+// as GroupGraphs.jsx's own GRANULARITY_BY_TAB.
+const GRANULARITY_BY_TAB = { month: 'bill', quad: 'day', year: 'week' }
 
 function rangeForTab(tab, offset) {
   if (tab === 'month') return getPeriodRange('month', offset)
@@ -171,6 +173,10 @@ export default function AccountGraphs() {
     load()
   }, [load])
 
+  // Shared by the day/week/month path below and the per-bill path further
+  // down — resolving an item's effective category name needs this either way.
+  const categoryNameById = useMemo(() => new Map(rawCategories.map((c) => [c.id, c.name])), [rawCategories])
+
   // Independent of tab/offset, same reasoning as GroupGraphs.jsx's own
   // `daily` — computed once from everything fetched, windowed afterward by
   // buildSeries() itself. Every active group's own computeDailyTotalsForUser()
@@ -178,13 +184,12 @@ export default function AccountGraphs() {
   // same shape), all folded into one map together — a person's total
   // personal spend shouldn't quietly drop a group just because they left it.
   const daily = useMemo(() => {
-    const categoryNameById = new Map(rawCategories.map((c) => [c.id, c.name]))
     const perGroupDailies = perGroupData.map(({ myId, bills, items, itemShares }) =>
       computeDailyTotalsForUser(myId, { bills, items, itemShares, categoryNameById })
     )
     const snapshotDailies = snapshots.map((s) => s.daily_totals || {})
     return mergeDailyMaps([...perGroupDailies, ...snapshotDailies])
-  }, [perGroupData, rawCategories, snapshots])
+  }, [perGroupData, categoryNameById, snapshots])
 
   const mergedCategories = useMemo(() => mergeCategoriesByName(rawCategories), [rawCategories])
 
@@ -196,12 +201,54 @@ export default function AccountGraphs() {
   const historyIncomplete =
     historyStatus !== 'complete' && Boolean(windowStart) && range.start && range.start < windowStart
 
-  const points = buildSeries(daily, {
-    start: range.start,
-    end: range.end,
-    granularity,
-    categoryKey: categoryFilter || null,
-  })
+  // 'bill' (the "This month" tab) needs its own path, same reasoning as
+  // GroupGraphs.jsx's own per-bill branch — but a departed group has no
+  // bill-level record left at all, only its frozen day-by-day
+  // daily_totals, so there's genuinely nothing to plot one point per
+  // transaction for there. The nearest honest approximation: one point
+  // per day a departed group actually had (matching) spending, standing
+  // in for "whatever happened that day" — placed among the real per-bill
+  // points from live groups in the same chronological order, rather than
+  // silently dropping departed-group spending from this one view alone.
+  let points
+  if (granularity === 'bill') {
+    const liveRecords = []
+    for (const { myId, bills, items, itemShares } of perGroupData) {
+      for (const b of bills) {
+        const billItems = items.filter((it) => it.bill_id === b.id)
+        let amount = 0
+        for (const it of billItems) {
+          if (categoryFilter) {
+            const categoryId = it.category_id || b.category_id || null
+            const rawName = categoryId ? categoryNameById.get(categoryId) : null
+            const name = rawName ? rawName.trim() : 'Uncategorized'
+            if (categoryKeyFor(name) !== categoryFilter) continue
+          }
+          const shares = itemShares.filter((s) => s.item_id === it.id)
+          const totalShares = shares.reduce((s, x) => s + Number(x.shares), 0)
+          if (totalShares <= 0) continue
+          const mine = shares.find((s) => s.user_id === myId)
+          if (!mine) continue
+          amount += (Number(it.total_price) * Number(mine.shares)) / totalShares
+        }
+        liveRecords.push({ key: b.id, date: new Date(b.created_at), amount })
+      }
+    }
+    const snapshotRecords = []
+    for (const snap of snapshots) {
+      for (const [dayKey, bucket] of Object.entries(snap.daily_totals || {})) {
+        const amount = categoryFilter
+          ? Object.entries(bucket.categories || {})
+              .filter(([name]) => categoryKeyFor(name) === categoryFilter)
+              .reduce((s, [, a]) => s + a, 0)
+          : bucket.consumed || 0
+        snapshotRecords.push({ key: `snapshot-${snap.group_id}-${dayKey}`, date: new Date(dayKey), amount })
+      }
+    }
+    points = buildBillPoints([...liveRecords, ...snapshotRecords], { start: range.start, end: range.end })
+  } else {
+    points = buildSeries(daily, { start: range.start, end: range.end, granularity, categoryKey: categoryFilter || null })
+  }
   const periodTotal = points.reduce((sum, p) => sum + p.amount, 0)
 
   // Per-category totals for the pie chart — summed straight from `daily`'s

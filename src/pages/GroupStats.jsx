@@ -303,12 +303,14 @@ export default function GroupStats() {
         <Link to={`/groups/${groupId}`} className="btn-link">
           ← Back
         </Link>
-        <h1>Stats</h1>
+        <div className="page-header-titles">
+          <h1>Group Stats</h1>
+          {groupName && <p className="page-header-subtitle">{groupName}</p>}
+        </div>
+        <Link to={`/groups/${groupId}/stats/graphs`} className="btn-link page-header-graphs-link">
+          See graphs →
+        </Link>
       </header>
-
-      <Link to={`/groups/${groupId}/stats/graphs`} className="btn-link see-stats-link">
-        See graphs →
-      </Link>
 
       {error && <p className="status-error">Couldn't load stats: {error}</p>}
       {historyGapAffectsView && (

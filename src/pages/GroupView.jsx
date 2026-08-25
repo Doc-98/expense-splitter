@@ -782,16 +782,19 @@ export default function GroupView() {
       <div className="bill-list-controls">
         {bills && bills.length > 0 && (
           <button type="button" className="btn-link" onClick={toggleSelectMode}>
-            {selectMode ? 'Cancel' : 'Select'}
+            {selectMode ? 'Cancel' : 'Select bills'}
           </button>
         )}
         {/* Same wording as the "Add" button above ("Add ___"), just the
-            generic noun instead of a specific bill — same btn-primary style
-            as that button too now (font size, padding, single line), for
-            full visual consistency between the two — and pinned to the
-            right so it sits under "Add" rather than under "Select". */}
+            generic noun instead of a specific bill — same accent color as
+            that button (.btn-primary), but its own smaller, two-line
+            layout so it doesn't read as an equally-big second "Add" —
+            pinned to the right so it sits under "Add" rather than under
+            "Select bills". */}
         <Link to={`/groups/${groupId}/recurring`} className="btn-primary recurring-bills-btn">
-          Add Recurring Bill ↻
+          Add Recurring
+          <br />
+          Bill ↻
         </Link>
       </div>
 
