@@ -792,7 +792,8 @@ a single page, `src/pages/Guide.jsx`, and each section is self-contained.
 
 ## Recaps, PDFs, and CSV
 
-Every bill and every group's settle-up has a single **Share recap** button
+Every bill, every group's settle-up, and every stats page (a group's own,
+and Your Stats) has a single **Share recap** button
 (`src/components/ShareButton.jsx`) — clicking it opens a small menu with
 the two ways to get the recap out, rather than two separate buttons sitting
 side by side:
@@ -801,14 +802,36 @@ side by side:
   (straight into WhatsApp, Messages, wherever), falling back to
   copy-to-clipboard on desktop. `src/lib/recapText.js` builds the text; it
   leans on WhatsApp's own `*bold*`/`_italic_` formatting rather than
-  markdown, since markdown wouldn't render there at all.
-- **Download as PDF** — uses the browser's own print dialog rather than a
-  new dependency: a `.print-only` element (see `PrintableRecap.jsx` and the
-  `@media print` rules in `styles.css`) stays hidden on screen and is the
-  only thing visible when `window.print()` is called, so "Save as PDF" in
-  the print dialog produces a clean recap with none of the app's own UI in
-  it. `ShareButton` itself has no idea which printable recap actually
-  exists on the page — it just triggers the print dialog, same as before.
+  markdown, since markdown wouldn't render there at all. The two stats
+  recaps (`formatGroupStatsRecap()`, `formatAccountStatsRecap()`) take
+  their rows already fully resolved — names looked up, month keys turned
+  into labels — since GroupStats.jsx/AccountStats.jsx already have all of
+  that on hand from what's on screen; nothing gets looked up twice.
+- **Download as PDF** — still the browser's own print dialog rather than a
+  new dependency (no `jsPDF`/`html2canvas`-style library, no added bundle
+  weight), but no longer nested inside the app's own component tree.
+  `PrintPortal.jsx` renders each printable recap (`PrintableRecap.jsx`)
+  through a React portal straight into `#print-root` — a plain sibling
+  `<div>` of `#root` in `index.html`, not a descendant of it. The print
+  stylesheet (`@media print` in `styles.css`) then just swaps which of the
+  two is `display: none`: `#root` hides, `#print-root` shows. That's the
+  fix for a real bug the old approach had — hiding everything under
+  `#root` with `visibility: hidden` instead doesn't collapse layout, so
+  the (invisible) page was still exactly as tall as normal, and printing
+  it routinely produced a trailing blank page once that hidden height ran
+  past one sheet of paper. A plain `display: none` has nothing left to
+  paginate. `ShareButton` itself still has no idea which printable recap
+  actually exists on the page — it just triggers the print dialog, same
+  as before this changed.
+
+Both stats pages' recaps mirror what's already on screen for whatever
+period is selected: the summary numbers, by-person/by-group and
+by-category breakdowns, the month-by-month bars (when shown), and, for a
+group's own stats, its biggest bills. Spending thresholds are deliberately
+left out of Your Stats' recap — they're always "this calendar month
+regardless of the period selector" (see [Time period
+controls](#time-period-controls)), and folding a fixed-month figure into
+an otherwise period-scoped recap would be more confusing than useful.
 
 A bill also gets a separate, always-visible **Export CSV** button (one row
 per item, via `src/lib/csv.js`) next to the share menu, divided from it by

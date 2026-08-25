@@ -21,8 +21,11 @@ import {
 } from '../lib/timeRange'
 import { deriveBillsItemsShares } from '../lib/deriveBillData'
 import { comparePeriods } from '../lib/periodComparison'
+import { formatAccountStatsRecap } from '../lib/recapText'
 import TimeRangeSelector from '../components/TimeRangeSelector'
 import ComparisonBadge from '../components/ComparisonBadge'
+import ShareButton from '../components/ShareButton'
+import { PrintableAccountStatsRecap } from '../components/PrintableRecap'
 
 function monthKey(dateStr) {
   const d = new Date(dateStr)
@@ -503,6 +506,25 @@ export default function AccountStats() {
     .sort((a, b) => b.amount - a.amount)
   const maxCategoryAmount = Math.max(1, ...categoryRows.map((c) => c.amount))
 
+  // Feeds both the "Share as text" and "Download as PDF" recap options
+  // (see ShareButton/PrintableAccountStatsRecap below) — one object, built
+  // once from whatever's already on screen, same reasoning as GroupStats.jsx's
+  // own `recap`.
+  const recap = {
+    periodLabel: yearLabel ? `${yearLabel} — ${label}` : label,
+    paid: myTotals.paid,
+    consumed: myTotals.consumed,
+    overallBalance,
+    categoryRows,
+    byGroupRows: byGroup.map((g) => ({
+      id: g.id,
+      name: g.left ? `${g.name} (left)` : g.name,
+      fronted: g.paid,
+      share: g.consumed,
+    })),
+    monthlyRows: showMonthly ? monthlyRows.map(([key, amount]) => ({ key, label: monthLabel(key), amount })) : [],
+  }
+
   async function markSettled(snapshotId) {
     const { error: settleError } = await supabase
       .from('departure_snapshots')
@@ -706,6 +728,11 @@ export default function AccountStats() {
           )}
 
           {thresholdsPosition === 'bottom' && thresholdsSection}
+
+          <div className="recap-actions">
+            <ShareButton label="Share recap" title="Your stats" getText={() => formatAccountStatsRecap(recap, format)} />
+          </div>
+          <PrintableAccountStatsRecap recap={recap} />
         </>
       )}
     </div>

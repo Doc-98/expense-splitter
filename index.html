@@ -13,6 +13,17 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Printable recaps (src/components/PrintPortal.jsx) render here via a
+         React portal, as a sibling of #root rather than nested inside it —
+         so the print stylesheet (see "Print / PDF recaps" in styles.css)
+         can hide #root with a plain `display: none` at print time without
+         also hiding the one thing that's actually supposed to print. The
+         old approach nested the printable content inside #root and hid
+         everything else with `visibility: hidden`, which doesn't collapse
+         layout — the full (invisible) page was still exactly as tall as
+         normal, so printing it routinely produced a trailing blank page
+         once that hidden height ran past one sheet of paper. -->
+    <div id="print-root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
