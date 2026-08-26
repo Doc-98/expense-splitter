@@ -848,7 +848,7 @@ export default function GroupView() {
                   {dayGroup.items.map((bill) => {
                     const billLabel = (
                       <span className="card-list-item-main">
-                        <span>{bill.title}</span>
+                        <span className="card-list-item-title">{bill.title}</span>
                         {bill.note && <span className="card-list-item-note">{bill.note}</span>}
                       </span>
                     )

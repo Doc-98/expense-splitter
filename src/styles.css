@@ -367,6 +367,22 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .list-row-focused .card-list-item { border-color: var(--accent); background: var(--accent-light); }
 .chevron { color: var(--ink-soft); }
 .card-list-item-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* A title/name with no spaces at all (one long merchant name typed
+   without them, a group name someone ran together) has no natural place
+   to wrap — by default a flex item won't shrink below its own content's
+   min-content width regardless of a *container* like .card-list-item-main
+   setting min-width: 0 on itself, so that single unbroken run just
+   overflows its row instead of wrapping. That overflow doesn't stay
+   contained to the row: with nothing to shrink it, it widens the row,
+   which widens the page itself past the viewport, which is how one long
+   bill title turns into the *whole app* scrolling sideways on a phone.
+   min-width: 0 here lets this element shrink to fit at all;
+   overflow-wrap: anywhere is what then actually breaks the text (only
+   where a normal word-break can't) instead of just clipping or
+   overflowing it. Shared by both places a title/name sits directly next
+   to a chevron or an amount with no wrapper of its own — a bill's title
+   (GroupView.jsx) and a group's name (Groups.jsx). */
+.card-list-item-title { min-width: 0; overflow-wrap: anywhere; }
 .card-list-item-note {
   font-size: 12px;
   font-weight: 400;
