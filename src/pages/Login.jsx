@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
 export default function Login() {
-  const [mode, setMode] = useState('magic') // 'magic' | 'password'
+  // Password first — most people landing here for the first time are
+  // looking for "sign in" / "register," not a magic link, which is the
+  // less familiar of the two options. Someone who does want it just
+  // switches tabs; nothing about the magic-link flow itself changes.
+  const [mode, setMode] = useState('password') // 'magic' | 'password'
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -100,6 +104,10 @@ export default function Login() {
             <button type="submit" className="btn-primary" disabled={loading}>
               {loading ? 'Sending…' : 'Send magic link'}
             </button>
+            <p className="muted auth-magic-link-hint">
+              We'll email you a link — open it on this device and you're signed in, no password
+              needed. Works for both a new account and an existing one.
+            </p>
           </form>
         ) : (
           <form onSubmit={handlePassword} className="auth-form">

@@ -341,6 +341,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .auth-form { display: flex; flex-direction: column; }
 .auth-form .btn-primary { margin-top: 4px; }
 .auth-form .btn-link { margin-top: var(--space-sm); text-align: center; }
+.auth-magic-link-hint { margin: var(--space-sm) 0 0; font-size: 13px; line-height: 1.4; }
 
 /* ---------- Card lists (groups, bills) ---------- */
 .card-list { list-style: none; padding: 0; margin: 0; }
