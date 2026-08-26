@@ -932,21 +932,24 @@ export default function GroupView() {
       />
 
       {settlement && (
-        <div className="recap-actions">
-          <ShareButton
-            label="Share settle-up"
-            title={`Settle up — ${group?.name}`}
-            getText={() => formatSettlementRecap(group?.name, settlement, allMembers, format)}
-          />
-          {bills && bills.length > 0 && (
-            <>
-              <span className="recap-divider" />
-              <button type="button" className="btn-secondary" onClick={exportGroupCsv}>
-                Export CSV
-              </button>
-            </>
-          )}
-        </div>
+        <>
+          <div className="section-divider" />
+          <div className="recap-actions">
+            <ShareButton
+              label="Share settle-up"
+              title={`Settle up — ${group?.name}`}
+              getText={() => formatSettlementRecap(group?.name, settlement, allMembers, format)}
+            />
+            {bills && bills.length > 0 && (
+              <>
+                <span className="recap-divider" />
+                <button type="button" className="btn-secondary" onClick={exportGroupCsv}>
+                  Export CSV
+                </button>
+              </>
+            )}
+          </div>
+        </>
       )}
       <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />
 

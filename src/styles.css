@@ -902,6 +902,13 @@ input.item-editable-input {
    (var(--space-lg)) now that the zeroing rule above excludes this class —
    only padding-top/border-top need setting here. */
 .section-always-divided { padding-top: var(--space-lg); border-top: 1px solid var(--border); }
+/* Same divider look as .group-stats-preview-title above (generous top
+   margin, a thin rule, breathing room below it) but as a standalone
+   utility rather than coupled to .settings-section-title — for a heading
+   that shouldn't take on that class's own font treatment (SettlementSummary's
+   "Settle up"/"Record a payment"), or for a bare divider between two rows
+   of buttons with no heading at all. */
+.section-divider { margin-top: 40px; padding-top: var(--space-lg); border-top: 1px solid var(--border); }
 /* Right-aligned like a page corner turning, the usual place a "see more"
    link like this sits. */
 .see-stats-link { display: block; text-align: right; margin-top: var(--space-sm); }
