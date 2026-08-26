@@ -785,16 +785,15 @@ export default function GroupView() {
             {selectMode ? 'Cancel' : 'Select bills'}
           </button>
         )}
-        {/* Same wording as the "Add" button above ("Add ___"), just the
-            generic noun instead of a specific bill — same accent color as
-            that button (.btn-primary), but its own smaller, two-line
-            layout so it doesn't read as an equally-big second "Add" —
-            pinned to the right so it sits under "Add" rather than under
-            "Select bills". */}
-        <Link to={`/groups/${groupId}/recurring`} className="btn-primary recurring-bills-btn">
-          Add Recurring
-          <br />
-          Bill ↻
+        {/* Several rounds of pill-button styling (colored, two-line,
+            single-line, every size in between) all ended up either too
+            big or too fussy next to "Add" — a secondary, occasional
+            action doesn't need button chrome at all. Plain text, same
+            style as "Select bills" right next to it (.btn-link), pinned
+            to the opposite edge of the same row — matches that link's own
+            visual weight instead of competing with "Add" for it. */}
+        <Link to={`/groups/${groupId}/recurring`} className="btn-link recurring-bills-btn">
+          Add recurring bill ↻
         </Link>
       </div>
 
@@ -849,7 +848,7 @@ export default function GroupView() {
                   {dayGroup.items.map((bill) => {
                     const billLabel = (
                       <span className="card-list-item-main">
-                        <span>{bill.title}</span>
+                        <span className="card-list-item-title">{bill.title}</span>
                         {bill.note && <span className="card-list-item-note">{bill.note}</span>}
                       </span>
                     )
@@ -933,21 +932,24 @@ export default function GroupView() {
       />
 
       {settlement && (
-        <div className="recap-actions">
-          <ShareButton
-            label="Share settle-up"
-            title={`Settle up — ${group?.name}`}
-            getText={() => formatSettlementRecap(group?.name, settlement, allMembers, format)}
-          />
-          {bills && bills.length > 0 && (
-            <>
-              <span className="recap-divider" />
-              <button type="button" className="btn-secondary" onClick={exportGroupCsv}>
-                Export CSV
-              </button>
-            </>
-          )}
-        </div>
+        <>
+          <div className="section-divider" />
+          <div className="recap-actions">
+            <ShareButton
+              label="Share settle-up"
+              title={`Settle up — ${group?.name}`}
+              getText={() => formatSettlementRecap(group?.name, settlement, allMembers, format)}
+            />
+            {bills && bills.length > 0 && (
+              <>
+                <span className="recap-divider" />
+                <button type="button" className="btn-secondary" onClick={exportGroupCsv}>
+                  Export CSV
+                </button>
+              </>
+            )}
+          </div>
+        </>
       )}
       <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />
 

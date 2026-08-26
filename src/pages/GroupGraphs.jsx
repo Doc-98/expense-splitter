@@ -7,18 +7,19 @@ import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { deriveBillsItemsShares } from '../lib/deriveBillData'
 import { computeCategoryTotals, computeDailyTotalsForGroup } from '../lib/categoryStats'
 import { getPeriodRange, getMultiMonthRange, filterByDateRange, getStatsWindowStart } from '../lib/timeRange'
-import { buildSeries, buildBillPoints } from '../lib/timeSeries'
+import { buildSeries } from '../lib/timeSeries'
 import { useCurrency } from '../context/CurrencyContext'
 import GraphsPeriodSelector from '../components/GraphsPeriodSelector'
 import LineChart from '../components/LineChart'
 import PieChart from '../components/PieChart'
 
-// tab -> the chart's own point granularity, finest first — a whole year of
-// individual bills (or even individual days) would be an unreadable wall
-// of points, but a single month has few enough bills that one point each
-// is exactly what's useful; the wider the span, the coarser the points
-// need to be to stay readable at a fixed chart width.
-const GRANULARITY_BY_TAB = { month: 'bill', quad: 'day', year: 'week' }
+// tab -> the chart's own point granularity — a whole calendar month has
+// too many days to plot meaningfully next to a whole year's worth of
+// months, but a single month is exactly the one view where day-by-day
+// actually says something. (Tried one point per bill/day/week instead —
+// day and week especially made the line read as too spiky even with
+// smoothing, so this reverts to the coarser, calmer version.)
+const GRANULARITY_BY_TAB = { month: 'day', quad: 'month', year: 'month' }
 
 function rangeForTab(tab, offset) {
   if (tab === 'month') return getPeriodRange('month', offset)
@@ -124,28 +125,15 @@ export default function GroupGraphs() {
   const historyIncomplete =
     historyStatus !== 'complete' && Boolean(windowStart) && range.start && range.start < windowStart
 
-  const { bills: periodBills, items: periodItems } = filterByDateRange(bills, items, [], range.start, range.end)
-
-  // 'bill' (the "This month" tab) doesn't fit buildSeries()'s "one point
-  // per fixed calendar unit" model — see buildBillPoints() in timeSeries.js
-  // for why — so it gets its own path: each bill's own total, or (with a
-  // category filter active) just the portion of it in that one category,
-  // same effective-category resolution computeCategoryTotals() itself uses.
-  const points =
-    granularity === 'bill'
-      ? buildBillPoints(
-          periodBills.map((b) => {
-            const billItems = periodItems.filter((it) => it.bill_id === b.id)
-            const relevant = categoryFilter
-              ? billItems.filter((it) => (it.category_id || b.category_id || 'uncategorized') === categoryFilter)
-              : billItems
-            return { key: b.id, date: new Date(b.created_at), amount: relevant.reduce((s, it) => s + Number(it.total_price), 0) }
-          }),
-          { start: range.start, end: range.end }
-        )
-      : buildSeries(daily, { start: range.start, end: range.end, granularity, categoryKey: categoryFilter || null })
+  const points = buildSeries(daily, {
+    start: range.start,
+    end: range.end,
+    granularity,
+    categoryKey: categoryFilter || null,
+  })
   const periodTotal = points.reduce((sum, p) => sum + p.amount, 0)
 
+  const { bills: periodBills, items: periodItems } = filterByDateRange(bills, items, [], range.start, range.end)
   const categoryTotals = computeCategoryTotals({ bills: periodBills, items: periodItems })
   const pieSlices = Object.entries(categoryTotals).map(([id, amount]) => ({
     key: id,

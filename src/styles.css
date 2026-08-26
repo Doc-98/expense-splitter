@@ -341,6 +341,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .auth-form { display: flex; flex-direction: column; }
 .auth-form .btn-primary { margin-top: 4px; }
 .auth-form .btn-link { margin-top: var(--space-sm); text-align: center; }
+.auth-magic-link-hint { margin: var(--space-sm) 0 0; font-size: 13px; line-height: 1.4; }
 
 /* ---------- Card lists (groups, bills) ---------- */
 .card-list { list-style: none; padding: 0; margin: 0; }
@@ -367,6 +368,22 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .list-row-focused .card-list-item { border-color: var(--accent); background: var(--accent-light); }
 .chevron { color: var(--ink-soft); }
 .card-list-item-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* A title/name with no spaces at all (one long merchant name typed
+   without them, a group name someone ran together) has no natural place
+   to wrap — by default a flex item won't shrink below its own content's
+   min-content width regardless of a *container* like .card-list-item-main
+   setting min-width: 0 on itself, so that single unbroken run just
+   overflows its row instead of wrapping. That overflow doesn't stay
+   contained to the row: with nothing to shrink it, it widens the row,
+   which widens the page itself past the viewport, which is how one long
+   bill title turns into the *whole app* scrolling sideways on a phone.
+   min-width: 0 here lets this element shrink to fit at all;
+   overflow-wrap: anywhere is what then actually breaks the text (only
+   where a normal word-break can't) instead of just clipping or
+   overflowing it. Shared by both places a title/name sits directly next
+   to a chevron or an amount with no wrapper of its own — a bill's title
+   (GroupView.jsx) and a group's name (Groups.jsx). */
+.card-list-item-title { min-width: 0; overflow-wrap: anywhere; }
 .card-list-item-note {
   font-size: 12px;
   font-weight: 400;
@@ -438,23 +455,14 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .bill-list-item .card-list-item { flex: 1; }
 
 .bill-list-controls { display: flex; align-items: center; gap: var(--space-md); margin-bottom: var(--space-lg); }
-/* Pinned to the row's right edge regardless of whether "Select" (its own
-   sibling here, left-aligned by just being first in source order) is
-   currently rendered at all — an empty group hides Select entirely, and
-   this should still land under "Add" above either way, not drift left
-   into where Select would have been. */
-.recurring-bills-btn {
-  margin-left: auto;
-  text-align: center;
-  line-height: 1.25;
-  /* Smaller than .btn-primary's own 15px default — two lines at that size
-     read as a noticeably bigger button than "Add" right above it, which
-     is the one thing this shouldn't do. Color still matches "Add"
-     (.btn-primary, inherited) — it's specifically the size/shape that
-     needs to stay smaller, not the color. */
-  font-size: 12px;
-  padding: 8px 16px;
-}
+/* Pinned to the row's right edge, opposite "Select bills" (its own sibling
+   here, left-aligned by just being first in source order) regardless of
+   whether that one's currently rendered at all — an empty group hides it
+   entirely, and this should still land at the row's right edge either
+   way. Plain .btn-link now (see the JSX comment for why) — nothing else
+   to override, its own font-size/color/weight already match
+   "Select bills" exactly. */
+.recurring-bills-btn { margin-left: auto; }
 
 /* Reuses the same "receipt tape" search bar treatment as the in-app
    guide's own search (.guide-search-input) — same torn-edge look, same
@@ -911,6 +919,13 @@ input.item-editable-input {
    (var(--space-lg)) now that the zeroing rule above excludes this class —
    only padding-top/border-top need setting here. */
 .section-always-divided { padding-top: var(--space-lg); border-top: 1px solid var(--border); }
+/* Same divider look as .group-stats-preview-title above (generous top
+   margin, a thin rule, breathing room below it) but as a standalone
+   utility rather than coupled to .settings-section-title — for a heading
+   that shouldn't take on that class's own font treatment (SettlementSummary's
+   "Settle up"/"Record a payment"), or for a bare divider between two rows
+   of buttons with no heading at all. */
+.section-divider { margin-top: 40px; padding-top: var(--space-lg); border-top: 1px solid var(--border); }
 /* Right-aligned like a page corner turning, the usual place a "see more"
    link like this sits. */
 .see-stats-link { display: block; text-align: right; margin-top: var(--space-sm); }
@@ -1461,7 +1476,12 @@ input.item-editable-input {
   margin-bottom: var(--space-lg);
 }
 .pie-chart { width: 160px; height: 160px; flex-shrink: 0; }
-.pie-chart-slice { cursor: pointer; transition: stroke-width 0.1s ease; }
+/* A filled wedge (see donutWedgePath() in PieChart.jsx), so "highlight the
+   hovered one" is a transform now rather than the stroke-width bump a
+   stroked circle used — transform-origin at the donut's own center keeps
+   the pop centered on the ring instead of drifting toward a corner. */
+.pie-chart-slice { cursor: pointer; transform-origin: 100px 100px; transition: transform 0.1s ease; }
+.pie-chart-slice.active { transform: scale(1.05); }
 .pie-chart-total-amount { font-size: 15px; fill: var(--ink); font-weight: 600; }
 .pie-chart-total-label { font-size: 11px; fill: var(--ink-soft); }
 .pie-chart-empty { flex-direction: column; align-items: flex-start; gap: var(--space-sm); }

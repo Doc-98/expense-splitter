@@ -121,7 +121,7 @@ export default function Groups() {
           return (
             <li key={group.id} className={isFocused ? 'list-row-focused' : ''} ref={isFocused ? groupNav.rowRef : null}>
               <Link to={`/groups/${group.id}`} className="card-list-item">
-                <span>{group.name}</span>
+                <span className="card-list-item-title">{group.name}</span>
                 <span className="chevron">→</span>
               </Link>
             </li>

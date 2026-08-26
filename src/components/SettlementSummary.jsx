@@ -56,7 +56,7 @@ export default function SettlementSummary({ transactions, members, payments, onR
 
   return (
     <div className="settlement">
-      <h2>Settle up</h2>
+      <h2 className="section-divider">Settle up</h2>
       {transactions.length === 0 ? (
         <p className="empty-state">Everyone's even — nothing to settle.</p>
       ) : (
@@ -81,7 +81,7 @@ export default function SettlementSummary({ transactions, members, payments, onR
         </ul>
       )}
 
-      <h3 className="payment-form-title">Record a payment</h3>
+      <h3 className="payment-form-title section-divider">Record a payment</h3>
       <RecordPaymentForm members={members || []} onRecordPayment={onRecordPayment} />
 
       {payments?.length > 0 && (
