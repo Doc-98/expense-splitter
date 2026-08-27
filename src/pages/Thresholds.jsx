@@ -50,7 +50,7 @@ export default function Thresholds() {
     } catch (err) {
       // Without this, a failure anywhere above (most likely: the
       // spending_thresholds table not existing yet on a database that
-      // hasn't run migration_thresholds.sql) left this page spinning on
+      // hasn't run supabase/migrations/thresholds.sql) left this page spinning on
       // "Loading…" forever with the actual error invisible — setLoading(false)
       // was only ever reached on the success path.
       setError(err.message)

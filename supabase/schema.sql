@@ -311,8 +311,8 @@ create table spending_thresholds (
 -- `.eq('bill_id', …)` on every group-page, stats, or graphs load — without
 -- an index that's a full sequential scan of the *entire* table, across
 -- every group and user, not just the one being asked for. See
--- migration_add_indexes.sql for the same statements as a standalone
--- migration for an already-deployed database.
+-- supabase/migrations/add_indexes.sql for the same statements as a
+-- standalone migration for an already-deployed database.
 -- ---------------------------------------------------------------------------
 create index bills_group_id_idx on bills (group_id);
 create index items_bill_id_idx on items (bill_id);
