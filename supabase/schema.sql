@@ -302,6 +302,26 @@ create table spending_thresholds (
   unique (user_id, category_name)
 );
 
+-- ---------------------------------------------------------------------------
+-- Indexes: Postgres never auto-indexes a foreign key column, only primary
+-- keys and explicit unique constraints — item_shares/bill_payers already
+-- get one for free since their own primary keys lead with item_id/bill_id,
+-- but every column below is a plain FK with no index of its own otherwise.
+-- Each one is hit by a plain `.eq('group_id', …)` / `.eq('user_id', …)` /
+-- `.eq('bill_id', …)` on every group-page, stats, or graphs load — without
+-- an index that's a full sequential scan of the *entire* table, across
+-- every group and user, not just the one being asked for. See
+-- migration_add_indexes.sql for the same statements as a standalone
+-- migration for an already-deployed database.
+-- ---------------------------------------------------------------------------
+create index bills_group_id_idx on bills (group_id);
+create index items_bill_id_idx on items (bill_id);
+create index payments_group_id_idx on payments (group_id);
+create index categories_group_id_idx on categories (group_id);
+create index recurring_bills_group_id_idx on recurring_bills (group_id);
+create index group_members_user_id_idx on group_members (user_id);
+create index departure_snapshots_user_id_idx on departure_snapshots (user_id);
+
 -- ============================================================================
 -- Row Level Security — every table is locked to "active [real-account]
 -- members of the same group". Access checks are entirely about *who is

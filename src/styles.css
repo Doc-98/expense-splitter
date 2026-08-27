@@ -59,6 +59,17 @@ body {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   -webkit-tap-highlight-color: transparent;
   transition: background-color 0.15s ease, color 0.15s ease;
+  /* Backstop, not the fix: this bug class (a flex item's automatic
+     min-width trap letting some unbreakable/long bit of content force a
+     row, and with it the whole page, wider than the viewport) has now
+     shown up twice in two different nesting levels of the same bill row.
+     Each real instance still gets fixed at its source (min-width: 0 on
+     the actual offending flex item) rather than relying on this alone,
+     but this keeps any future recurrence from making the *entire app*
+     scroll sideways while it's tracked down — it only clips overflow at
+     the document edge, and has no effect on elements that scroll
+     horizontally within their own container (e.g. .chip-row, .tab-row). */
+  overflow-x: hidden;
 }
 
 button { font-family: inherit; font-size: inherit; }
@@ -452,7 +463,17 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   align-items: center;
   gap: 8px;
 }
-.bill-list-item .card-list-item { flex: 1; }
+/* .card-list-item-main's min-width: 0 (above) stops the title/note from
+   forcing *that* row wide, but .card-list-item itself is a second,
+   independent flex item here — nested one level further out, alongside
+   the ⋮ menu button (.bill-menu-wrap) — and picks up the exact same
+   automatic-minimum-size trap on its own account: with no min-width of
+   its own, its floor defaults to its content's preferred size (still
+   ~320px, since .card-list-item-note's max-width caps but doesn't zero
+   out its contribution), which is what was still pushing .bill-list-item,
+   and with it the whole page, wider than the viewport even after the
+   inner fix. min-width: 0 here closes that off at this level too. */
+.bill-list-item .card-list-item { flex: 1; min-width: 0; }
 
 .bill-list-controls { display: flex; align-items: center; gap: var(--space-md); margin-bottom: var(--space-lg); }
 /* Pinned to the row's right edge, opposite "Select bills" (its own sibling
@@ -988,7 +1009,11 @@ input.item-editable-input {
    margin-top below, so the gap above that section's divider doesn't rely
    solely on one side's margin — belt and suspenders against the divider
    ever reading as too close to these buttons. */
-.recap-actions { display: flex; align-items: center; gap: 10px; margin-top: var(--space-sm); margin-bottom: var(--space-lg); flex-wrap: wrap; }
+/* Centered per explicit request, same on every viewport for now — a
+   possible future refinement is splitting this per-breakpoint (flagged as
+   maybe reading worse on desktop), but that's deliberately not done here
+   until there's an actual verdict on how it looks. */
+.recap-actions { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: var(--space-sm); margin-bottom: var(--space-lg); flex-wrap: wrap; }
 .recap-actions .share-button-wrap { margin-top: 0; }
 /* A thin separator between the share menu and a standalone export button
    sitting in the same row (e.g. "Export CSV" on a bill) — stretches to the

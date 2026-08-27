@@ -26,14 +26,32 @@ export default function Login() {
     e.preventDefault()
     setLoading(true)
     setStatus(null)
+    // shouldCreateUser: false is the whole fix here — signInWithOtp
+    // defaults to creating a brand-new account for any email that isn't
+    // already registered, silently, with no display name and no chance
+    // to set one (the password tab's signUp is the only place that ever
+    // passes one). Someone who mistypes their email, or just wants to
+    // check whether an account exists, would otherwise get a fresh,
+    // half-set-up account for a stranger's inbox instead of a "no
+    // account" answer. Existing users are completely unaffected — this
+    // only changes what happens for an email Supabase doesn't recognize.
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: window.location.origin, shouldCreateUser: false },
     })
     setLoading(false)
+    // GoTrue's own message for this case ("Signups not allowed for otp")
+    // reads like a server error, not "no account with that email" — swap
+    // it for something that actually points at what to do next.
+    const noAccountError = error?.message?.toLowerCase().includes('signups not allowed')
     setStatus(
       error
-        ? { type: 'error', text: error.message }
+        ? {
+            type: 'error',
+            text: noAccountError
+              ? "No account found for that email. Switch to \"Password\" and use \"New here? Create an account\" to sign up first."
+              : error.message,
+          }
         : { type: 'success', text: 'Check your email for a sign-in link.' }
     )
   }
@@ -106,7 +124,7 @@ export default function Login() {
             </button>
             <p className="muted auth-magic-link-hint">
               We'll email you a link — open it on this device and you're signed in, no password
-              needed. Works for both a new account and an existing one.
+              needed. Only works for an email that already has an account.
             </p>
           </form>
         ) : (
