@@ -1056,6 +1056,38 @@ input.item-editable-input {
 .categorize-hint-label { display: block; font-size: 13px; margin: var(--space-sm) 0 var(--space-lg); }
 .categorize-hint { width: 100%; margin-top: 6px; resize: vertical; }
 
+/* ImportBankStatement.jsx's review rows — the label wraps the checkbox
+   plus everything that identifies the row (date, description, any
+   flags), .member-list-actions on the same row holds the amount and
+   category picker, same split every other .member-list-item review row
+   already uses. */
+/* flex-direction: row explicit, not left to default — the global `label`
+   rule sets column, and being a class selector this wins on display but
+   not automatically on every property it doesn't itself repeat. */
+.bank-tx-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  flex: 1;
+  margin-bottom: 0;
+}
+.bank-tx-date { flex-shrink: 0; font-size: 12px; }
+.bank-tx-flag {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-tint);
+  white-space: nowrap;
+}
+/* .member-list-actions on a <label> (the recurring-cluster toggle) has
+   the same flex-direction: column to override as .bank-tx-row above —
+   its other, more common usage is on a plain <span>, so the override
+   lives on this modifier rather than on .member-list-actions itself. */
+.bank-tx-recurring-toggle { flex-direction: row; margin-bottom: 0; }
+
 /* Sits inline next to a "Common patterns" row's Apply button — the only
    feedback that a click actually did something, since the effect itself
    (rows further down the page changing) is easy to miss entirely. */

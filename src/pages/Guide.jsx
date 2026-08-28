@@ -35,7 +35,8 @@ const GROUPS = [
       {
         id: 'personal',
         title: 'Personal spending — tracking just your own',
-        keywords: 'personal solo alone just me financial companion budget my own spending',
+        keywords:
+          'personal solo alone just me financial companion budget my own spending bank statement import transactions recurring duplicate',
         body: (
           <>
             <p>
@@ -49,6 +50,18 @@ const GROUPS = [
             <p>
               It counts toward <strong>Your Stats</strong> automatically, right alongside your
               real groups.
+            </p>
+            <p>
+              <strong>Group settings → Import a bank statement</strong> turns a bank or
+              credit-card statement into bills — a CSV export from your bank if it offers one
+              (no AI, most reliable), or a PDF read by whichever AI service you've set up in{' '}
+              <strong>Scan settings</strong>. Strip anything sensitive beyond the transactions
+              themselves before uploading a PDF — it's sent to that provider to be read. Every
+              transaction gets a category suggestion and a review checkbox before anything is
+              saved; a charge that repeats on a regular schedule can be set up as a Recurring
+              Bill in one click instead of importing it fresh each time, and a transaction that
+              looks like it's already been imported (an overlapping statement period) defaults
+              to unchecked.
             </p>
           </>
         ),
