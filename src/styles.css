@@ -1318,15 +1318,67 @@ input.item-editable-input {
 }
 .delete-all-payments-option input { flex-shrink: 0; }
 
-/* ---------- Currency selector (account dropdown) ---------- */
-.dropdown-item-currency {
+/* ---------- Settings page ---------- */
+/* A plain label + control row — Appearance's dark-mode switch, Currency's
+   select — both simple enough not to need their own dedicated layout each. */
+.settings-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  cursor: default;
+  margin-bottom: var(--space-sm);
 }
-.dropdown-item-currency select { font-size: 14px; }
+.settings-row select { font-size: 14px; }
+
+/* A real sliding toggle (checkbox underneath, visually hidden) rather than
+   the plain "Switch to light/dark mode" text button this used to be —
+   requested specifically for dark mode once it moved off the account
+   dropdown and onto its own settings row. */
+.switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
+  pointer-events: none;
+}
+.switch-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: var(--surface);
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.switch input:checked + .switch-slider { background: var(--accent); }
+.switch input:checked + .switch-slider::before { transform: translateX(20px); }
+.switch input:focus-visible + .switch-slider { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Spending thresholds / scan settings, collapsed by default on the
+   Settings page — same visual language as .guide-section (Guide.jsx) but
+   kept as its own rule rather than sharing that class, since the two
+   features aren't otherwise related and shouldn't end up coupled just
+   because they happen to look alike. */
+.collapsible-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+.collapsible-section summary {
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+}
+.collapsible-section[open] summary { margin-bottom: var(--space-sm); }
 
 /* ---------- Categories ---------- */
 .category-dot {
