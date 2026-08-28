@@ -29,5 +29,13 @@ export function createLruCache(maxEntries = 5) {
         map.delete(map.keys().next().value)
       }
     },
+    // On sign-out (see AppHeader.jsx) — group ids are opaque UUIDs, not
+    // scoped to an account, so on a shared device where a second person
+    // signs in on the same tab afterward, leaving these entries in place
+    // would paint the first person's cached group data on-screen for
+    // however briefly it takes RLS's own real fetch to correct it.
+    clear() {
+      map.clear()
+    },
   }
 }

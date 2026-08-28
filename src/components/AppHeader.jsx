@@ -4,6 +4,9 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useClickOutside } from '../lib/useClickOutside'
 import { clearCachedPersonalGroupId } from '../lib/personalGroupCache'
+import { resetBootState } from '../lib/bootState'
+import { groupViewCache } from '../lib/groupViewCache'
+import { groupStatsCache } from '../lib/groupStatsCache'
 
 // Bumped by hand with each PR — "1.<PR number>" rather than semver, since PRs
 // merge in order on this branch and are already a visible, monotonic counter
@@ -24,6 +27,12 @@ export default function AppHeader() {
     // into whoever was signed in before — see the comment on
     // clearCachedPersonalGroupId itself.
     clearCachedPersonalGroupId()
+    groupViewCache.clear()
+    groupStatsCache.clear()
+    // So the next sign-in on this tab — same account or a different one —
+    // gets the boot splash again instead of silently skipping straight to
+    // the plain inline loading text, as if this tab had already seen it.
+    resetBootState()
     await supabase.auth.signOut()
   }
 

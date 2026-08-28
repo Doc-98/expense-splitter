@@ -7,11 +7,10 @@ import { fetchCategories } from '../lib/categories'
 import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
-import { computeBalances, computeSpendingTotals, simplifyDebts } from '../lib/settlement'
-import { deriveBillsItemsShares } from '../lib/deriveBillData'
+import { GROUP_BILLS_SELECT, computeGroupViewSnapshot } from '../lib/groupViewSnapshot'
+import { recordGroupVisit } from '../lib/recentGroups'
 import { formatSettlementRecap, formatMultiBillRecap } from '../lib/recapText'
 import { shareOrCopyText } from '../lib/shareText'
-import { getPeriodRange, filterByDateRange } from '../lib/timeRange'
 import { filterBills, billTotal } from '../lib/billFilters'
 import { useClickOutside } from '../lib/useClickOutside'
 import { useEscapeKey } from '../lib/useEscapeKey'
@@ -184,63 +183,20 @@ export default function GroupView() {
     }
   }, [groupId])
 
-  // One unified per-bill shape — '*' for every plain bill column (title,
-  // note, category_id, etc., what the bill list/search/filter need) plus
-  // items(id, total_price, category_id, item_shares(...)) and bill_payers
-  // (what the settlement math needs) — rather than the two separate
-  // queries this used to be (one light, for the list; one heavier, for
-  // balances). They were kept apart originally for code clarity — each
-  // piece only asking for what it actually uses — but they're fetching
-  // essentially the same bills either way, so on a group with a big
-  // imported history, that meant two separate paginated round-trips where
-  // one now does. Paged through fetchAllRows rather than one unbounded
-  // request either way — a big group's bills, each with nested items, is
-  // exactly the kind of response that's prone to silently timing out.
-  const BILLS_SELECT = '*, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
-
   // Derives the settlement-side state (per-bill personal totals, the
   // group's simplified debts, the week/month preview totals) from bills
   // already fetched — deliberately separate from the fetch itself, so a
   // payments-only change (see loadPayments below) can recompute all of
   // this from whatever's already in `bills` state without re-fetching the
-  // bill list just because a payment came or went.
+  // bill list just because a payment came or went. The actual derivation
+  // lives in groupViewSnapshot.js now, shared with the app-boot prefetch
+  // (see prefetchGroup.js) so both compute this the same way.
   function computeAndSetSettlement(billsData, paymentsData) {
-    const { list: settlementBills, items, itemShares } = deriveBillsItemsShares(billsData)
-
-    // Same reuse principle as the weekly/monthly preview below — one
-    // computeSpendingTotals() call per bill, scoped to just that bill's
-    // own items/shares, rather than a second query. A bill nobody's
-    // touched in either direction (no payer, nothing assigned) simply
-    // has no entry for anyone, same "absence means zero involvement"
-    // convention computeSpendingTotals already uses at the group level.
-    const perBillTotals = {}
-    for (const bill of settlementBills) {
-      const billItems = items.filter((it) => it.bill_id === bill.id)
-      const billItemIds = new Set(billItems.map((it) => it.id))
-      const billItemShares = itemShares.filter((s) => billItemIds.has(s.item_id))
-      perBillTotals[bill.id] = computeSpendingTotals({ bills: [bill], items: billItems, itemShares: billItemShares })
-    }
-    setBillPersonalTotals(perBillTotals)
-
-    const thisWeek = getPeriodRange('week', 0)
-    const thisMonth = getPeriodRange('month', 0)
-    const weekBills = filterByDateRange(settlementBills, items, [], thisWeek.start, thisWeek.end)
-    const monthBills = filterByDateRange(settlementBills, items, [], thisMonth.start, thisMonth.end)
-    setWeekTotal(weekBills.items.reduce((sum, it) => sum + Number(it.total_price), 0))
-    setMonthTotal(monthBills.items.reduce((sum, it) => sum + Number(it.total_price), 0))
-
-    // computeBalances/simplifyDebts operate on a generic "userId" key —
-    // it's always been just an opaque ID as far as they're concerned, so
-    // feeding them group_members.id values (real accounts and guests
-    // alike) needs no changes there, only here at the query/mapping
-    // boundary.
-    const paymentsForBalances = paymentsData.map((p) => ({
-      from_user: p.from_member,
-      to_user: p.to_member,
-      amount: p.amount,
-    }))
-    const balances = computeBalances({ bills: settlementBills, items, itemShares, payments: paymentsForBalances })
-    setSettlement(simplifyDebts(balances))
+    const { billPersonalTotals, weekTotal, monthTotal, settlement } = computeGroupViewSnapshot(billsData, paymentsData)
+    setBillPersonalTotals(billPersonalTotals)
+    setWeekTotal(weekTotal)
+    setMonthTotal(monthTotal)
+    setSettlement(settlement)
   }
 
   const loadBillsAndSettlement = useCallback(async () => {
@@ -251,7 +207,7 @@ export default function GroupView() {
         fetchAllRows(() =>
           supabase
             .from('bills')
-            .select(BILLS_SELECT, { count: 'exact' })
+            .select(GROUP_BILLS_SELECT, { count: 'exact' })
             .eq('group_id', groupId)
             .order('created_at', { ascending: false })
         ),
@@ -404,6 +360,13 @@ export default function GroupView() {
     loadMembers()
     loadCategories()
     reloadAll()
+
+    // Feeds the app-boot warm-up (see recentGroups.js/prefetchGroup.js) —
+    // recording every visit, personal group included, is simpler than
+    // deciding here which groups are worth remembering; Groups.jsx is the
+    // one place that already knows which ids are real groups worth
+    // prefetching and filters there instead.
+    recordGroupVisit(groupId)
 
     // Opportunistic, not scheduled — this is what actually generates due
     // recurring bills, running the moment anyone opens the group rather

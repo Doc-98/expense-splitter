@@ -6,6 +6,10 @@ import Pagination from '../components/Pagination'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { useListKeyboardNav } from '../lib/useListKeyboardNav'
 import { getCachedPersonalGroupId, setCachedPersonalGroupId } from '../lib/personalGroupCache'
+import { getRecentGroupIds } from '../lib/recentGroups'
+import { warmUpTopGroups } from '../lib/prefetchGroup'
+import BootSplash from '../components/BootSplash'
+import { hasAppBooted, markAppBooted } from '../lib/bootState'
 
 const GROUPS_PAGE_SIZE = 10
 
@@ -25,6 +29,11 @@ export default function Groups() {
   // enough to disable the tab and show it's doing something, never a
   // second page of its own.
   const [openingPersonal, setOpeningPersonal] = useState(false)
+  // Only ever true for the very first time this tab opens the groups list
+  // — see bootState.js. A later revisit to "/" this same session starts
+  // this already false and falls back to the plain inline "Loading your
+  // groups…" text further down, same as before this existed.
+  const [showBootSplash, setShowBootSplash] = useState(!hasAppBooted())
 
   const visibleGroups = groups
     ? groups.slice(groupsPage * GROUPS_PAGE_SIZE, (groupsPage + 1) * GROUPS_PAGE_SIZE)
@@ -56,6 +65,16 @@ export default function Groups() {
     if (groupsPage > maxPage) setGroupsPage(maxPage)
   }, [groups, groupsPage])
 
+  // The boot splash (if it's even showing — see showBootSplash above)
+  // only ever needs to hide once this settles, success or failure alike:
+  // an error is still a real, renderable state (the page's own error
+  // banner), and holding the splash up waiting for a retry that may never
+  // come would just trade one stall for a worse one.
+  function finishBoot() {
+    markAppBooted()
+    setShowBootSplash(false)
+  }
+
   async function loadGroups() {
     const { data: memberships, error: membershipError } = await supabase
       .from('group_members')
@@ -65,12 +84,14 @@ export default function Groups() {
 
     if (membershipError) {
       setError(loadErrorMessage(membershipError))
+      finishBoot()
       return
     }
 
     const groupIds = (memberships || []).map((m) => m.group_id)
     if (groupIds.length === 0) {
       setGroups([])
+      finishBoot()
       return
     }
 
@@ -87,10 +108,24 @@ export default function Groups() {
 
     if (groupsError) {
       setError(loadErrorMessage(groupsError))
+      finishBoot()
       return
     }
 
     setGroups(data || [])
+    finishBoot()
+
+    // Fire-and-forget — nothing here waits on it, it just warms
+    // groupViewCache in the background for whichever group (or the
+    // personal space) you open next. See prefetchGroup.js for why this is
+    // scoped to a recent window rather than each group's full history.
+    if (data && data.length > 0) {
+      warmUpTopGroups(
+        data.map((g) => g.id),
+        getRecentGroupIds(),
+        getCachedPersonalGroupId()
+      )
+    }
   }
 
   async function openPersonal() {
@@ -132,6 +167,8 @@ export default function Groups() {
     }
     setCreating(false)
   }
+
+  if (showBootSplash) return <BootSplash />
 
   return (
     <div className="page">
