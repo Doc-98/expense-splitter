@@ -323,7 +323,17 @@ create table spending_thresholds (
 -- supabase/migrations/add_indexes.sql for the same statements as a
 -- standalone migration for an already-deployed database.
 -- ---------------------------------------------------------------------------
-create index bills_group_id_idx on bills (group_id);
+-- Composite, not just (group_id) — nearly every bills query filters by
+-- group_id *and* either orders by created_at, ranges over it (the
+-- "recent window first, backfill after" pattern used throughout
+-- GroupStats/AccountStats/GroupGraphs/AccountGraphs/GroupView), or both.
+-- A plain group_id index narrows to the group; created_at desc as the
+-- second column lets Postgres satisfy the range/order in the same index
+-- scan too, rather than filtering by group then sorting/scanning
+-- unindexed within it. Supersedes a plain (group_id) index entirely (its
+-- own leading column already serves every place that alone used to be
+-- asked for), so there's deliberately only this one, not both.
+create index bills_group_id_created_at_idx on bills (group_id, created_at desc);
 create index items_bill_id_idx on items (bill_id);
 create index payments_group_id_idx on payments (group_id);
 create index categories_group_id_idx on categories (group_id);

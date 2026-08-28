@@ -8,6 +8,7 @@ import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
 import { GROUP_BILLS_SELECT, computeGroupViewSnapshot } from '../lib/groupViewSnapshot'
+import { getStatsWindowStart } from '../lib/timeRange'
 import { recordGroupVisit } from '../lib/recentGroups'
 import { formatSettlementRecap, formatMultiBillRecap } from '../lib/recapText'
 import { shareOrCopyText } from '../lib/shareText'
@@ -56,6 +57,21 @@ export default function GroupView() {
   useEffect(() => {
     billsRef.current = bills
   }, [bills])
+  // True once the definitive, complete (unwindowed) bill history has been
+  // fetched at least once this visit — see loadRecentBillsForFirstPaint
+  // below for why the all-time settlement specifically has to wait for
+  // this, even though the bill list itself, and week/month totals, can
+  // safely paint from a partial recent window sooner. Starts true
+  // whenever cache hydration already found something (a cached snapshot
+  // is only ever written once complete — see the cache-write effect
+  // further down), false otherwise. Mirrored to a ref for the same reason
+  // billsRef exists just above: the realtime payments subscription is
+  // wired up once per group, not re-subscribed every time this changes.
+  const [historyComplete, setHistoryComplete] = useState(false)
+  const historyCompleteRef = useRef(false)
+  useEffect(() => {
+    historyCompleteRef.current = historyComplete
+  }, [historyComplete])
   const [billsPage, setBillsPage] = useState(0)
   const [newBillTitle, setNewBillTitle] = useState('')
   const [settlement, setSettlement] = useState(null)
@@ -142,10 +158,19 @@ export default function GroupView() {
   const isAdmin = myParticipantId && myParticipantId === group?.admin_id
   // Whether the current selection happens to cover every bill in the
   // group, not just the visible page — bills holds the group's full list
-  // (see loadBillsAndSettlement), so this is a real "delete everything" check, the same
-  // one delete_all_group_bills() itself enforces server-side, not just a
-  // guess based on what's currently on screen.
-  const allBillsSelected = Boolean(bills && bills.length > 0 && selectedIds.size === bills.length)
+  // once historyComplete (see loadBillsAndSettlement), so this is a real
+  // "delete everything" check, the same one delete_all_group_bills()
+  // itself enforces server-side, not just a guess based on what's
+  // currently on screen. Also requires historyComplete specifically:
+  // during loadRecentBillsForFirstPaint's brief windowed-preview phase,
+  // `bills` only holds a recent slice, and selecting all of *that* would
+  // otherwise still trigger the delete-everything RPC underneath a
+  // confirmation dialog that only mentioned the smaller, visible count —
+  // an honesty problem worth avoiding on a destructive, irreversible
+  // action even for the few seconds this window is normally open.
+  const allBillsSelected = Boolean(
+    bills && bills.length > 0 && selectedIds.size === bills.length && historyComplete
+  )
 
   // Every loader below used to just destructure `{ data }` and move on — a
   // failed request (a dropped connection, an expired session, anything)
@@ -197,7 +222,53 @@ export default function GroupView() {
     setWeekTotal(weekTotal)
     setMonthTotal(monthTotal)
     setSettlement(settlement)
+    // Every caller of this function is working from a definitive, complete
+    // bill set — loadBillsAndSettlement below always fetches everything,
+    // unwindowed, and loadPaymentsAndSettlement only ever reaches this
+    // once historyComplete is already true (see its own guard) — so this
+    // is always a safe place to (re)confirm it.
+    setHistoryComplete(true)
   }
+
+  // Paints the bill list — and the week/month totals, safe from a partial
+  // window since "this week"/"this month" is always inside it — fast, for
+  // the one case that actually needs it: a group with no cached snapshot
+  // at all yet (see the mount effect below, which only calls this when
+  // groupViewCache came up empty). Deliberately never touches
+  // `settlement`: the all-time balance sums *every* bill and payment
+  // together, so computing it from just a recent window would show a
+  // wrong number, not merely an incomplete one — loadBillsAndSettlement,
+  // always running right alongside this, is what actually gets to decide
+  // the real balance, exactly as it always has.
+  const loadRecentBillsForFirstPaint = useCallback(async () => {
+    try {
+      const windowStart = getStatsWindowStart()
+      const billsData = await fetchAllRows(() =>
+        supabase
+          .from('bills')
+          .select(GROUP_BILLS_SELECT, { count: 'exact' })
+          .eq('group_id', groupId)
+          .gte('created_at', windowStart.toISOString())
+          .order('created_at', { ascending: false })
+      )
+      // loadBillsAndSettlement might already have won this race — a
+      // small/young group with nothing to window in the first place, or
+      // just a faster response. Applying this now would only ever be a
+      // strictly worse, partial view of data the page already has in
+      // full, so skip it entirely rather than flash backwards.
+      if (billsRef.current) return
+      setBills(billsData)
+      setError(null)
+      const { billPersonalTotals, weekTotal, monthTotal } = computeGroupViewSnapshot(billsData, [])
+      setBillPersonalTotals(billPersonalTotals)
+      setWeekTotal(weekTotal)
+      setMonthTotal(monthTotal)
+    } catch {
+      // Best-effort only — loadBillsAndSettlement is what actually has to
+      // succeed; if this one fails there's simply nothing extra to show
+      // meanwhile, same as before this existed.
+    }
+  }, [groupId])
 
   const loadBillsAndSettlement = useCallback(async () => {
     try {
@@ -244,7 +315,17 @@ export default function GroupView() {
       )
       setPayments(paymentsData)
       setError(null)
-      computeAndSetSettlement(billsRef.current || [], paymentsData)
+      // A payment coming in while the initial full bill load is still in
+      // flight has nothing safe to recompute against yet — billsRef.current
+      // would only be loadRecentBillsForFirstPaint's windowed preview, and
+      // settling against a partial bill history would show a wrong
+      // balance, not just an incomplete one. That in-flight load re-fetches
+      // payments fresh on its own once it resolves regardless, so this
+      // payment isn't lost — it just isn't reflected in the balance until
+      // the complete picture is.
+      if (historyCompleteRef.current) {
+        computeAndSetSettlement(billsRef.current || [], paymentsData)
+      }
     } catch (err) {
       setError(`Couldn't load payments: ${loadErrorMessage(err)}`)
     }
@@ -301,10 +382,17 @@ export default function GroupView() {
   // Initializes the price slider from real data exactly once bills first
   // load — see the priceRange state comment above for why a later reload
   // (a new, pricier bill coming in) deliberately doesn't touch it again.
+  // Gated on historyComplete, not just `bills` being non-empty: bills can
+  // already be non-empty from loadRecentBillsForFirstPaint's windowed
+  // preview (see its own comment), and initializing the slider's max off
+  // of just that would silently exclude a pricier bill outside the window
+  // from ever showing up in a price-filtered search, forever, even once
+  // the real backfill lands — this waits for the real, complete picture
+  // instead, same reasoning as settlement.
   useEffect(() => {
-    if (priceRange !== null || !bills || bills.length === 0) return
+    if (priceRange !== null || !bills || bills.length === 0 || !historyComplete) return
     setPriceRange([0, Math.max(1, Math.ceil(Math.max(...bills.map(billTotal))))])
-  }, [bills, priceRange])
+  }, [bills, priceRange, historyComplete])
 
   // Kept as its own name (rather than every call site just saying
   // loadBillsAndSettlement directly) since "reload everything" is the
@@ -320,9 +408,12 @@ export default function GroupView() {
   // three without any loader needing to know the cache exists. Guarded on
   // group/bills both being set so a still-loading (or failed-before-ever-
   // loading) page doesn't cache a half-populated snapshot that would paint
-  // instantly-but-wrong the next time this group is opened.
+  // instantly-but-wrong the next time this group is opened — and now also
+  // on historyComplete, so loadRecentBillsForFirstPaint's own windowed
+  // preview (which does set `bills`, just not the full picture yet) is
+  // never mistaken for the real thing and persisted as if it were.
   useEffect(() => {
-    if (!group || !bills) return
+    if (!group || !bills || !historyComplete) return
     groupViewCache.set(groupId, {
       group,
       allMembers,
@@ -334,7 +425,19 @@ export default function GroupView() {
       weekTotal,
       monthTotal,
     })
-  }, [groupId, group, allMembers, categories, bills, billPersonalTotals, settlement, payments, weekTotal, monthTotal])
+  }, [
+    groupId,
+    group,
+    allMembers,
+    categories,
+    bills,
+    billPersonalTotals,
+    settlement,
+    payments,
+    weekTotal,
+    monthTotal,
+    historyComplete,
+  ])
 
   useEffect(() => {
     // Paints instantly from whatever was on screen last time this group was
@@ -354,6 +457,17 @@ export default function GroupView() {
       setPayments(cached.payments)
       setWeekTotal(cached.weekTotal)
       setMonthTotal(cached.monthTotal)
+      // A cached snapshot is only ever written once complete (see the
+      // cache-write effect above) — never partial.
+      setHistoryComplete(true)
+    } else {
+      // Nothing cached at all — get *something* on screen fast (a recent
+      // window) while the real, complete load right behind it is still in
+      // flight, rather than showing nothing for however long a big or old
+      // group's full history takes to fetch. A cached revisit already has
+      // something to show immediately, so it skips straight to the one
+      // real fetch below, same as before this existed.
+      loadRecentBillsForFirstPaint()
     }
 
     loadGroup()
@@ -379,14 +493,39 @@ export default function GroupView() {
       })
       .catch((err) => console.error('Failed to process recurring bills:', err))
 
+    // `filter` narrows each subscription to *this* group specifically —
+    // without it, being a member of several groups means every change
+    // anywhere in any of them (RLS already limits it to groups you're
+    // actually in, but not to the one you're currently looking at)
+    // triggers a full reloadAll() here regardless of which group it was
+    // actually for. Only possible where the table has its own group_id
+    // column to filter on directly: bills/payments/group_members/
+    // categories all do. items/item_shares don't (they only carry
+    // bill_id/item_id, one join step further from group_id), and
+    // Realtime's filter can't express a join — those two stay unfiltered,
+    // same as before, which is the one real limitation here, not an
+    // oversight.
+    const groupFilter = `group_id=eq.${groupId}`
     const channel = supabase
       .channel(`group-${groupId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bills' }, reloadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: groupFilter }, reloadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, reloadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, reloadAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, loadPaymentsAndSettlement)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members' }, loadMembers)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, loadCategories)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'payments', filter: groupFilter },
+        loadPaymentsAndSettlement
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'group_members', filter: groupFilter },
+        loadMembers
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'categories', filter: groupFilter },
+        loadCategories
+      )
       .subscribe()
 
     return () => supabase.removeChannel(channel)

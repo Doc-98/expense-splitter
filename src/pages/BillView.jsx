@@ -93,11 +93,25 @@ export default function BillView() {
     loadBillAndMembers()
     loadItems()
 
+    // `filter` narrows each subscription to *this* bill specifically —
+    // without it, any change to any bill in any group you're a member of
+    // (RLS already limits it to those, but not to the one bill you're
+    // actually looking at) triggers a refetch here. Only possible where
+    // the table has its own bill_id column: items/bill_payers both do.
+    // item_shares doesn't (it only carries item_id, one join step further
+    // from bill_id), and Realtime's filter can't express a join — that one
+    // stays unfiltered, same as before, which is the one real limitation
+    // here, not an oversight.
+    const billFilter = `bill_id=eq.${billId}`
     const channel = supabase
       .channel(`bill-${billId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, loadItems)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: billFilter }, loadItems)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, loadItems)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bill_payers' }, loadBill)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bill_payers', filter: billFilter },
+        loadBill
+      )
       .subscribe()
 
     return () => supabase.removeChannel(channel)
