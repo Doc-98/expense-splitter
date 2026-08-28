@@ -11,7 +11,14 @@ import { computeBalances } from './settlement'
 export function parseSplitwiseCsv(text) {
   const rows = parseCsv(text)
   if (rows.length < 2) {
-    return { peopleNames: [], expenses: [], needsReview: [], finalBalances: {}, warnings: ['That file looks empty.'] }
+    return {
+      peopleNames: [],
+      expenses: [],
+      transfers: [],
+      needsReview: [],
+      finalBalances: {},
+      warnings: ['That file looks empty.'],
+    }
   }
 
   const header = rows[0].map((h) => h.trim())
@@ -28,6 +35,7 @@ export function parseSplitwiseCsv(text) {
     return {
       peopleNames: [],
       expenses: [],
+      transfers: [],
       needsReview: [],
       finalBalances: {},
       warnings: ["This doesn't look like a Splitwise export — missing Date/Description/Cost columns."],
@@ -42,6 +50,17 @@ export function parseSplitwiseCsv(text) {
   const warnings = []
   const currenciesSeen = new Set()
   const expenses = []
+  // Splitwise records a settle-up transfer as an ordinary row with
+  // category "Payment" — same net-balance shape as a real expense
+  // (exactly one person positive, one negative), but it's money moving
+  // between two people, not a purchase. Recognized below and kept
+  // separate from `expenses` so ImportBills.jsx can record each one as a
+  // real payment (the `payments` table) instead of a fake bill — which is
+  // what treating it as an ordinary expense used to do: clutter the bill
+  // list with entries literally titled "A paid B", and quietly inflate
+  // B's counted "spend" by money that was never actually spent on
+  // anything.
+  const transfers = []
   // Rows where the net-balance numbers alone can't tell us who actually
   // paid, or how a multi-person expense should split — either nobody has
   // a positive net (a personal expense someone logged for their own
@@ -98,6 +117,20 @@ export function parseSplitwiseCsv(text) {
     const date = Number.isNaN(parsedDate.getTime()) ? null : parsedDate.toISOString()
     const category = categoryIdx !== -1 ? row[categoryIdx]?.trim() : ''
 
+    if (category.toLowerCase() === 'payment') {
+      const positive = Object.entries(netByPerson).filter(([, net]) => net > 0.001)
+      const negative = Object.entries(netByPerson).filter(([, net]) => net < -0.001)
+      // A clean two-party transfer: one payer, one receiver, netting to
+      // zero between them. Anything messier (Splitwise batching multiple
+      // settlements into one row, say) falls through to the ordinary
+      // expense/review handling below instead of being guessed at here —
+      // needsReview's own UI still lets it be resolved by hand.
+      if (positive.length === 1 && negative.length === 1 && Math.abs(positive[0][1] + negative[0][1]) < 0.01) {
+        transfers.push({ date, description, payerName: positive[0][0], receiverName: negative[0][0], amount: cost })
+        continue
+      }
+    }
+
     // The one person with a positive net fronted the money — this is the
     // only shape Splitwise's per-row net balances can be reconstructed
     // from with confidence. Zero such people, or more than one, both mean
@@ -136,7 +169,7 @@ export function parseSplitwiseCsv(text) {
     )
   }
 
-  return { peopleNames: peopleColumns.map((c) => c.name), expenses, needsReview, finalBalances, warnings }
+  return { peopleNames: peopleColumns.map((c) => c.name), expenses, transfers, needsReview, finalBalances, warnings }
 }
 
 // Compares what the app itself computes for each Splitwise name's balance,

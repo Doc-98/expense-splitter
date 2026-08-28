@@ -234,6 +234,7 @@ export default function ImportBills() {
     const insertedBills = []
     const insertedItems = []
     const insertedShares = []
+    const insertedPayments = []
 
     // buyerAmounts is { member_id: amount }, each entry becoming its own
     // item assigned to just that person — not one item covering the whole
@@ -306,8 +307,35 @@ export default function ImportBills() {
       for (const row of insertedItemRows) insertedItems.push({ id: row.id, bill_id: bill.id, total_price: row.total_price })
     }
 
+    // A Splitwise settle-up row (see parseSplitwiseCsv's `transfers`) —
+    // recorded as a real payment, not a bill, so it settles the group's
+    // balance the same way any other recorded payment does without ever
+    // showing up in the bill list or counting toward anyone's spend.
+    // from_member is whoever handed over the money (Splitwise's own net
+    // balance has them positive, same "fronted the money" sense
+    // computeBalances already uses for a payment: from_user's balance
+    // moves up, to_user's moves down), matching recordPayment() elsewhere
+    // in the app exactly.
+    async function insertTransfer({ date, payerId, receiverId, amount }) {
+      const { data: payment, error: paymentError } = await supabase
+        .from('payments')
+        .insert({
+          group_id: groupId,
+          from_member: payerId,
+          to_member: receiverId,
+          amount,
+          created_by: user.id,
+          ...(date ? { created_at: date } : {}),
+        })
+        .select()
+        .single()
+      if (paymentError) throw paymentError
+      insertedPayments.push(payment)
+    }
+
     try {
       let imported = 0
+      const totalCount = parsed.expenses.length + parsed.transfers.length + parsed.needsReview.length
 
       // The ordinary, automatically-resolved expenses — same shape and
       // logic this always had, just now sharing insertBill() with the
@@ -317,7 +345,7 @@ export default function ImportBills() {
       // compute here beyond resolving names to member ids.
       for (let i = 0; i < parsed.expenses.length; i++) {
         const expense = parsed.expenses[i]
-        setProgress(`Importing ${i + 1} of ${parsed.expenses.length + parsed.needsReview.length}…`)
+        setProgress(`Importing ${i + 1} of ${totalCount}…`)
 
         const payerId = ids[expense.payerName]
         if (!payerId) continue
@@ -340,6 +368,22 @@ export default function ImportBills() {
         imported++
       }
 
+      // Settle-up transfers — recorded as payments (see insertTransfer
+      // above), inserted before the balance proof-check below so the
+      // fresh existingPayments fetch there picks them up automatically,
+      // same as any payment already on the group.
+      for (let i = 0; i < parsed.transfers.length; i++) {
+        const transfer = parsed.transfers[i]
+        setProgress(`Importing ${parsed.expenses.length + i + 1} of ${totalCount}…`)
+
+        const payerId = ids[transfer.payerName]
+        const receiverId = ids[transfer.receiverName]
+        if (!payerId || !receiverId) continue
+
+        await insertTransfer({ date: transfer.date, payerId, receiverId, amount: transfer.amount })
+        imported++
+      }
+
       // The ones the review step just resolved (or you chose to skip) —
       // whatever amounts "Split unevenly…" produced, or an equal split of
       // the cost among whoever was checked if that was never opened
@@ -348,7 +392,7 @@ export default function ImportBills() {
       for (let i = 0; i < parsed.needsReview.length; i++) {
         const item = parsed.needsReview[i]
         const resolution = resolutions[i]
-        setProgress(`Importing ${parsed.expenses.length + i + 1} of ${parsed.expenses.length + parsed.needsReview.length}…`)
+        setProgress(`Importing ${parsed.expenses.length + parsed.transfers.length + i + 1} of ${totalCount}…`)
 
         if (!resolution || resolution.skipped) {
           await insertBill({
@@ -402,7 +446,9 @@ export default function ImportBills() {
       // "matches" here and then visibly disagree with that page the
       // moment you actually look at it — a real, if confusing, way for
       // this to have looked right immediately after import and wrong five
-      // minutes later.
+      // minutes later. This fresh fetch also already includes whatever
+      // this run's own transfers loop just inserted, since it ran before
+      // this point.
       let balanceCheck = null
       if (Object.keys(parsed.finalBalances).length > 0) {
         const existingPayments = await fetchAllRows(() =>
@@ -418,7 +464,7 @@ export default function ImportBills() {
         })
       }
 
-      setResult({ imported, total: parsed.expenses.length + parsed.needsReview.length, balanceCheck })
+      setResult({ imported, total: totalCount, balanceCheck })
       setProgress(null)
     } catch (err) {
       setError(err.message)
@@ -444,7 +490,8 @@ export default function ImportBills() {
             then upload it here. Each expense becomes one bill, imported with its original date and
             payer preserved. Splitwise doesn't track individual line items, but each person's own
             share becomes its own item, assigned just to them — so an imported bill ends up exactly
-            as editable afterward as any other.
+            as editable afterward as any other. A recorded settle-up between two people (not a
+            purchase) is recognized separately and imported as a payment instead of a bill.
           </p>
           <input type="file" accept=".csv,text/csv" onChange={handleFile} />
         </>
@@ -464,9 +511,17 @@ export default function ImportBills() {
 
           <h2 className="settings-section-title">
             {parsed.expenses.length} expense{parsed.expenses.length === 1 ? '' : 's'} found
+            {parsed.transfers.length > 0 &&
+              `, ${parsed.transfers.length} settle-up${parsed.transfers.length === 1 ? '' : 's'}`}
             {parsed.needsReview.length > 0 &&
               `, ${parsed.needsReview.length} need${parsed.needsReview.length === 1 ? 's' : ''} your input`}
           </h2>
+          {parsed.transfers.length > 0 && (
+            <p className="muted">
+              Splitwise recorded {parsed.transfers.length} of these as a settle-up between two
+              people rather than a purchase — those will be imported as payments, not bills.
+            </p>
+          )}
           {parsed.needsReview.length > 0 && (
             <p className="muted">
               Splitwise's export doesn't say who paid (or how a multi-payer expense splits) for
@@ -495,7 +550,7 @@ export default function ImportBills() {
               ? progress || 'Importing…'
               : parsed.needsReview.length > 0
                 ? 'Continue'
-                : `Import ${parsed.expenses.length} bills`}
+                : `Import ${parsed.expenses.length} bills${parsed.transfers.length > 0 ? ` + ${parsed.transfers.length} settle-ups` : ''}`}
           </button>
         </>
       )}
@@ -605,7 +660,11 @@ export default function ImportBills() {
       {result && (
         <>
           <p className="status-success">
-            Imported {result.imported} of {result.total} bills.
+            Imported {result.imported} of {result.total}
+            {parsed.transfers.length > 0
+              ? ` (${parsed.expenses.length + parsed.needsReview.length} bills, ${parsed.transfers.length} settle-up${parsed.transfers.length === 1 ? '' : 's'})`
+              : ' bills'}
+            .
           </p>
           {result.balanceCheck && (
             <>
