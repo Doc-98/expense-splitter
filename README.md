@@ -1065,6 +1065,22 @@ everywhere else this app avoids trapping you behind a check it runs on
 your behalf: you're the authority on your own financial history, not a
 validation rule.
 
+**Settle-up transfers aren't bills.** When someone pays another person
+directly to settle a debt — not a purchase — Splitwise records that as an
+ordinary row with category `Payment`. Numerically it has the exact same
+shape as a real expense (one person positive, one negative), but treating
+it as one produces a bill literally titled "A paid B", and inflates B's
+counted spend by money that was never spent on anything, since B ends up
+"consuming" an item that's really just cash changing hands.
+`parseSplitwiseCsv()` recognizes a clean two-party `Payment` row (falling
+back to ordinary expense/review handling for anything messier — Splitwise
+batching several settlements into one row, say) and keeps it in its own
+`transfers` bucket; `ImportBills.jsx` then records each one as a real
+`payments`-table row (`from_member` = whoever handed over the money,
+matching `computeBalances()`'s existing sense of a recorded payment)
+instead of a bill, so it settles the group's balance the same way any
+other recorded payment does without ever cluttering the bill list.
+
 ### Categorizing bills after an import
 
 An import lands every bill uncategorized — Splitwise's own categories
