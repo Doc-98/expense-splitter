@@ -142,3 +142,40 @@ export function findDuplicateIndexes(newTransactions, existingBills = []) {
   }
   return duplicates
 }
+
+// A different kind of duplicate than findDuplicateIndexes above: not "did
+// I already import this exact statement," but "did I already record this
+// same real-world expense as a bill in one of my *other* groups" — you
+// paid for something with a friend, it's already sitting in that group's
+// bill list, and now it's also showing up here on your own bank
+// statement. A shared bill's title ("Dinner with roommates," typed by a
+// person) has no reason to resemble the bank's own wording for the same
+// charge ("RESTAURANT XYZ 4821"), so this deliberately does *not* require
+// a description match the way the same-statement check does — just the
+// amount, and the date within a few days either way. That's a real
+// tradeoff (a coincidental same-amount, same-week purchase in another
+// group would false-positive) but the safer one for a destructive-if-
+// missed case: a flagged row is still just one click to keep, an unflagged
+// real duplicate is money counted twice with nothing pointing at it.
+//
+// `otherGroupBills` is `{ amount, date, groupName }[]` — see
+// ImportBankStatement.jsx's loadCrossGroupBills for why it's fetched in a
+// tight window around the statement's own date range rather than each
+// other group's full history ("trust the date match" — no reason to
+// search further than the wiggle room itself covers).
+const CROSS_GROUP_WINDOW_DAYS = 3
+
+export function findCrossGroupMatches(newTransactions, otherGroupBills = []) {
+  const matches = new Map() // transaction index -> groupName
+  for (let i = 0; i < newTransactions.length; i++) {
+    const tx = newTransactions[i]
+    const txDate = new Date(tx.date)
+    const match = otherGroupBills.find((b) => {
+      if (Math.abs(b.amount - tx.amount) > 0.01) return false
+      const gapDays = Math.abs(new Date(b.date) - txDate) / DAY_MS
+      return gapDays <= CROSS_GROUP_WINDOW_DAYS
+    })
+    if (match) matches.set(i, match.groupName)
+  }
+  return matches
+}

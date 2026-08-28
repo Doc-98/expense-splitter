@@ -14,7 +14,7 @@ import {
   isBankStatementPdfConfigured,
   currentBankStatementStrategyLabel,
 } from '../lib/bank-statement-parsing'
-import { detectRecurringClusters, findDuplicateIndexes } from '../lib/bankStatementDetection'
+import { detectRecurringClusters, findDuplicateIndexes, findCrossGroupMatches } from '../lib/bankStatementDetection'
 import { classifyTitles, resolveClassifyStrategy } from '../lib/billCategorization'
 import { advanceDate, addRecurringBill } from '../lib/recurringBills'
 
@@ -59,6 +59,7 @@ export default function ImportBankStatement() {
   const [transactions, setTransactions] = useState([])
   const [selections, setSelections] = useState([]) // parallel to transactions: { include, categoryId }
   const [duplicateIndexes, setDuplicateIndexes] = useState(new Set())
+  const [crossGroupMatches, setCrossGroupMatches] = useState(new Map()) // transaction index -> groupName
   const [recurringClusters, setRecurringClusters] = useState([])
   const [recurringChoices, setRecurringChoices] = useState({}) // clusterKey -> boolean
   const [categorizing, setCategorizing] = useState(null) // { done, total } | null, only while the AI category pass runs
@@ -125,6 +126,58 @@ export default function ImportBankStatement() {
       description: b.title,
       amount: (b.items || []).reduce((sum, it) => sum + Number(it.total_price), 0),
       date: b.created_at,
+    }))
+  }
+
+  // The same real-world expense can already be sitting in one of the
+  // account's *other* groups — you paid for something with a friend, and
+  // now it's also showing up on your own bank statement. Unlike
+  // loadExistingHistory above (a broad recent window, since it's only one
+  // group), this is scoped tightly to the statement's own date range,
+  // padded by the same wiggle room findCrossGroupMatches itself checks —
+  // "trust the date match," per the reasoning that motivated this at all:
+  // no reason to search further than that wiggle room could ever match
+  // anyway, across however many other groups the account belongs to.
+  const CROSS_GROUP_WINDOW_DAYS = 3
+
+  async function loadCrossGroupBills(transactionDates) {
+    if (transactionDates.length === 0) return []
+
+    const times = transactionDates.map((d) => new Date(d).getTime())
+    const padMs = CROSS_GROUP_WINDOW_DAYS * 24 * 60 * 60 * 1000
+    const rangeStart = new Date(Math.min(...times) - padMs)
+    const rangeEnd = new Date(Math.max(...times) + padMs)
+
+    const { data: memberships, error: membershipError } = await supabase
+      .from('group_members')
+      .select('group_id')
+      .eq('user_id', user.id)
+      .eq('active', true)
+    if (membershipError) throw membershipError
+
+    const otherGroupIds = [...new Set((memberships || []).map((m) => m.group_id))].filter((id) => id !== groupId)
+    if (otherGroupIds.length === 0) return []
+
+    const { data: groupsData, error: groupsError } = await supabase
+      .from('groups')
+      .select('id, name')
+      .in('id', otherGroupIds)
+    if (groupsError) throw groupsError
+    const groupNameById = new Map((groupsData || []).map((g) => [g.id, g.name]))
+
+    const bills = await fetchAllRows(() =>
+      supabase
+        .from('bills')
+        .select('group_id, created_at, items(total_price)', { count: 'exact' })
+        .in('group_id', otherGroupIds)
+        .gte('created_at', rangeStart.toISOString())
+        .lte('created_at', rangeEnd.toISOString())
+    )
+
+    return bills.map((b) => ({
+      amount: (b.items || []).reduce((sum, it) => sum + Number(it.total_price), 0),
+      date: b.created_at,
+      groupName: groupNameById.get(b.group_id) || 'another group',
     }))
   }
 
@@ -207,10 +260,14 @@ export default function ImportBankStatement() {
         }
       }
 
-      const existingHistory = await loadExistingHistory()
+      const [existingHistory, crossGroupBills] = await Promise.all([
+        loadExistingHistory(),
+        loadCrossGroupBills(parsedTransactions.map((t) => t.date)),
+      ])
       const debitTransactions = parsedTransactions.filter((t) => t.direction === 'debit')
 
       const duplicates = findDuplicateIndexes(parsedTransactions, existingHistory)
+      const crossMatches = findCrossGroupMatches(parsedTransactions, crossGroupBills)
       const clusters = detectRecurringClusters(debitTransactions, existingHistory).map((cluster) => ({
         ...cluster,
         // detectRecurringClusters indexes into debitTransactions, not the
@@ -223,17 +280,19 @@ export default function ImportBankStatement() {
       // Debits import by default (that's what this app tracks); credits —
       // income, refunds, salary — don't, since they're not spending, but
       // they still show up in the review list rather than vanishing
-      // silently. A likely duplicate defaults off regardless of
-      // direction, so re-importing an overlapping statement period
-      // doesn't double an expense just because nobody unchecked it.
+      // silently. A likely duplicate — this same statement re-imported, or
+      // this same expense already recorded in another group — defaults
+      // off regardless of direction, so nobody accidentally double-counts
+      // just because they didn't notice the flag.
       const initialSelections = parsedTransactions.map((t, i) => ({
-        include: t.direction === 'debit' && !duplicates.has(i),
+        include: t.direction === 'debit' && !duplicates.has(i) && !crossMatches.has(i),
         categoryId: '',
       }))
 
       setTransactions(parsedTransactions)
       setSelections(initialSelections)
       setDuplicateIndexes(duplicates)
+      setCrossGroupMatches(crossMatches)
       setRecurringClusters(clusters)
       setRecurringChoices({})
       setStep('review')
@@ -467,6 +526,9 @@ export default function ImportBankStatement() {
                   <span className="muted bank-tx-date">{new Date(tx.date).toLocaleDateString()}</span>
                   <span className="categorize-row-title">{tx.description}</span>
                   {duplicateIndexes.has(i) && <span className="bank-tx-flag muted">possible duplicate</span>}
+                  {crossGroupMatches.has(i) && (
+                    <span className="bank-tx-flag muted">already in {crossGroupMatches.get(i)}?</span>
+                  )}
                   {tx.direction === 'credit' && <span className="bank-tx-flag muted">income — not imported</span>}
                 </label>
                 <span className="member-list-actions">
