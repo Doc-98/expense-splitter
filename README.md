@@ -428,6 +428,59 @@ export all just work; only Invite, "paid by"/"split with" pickers, and
 Settle Up are hidden, since there's never anyone but you in it. It folds
 into "Your Stats" automatically, same as any other group.
 
+### Importing a bank statement
+
+`/groups/:groupId/import-bank-statement` (linked from the Personal space's
+own Group Settings — not available for a real group yet) turns a bank or
+credit-card statement into bills. Two ways in:
+
+- **CSV export**, if your bank offers one — parsed locally
+  (`src/lib/bankStatementCsv.js`), no AI involved, matching by common column
+  aliases (Date/Payee/Amount, or separate Debit/Credit columns) rather than
+  one fixed shape.
+- **PDF statement** — read by whichever AI service you've set up in Scan
+  settings (Claude or Gemini specifically; Ollama's local models don't
+  reliably take a multi-page PDF document the way those two hosted APIs do,
+  so there's no local fallback here the way receipt scanning has one).
+  **Strip anything sensitive beyond the transactions themselves — account
+  number, name, address — before uploading**, since the file is sent to
+  that provider to be read.
+
+Either path lands on the same review screen: every transaction, a category
+suggestion per row (reusing the exact same AI pass `/categorize` uses),
+and a checkbox to include or skip it — nothing is saved until you confirm.
+Credits (salary, refunds, incoming transfers) are shown but never imported
+by default, since they're not spending.
+
+<details>
+<summary>Recurring and duplicate detection</summary>
+
+Both run automatically, client-side, no AI needed — see
+`src/lib/bankStatementDetection.js`.
+
+- **Recurring**: transactions are clustered by merchant name and *exact*
+  amount (favors precision — missing a utility bill that genuinely varies
+  month to month — over guessing a pattern that isn't really there), looking
+  at both this batch and the Personal space's own recent bill history so a
+  subscription is recognized even on its first appearance in a given
+  statement. A cluster with a clean weekly/monthly/yearly gap between
+  occurrences is offered as a one-click Recurring Bill template, so the next
+  month's charge is generated automatically instead of needing another
+  import.
+- **Duplicates**: a transaction matching an existing bill's merchant and
+  amount within a few days defaults its checkbox off, flagged "possible
+  duplicate" — for re-importing an overlapping statement period. Still
+  editable, in case it's a false positive.
+- **Already recorded elsewhere**: a transaction matching a bill's *amount*
+  in one of the account's *other* groups, within the same few-day window,
+  is flagged "already in \<Group\>?" — a shared expense (split with a
+  friend, already a bill there) showing up on your own statement too.
+  Deliberately amount + date only, no title match required — a shared
+  bill's title has no reason to resemble the bank's own wording for the
+  same charge.
+
+</details>
+
 ## The in-app guide
 
 `/guide` (also reachable from the account menu as "How to use") is a

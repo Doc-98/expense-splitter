@@ -30,6 +30,10 @@ const ImportBills = lazy(() => import('./pages/ImportBills'))
 // Same reasoning as ImportBills above — a wizard almost nobody opens more
 // than once, right after a big import.
 const CategorizeBills = lazy(() => import('./pages/CategorizeBills'))
+// Same reasoning again, plus this one's own bank-statement-parsing module
+// (two more AI provider calls) — no reason for anyone who never touches
+// the Personal space's bank import to pay for any of it.
+const ImportBankStatement = lazy(() => import('./pages/ImportBankStatement'))
 // A second, more visual stats page most people will never open at all —
 // deliberately a separate page from Your Stats/Group Stats rather than
 // folded into them, so its charts (and the SVG chart components they pull
@@ -130,6 +134,16 @@ function Shell() {
           <RequireAuth>
             <Suspense fallback={<div className="page-loading">Loading…</div>}>
               <ImportBills />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/groups/:groupId/import-bank-statement"
+        element={
+          <RequireAuth>
+            <Suspense fallback={<div className="page-loading">Loading…</div>}>
+              <ImportBankStatement />
             </Suspense>
           </RequireAuth>
         }

@@ -594,6 +594,16 @@ export default function GroupSettings() {
       <Link to={`/groups/${groupId}/categorize`} className="btn-link import-link">
         Categorize uncategorized bills
       </Link>
+      {/* Personal-space only, for now — a bank statement genuinely covers
+          your own account either way, but a shared group's statement
+          import (whose account, who's the payer, splitting a shared bill
+          apart from the raw transaction list) is a different, bigger
+          feature than this one, not yet built. */}
+      {isPersonal && (
+        <Link to={`/groups/${groupId}/import-bank-statement`} className="btn-link import-link">
+          Import a bank statement
+        </Link>
+      )}
 
       {formerRealMembers.length > 0 && (
         <>
