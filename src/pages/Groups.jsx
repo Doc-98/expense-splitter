@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import Pagination from '../components/Pagination'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { useListKeyboardNav } from '../lib/useListKeyboardNav'
+import { getCachedPersonalGroupId, setCachedPersonalGroupId } from '../lib/personalGroupCache'
 
 const GROUPS_PAGE_SIZE = 10
 
@@ -93,6 +94,14 @@ export default function Groups() {
   }
 
   async function openPersonal() {
+    // Once we already know the id (from earlier this session), skip the
+    // round-trip entirely — get_or_create_personal_group() is cheap, but
+    // "already know where to go" beats "ask again" every time.
+    const cachedId = getCachedPersonalGroupId()
+    if (cachedId) {
+      navigate(`/groups/${cachedId}`)
+      return
+    }
     setOpeningPersonal(true)
     setError(null)
     const { data, error: rpcError } = await supabase.rpc('get_or_create_personal_group')
@@ -101,6 +110,7 @@ export default function Groups() {
       setOpeningPersonal(false)
       return
     }
+    setCachedPersonalGroupId(data.id)
     navigate(`/groups/${data.id}`)
   }
 

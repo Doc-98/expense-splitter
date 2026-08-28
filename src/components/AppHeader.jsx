@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useClickOutside } from '../lib/useClickOutside'
+import { clearCachedPersonalGroupId } from '../lib/personalGroupCache'
 
 // Bumped by hand with each PR — "1.<PR number>" rather than semver, since PRs
 // merge in order on this branch and are already a visible, monotonic counter
@@ -18,6 +19,11 @@ export default function AppHeader() {
   useClickOutside(menuRef, () => setOpen(false), open)
 
   async function signOut() {
+    // On a shared device, a stale personal-group id left behind for the
+    // next person to sign in on this same tab would send them straight
+    // into whoever was signed in before — see the comment on
+    // clearCachedPersonalGroupId itself.
+    clearCachedPersonalGroupId()
     await supabase.auth.signOut()
   }
 
