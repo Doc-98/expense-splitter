@@ -84,9 +84,15 @@ the (tiny) hosting bill. Setup takes about 20 minutes.
    `items`, `item_shares`, `bill_payers`, `payments`, `group_members` — this
    is what makes edits show up live on every phone without refreshing.
 4. **Authentication → Sign In / Providers** → confirm **Email** is on
-   (default). For magic links to redirect to your deployed app instead of
-   `localhost`, set **Authentication → URL Configuration → Site URL** once
-   you've deployed (step 3 below).
+   (default). For magic links and password-reset links to redirect to your
+   deployed app instead of `localhost`, set **Authentication → URL
+   Configuration → Site URL** once you've deployed (step 3 below), and add
+   `your-deployed-url/reset-password` under **Redirect URLs** on the same
+   page — Supabase rejects a redirect target that isn't on this allowlist,
+   which otherwise silently breaks the "forgot password" flow specifically
+   (magic links happen to redirect to the Site URL's bare root, which is
+   already allowed by default; password resets redirect to `/reset-password`
+   on top of it, which isn't covered by that same default).
 
 ### 2. Get your API credentials
 

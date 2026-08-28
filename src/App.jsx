@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext'
 import { CurrencyProvider } from './context/CurrencyContext'
 import AppHeader from './components/AppHeader'
 import Login from './pages/Login'
+import ResetPassword from './pages/ResetPassword'
 import Groups from './pages/Groups'
 import GroupView from './pages/GroupView'
 import BillView from './pages/BillView'
@@ -57,23 +58,39 @@ function RequireAuth({ children }) {
 function Shell() {
   const { session } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
   // Whenever a session appears — whether from a password sign-in, clicking a
   // magic-link email, or confirming a new account by email — check if we
   // owe the person a trip back to wherever they originally tried to go
   // (e.g. an invite link) and finish that journey automatically.
+  //
+  // Skipped on /reset-password specifically: confirming a password-reset
+  // link also makes a session appear (a temporary "recovery" one — see
+  // ResetPassword.jsx), but that's not really "signing in," and this
+  // effect firing there would yank someone away mid-task to whatever
+  // redirectAfterLogin happens to still be sitting in storage from some
+  // earlier, unrelated, never-finished login attempt — before they ever
+  // get to actually set their new password.
   useEffect(() => {
-    if (!session) return
+    if (!session || location.pathname === '/reset-password') return
     const next = sessionStorage.getItem('redirectAfterLogin')
     if (next) {
       sessionStorage.removeItem('redirectAfterLogin')
       navigate(next, { replace: true })
     }
-  }, [session, navigate])
+  }, [session, navigate, location.pathname])
 
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/* Not behind RequireAuth, on purpose — a person lands here straight
+          from an emailed link, not through the normal signed-in flow, and
+          RequireAuth's own session===null case would just bounce them to
+          /login with no explanation. ResetPassword.jsx handles all three
+          states of its own (still-loading / invalid-or-expired link /
+          ready) itself, with a message that actually says which. */}
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/join/:code" element={<RequireAuth><JoinGroup /></RequireAuth>} />
       <Route path="/claim/:token" element={<RequireAuth><ClaimGuest /></RequireAuth>} />
       <Route path="/about" element={<RequireAuth><About /></RequireAuth>} />
