@@ -9,6 +9,11 @@ export default function Login() {
   // switches tabs; nothing about the magic-link flow itself changes.
   const [mode, setMode] = useState('password') // 'magic' | 'password'
   const [isSignUp, setIsSignUp] = useState(false)
+  // A third state of the password tab, not a fourth top-level `mode` —
+  // "forgot password" only ever makes sense starting from password
+  // sign-in, never from magic link (which needs no password to begin
+  // with) or mid-signup (nothing to reset yet).
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -56,6 +61,33 @@ export default function Login() {
     )
   }
 
+  // Sends a recovery email regardless of whether this account has ever had
+  // a password before — the same flow works for someone who forgot theirs
+  // and for an account that only ever existed via magic link (no password
+  // set at all, e.g. from before shouldCreateUser: false closed that gap;
+  // see handleMagicLink above). Confirming the emailed link lands on
+  // ResetPassword.jsx, which calls supabase.auth.updateUser({ password })
+  // — that sets a password whether or not one existed previously, so
+  // there's no separate "first-time set" path needed.
+  async function handleForgotPassword(e) {
+    e.preventDefault()
+    setLoading(true)
+    setStatus(null)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    setLoading(false)
+    // Supabase itself already doesn't error out for an email with no
+    // account (avoids confirming whether one exists to whoever's typing) —
+    // so a real error here is a genuine operational problem (rate limit,
+    // network) worth actually showing, not something to mask.
+    setStatus(
+      error
+        ? { type: 'error', text: error.message }
+        : { type: 'success', text: "If that email has an account, we've sent a link to reset the password." }
+    )
+  }
+
   async function handlePassword(e) {
     e.preventDefault()
     setLoading(true)
@@ -94,14 +126,22 @@ export default function Login() {
           <button
             type="button"
             className={mode === 'magic' ? 'tab active' : 'tab'}
-            onClick={() => setMode('magic')}
+            onClick={() => {
+              setMode('magic')
+              setShowForgotPassword(false)
+              setStatus(null)
+            }}
           >
             Magic link
           </button>
           <button
             type="button"
             className={mode === 'password' ? 'tab active' : 'tab'}
-            onClick={() => setMode('password')}
+            onClick={() => {
+              setMode('password')
+              setShowForgotPassword(false)
+              setStatus(null)
+            }}
           >
             Password
           </button>
@@ -126,6 +166,32 @@ export default function Login() {
               We'll email you a link — open it on this device and you're signed in, no password
               needed. Only works for an email that already has an account.
             </p>
+          </form>
+        ) : showForgotPassword ? (
+          <form onSubmit={handleForgotPassword} className="auth-form">
+            <label>
+              Email
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </label>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Sending…' : 'Send reset link'}
+            </button>
+            <button
+              type="button"
+              className="btn-link"
+              onClick={() => {
+                setShowForgotPassword(false)
+                setStatus(null)
+              }}
+            >
+              ← Back to sign in
+            </button>
           </form>
         ) : (
           <form onSubmit={handlePassword} className="auth-form">
@@ -161,12 +227,25 @@ export default function Login() {
                 placeholder="••••••••"
               />
             </label>
+            {isSignUp && <p className="muted field-hint">At least 6 characters.</p>}
             <button type="submit" className="btn-primary" disabled={loading}>
               {loading ? 'Please wait…' : isSignUp ? 'Create account' : 'Sign in'}
             </button>
             <button type="button" className="btn-link" onClick={() => setIsSignUp((s) => !s)}>
               {isSignUp ? 'Already have an account? Sign in' : 'New here? Create an account'}
             </button>
+            {!isSignUp && (
+              <button
+                type="button"
+                className="btn-link"
+                onClick={() => {
+                  setShowForgotPassword(true)
+                  setStatus(null)
+                }}
+              >
+                Forgot password?
+              </button>
+            )}
           </form>
         )}
 

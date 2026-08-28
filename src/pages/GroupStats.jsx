@@ -40,6 +40,7 @@ export default function GroupStats() {
   // state on top of that; empty just means the recap's header is briefly
   // titled "Stats" alone until this resolves.
   const [groupName, setGroupName] = useState('')
+  const [isPersonal, setIsPersonal] = useState(false)
   const [members, setMembers] = useState([])
   const [categories, setCategories] = useState([])
   const [rawBills, setRawBills] = useState([])
@@ -122,7 +123,7 @@ export default function GroupStats() {
       const [membersData, categoriesData, groupResult, recentBillsData] = await Promise.all([
         fetchAllGroupMembers(groupId),
         fetchCategories(groupId),
-        supabase.from('groups').select('name').eq('id', groupId).single(),
+        supabase.from('groups').select('name, is_personal').eq('id', groupId).single(),
         fetchAllRows(() =>
           supabase
             .from('bills')
@@ -134,7 +135,10 @@ export default function GroupStats() {
       ])
       setMembers(membersData)
       setCategories(categoriesData)
-      if (groupResult.data) setGroupName(groupResult.data.name)
+      if (groupResult.data) {
+        setGroupName(groupResult.data.name)
+        setIsPersonal(groupResult.data.is_personal)
+      }
       // Deliberately doesn't touch historyStatus here — if this group's
       // full history was already cached from a previous visit (status
       // already 'complete'), this recent-window refresh shouldn't flash
@@ -176,6 +180,7 @@ export default function GroupStats() {
     const cached = groupStatsCache.get(groupId)
     if (cached) {
       setGroupName(cached.groupName || '')
+      setIsPersonal(cached.isPersonal || false)
       setMembers(cached.members)
       setCategories(cached.categories)
       setRawBills(cached.rawBills)
@@ -191,6 +196,7 @@ export default function GroupStats() {
     if (!members.length) return
     groupStatsCache.set(groupId, {
       groupName,
+      isPersonal,
       members,
       categories,
       rawBills,
@@ -199,7 +205,7 @@ export default function GroupStats() {
       historyStatus,
       historyWindowStart,
     })
-  }, [groupId, groupName, members, categories, rawBills, rawItems, rawShares, historyStatus, historyWindowStart])
+  }, [groupId, groupName, isPersonal, members, categories, rawBills, rawItems, rawShares, historyStatus, historyWindowStart])
 
   // Whether the currently selected period (and its "previous period"
   // comparison, if it has one) is fully covered by whatever's actually in
@@ -348,36 +354,46 @@ export default function GroupStats() {
         </div>
       </div>
 
-      <h2 className="settings-section-title">By person</h2>
-      {peopleWithData.length === 0 && <p className="empty-state">No spending recorded for this period.</p>}
-      {peopleWithData.length > 0 && (
-        <table className="stats-table">
-          <thead>
-            <tr>
-              <th>Person</th>
-              <th>Fronted</th>
-              <th>Their share</th>
-            </tr>
-          </thead>
-          <tbody>
-            {peopleWithData.map((m) => (
-              <tr key={m.id}>
-                <td>
-                  {m.name}
-                  {m.isGuest && <span className="muted"> (guest)</span>}
-                  {!m.active && <span className="muted"> (left)</span>}
-                </td>
-                <td className="mono">{format(totals[m.id]?.paid || 0)}</td>
-                <td className="mono">{format(totals[m.id]?.consumed || 0)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* "Fronted" vs. "their share" only ever tells you something once
+          there's more than one person for them to differ between — with
+          just you in a personal space the two columns are always
+          identical, and the gap this table exists to surface (what the
+          settle-up on the group page is for) doesn't exist here. */}
+      {!isPersonal && (
+        <>
+          <h2 className="settings-section-title">By person</h2>
+          {peopleWithData.length === 0 && <p className="empty-state">No spending recorded for this period.</p>}
+          {peopleWithData.length > 0 && (
+            <table className="stats-table">
+              <thead>
+                <tr>
+                  <th>Person</th>
+                  <th>Fronted</th>
+                  <th>Their share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {peopleWithData.map((m) => (
+                  <tr key={m.id}>
+                    <td>
+                      {m.name}
+                      {m.isGuest && <span className="muted"> (guest)</span>}
+                      {!m.active && <span className="muted"> (left)</span>}
+                    </td>
+                    <td className="mono">{format(totals[m.id]?.paid || 0)}</td>
+                    <td className="mono">{format(totals[m.id]?.consumed || 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p className="muted stats-note">
+            "Fronted" is what they've paid at checkout. "Their share" is what they've actually
+            consumed — these rarely match, that gap is exactly what the settle-up on the group
+            page is for.
+          </p>
+        </>
       )}
-      <p className="muted stats-note">
-        "Fronted" is what they've paid at checkout. "Their share" is what they've actually consumed —
-        these rarely match, that gap is exactly what the settle-up on the group page is for.
-      </p>
 
       {categoryRows.length > 0 && (
         <>
@@ -431,9 +447,15 @@ export default function GroupStats() {
                 <Link to={`/groups/${groupId}/bills/${b.id}`} className="debtor">
                   {b.title}
                 </Link>
-                <span className="settlement-verb">
-                  paid by {b.payers?.length > 0 ? b.payers.map((p) => nameOf(p.member_id)).join(', ') : nameOf(b.paid_by)}
-                </span>
+                {/* Same reasoning as the By person table above — "paid by
+                    you" on every single row of your own space says
+                    nothing a real group's "paid by" doesn't already say
+                    for free. */}
+                {!isPersonal && (
+                  <span className="settlement-verb">
+                    paid by {b.payers?.length > 0 ? b.payers.map((p) => nameOf(p.member_id)).join(', ') : nameOf(b.paid_by)}
+                  </span>
+                )}
                 <span className="mono amount">{format(b.total)}</span>
               </li>
             ))}

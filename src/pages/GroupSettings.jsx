@@ -31,6 +31,7 @@ export default function GroupSettings() {
 
   const [name, setName] = useState('')
   const [adminId, setAdminId] = useState(null)
+  const [isPersonal, setIsPersonal] = useState(false)
   const [members, setMembers] = useState([])
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(false)
@@ -59,6 +60,7 @@ export default function GroupSettings() {
     const { data } = await supabase.from('groups').select('*').eq('id', groupId).single()
     setName(data?.name || '')
     setAdminId(data?.admin_id || null)
+    setIsPersonal(data?.is_personal || false)
   }, [groupId])
 
   const loadMembers = useCallback(async () => {
@@ -382,6 +384,13 @@ export default function GroupSettings() {
         </button>
       </form>
 
+      {/* Members, guests, and everything about who's in the group only
+          means something once there's a group of more than one — a
+          personal space has exactly one member (you) forever, with no
+          invite code ever surfaced to change that (see is_personal on the
+          groups table). */}
+      {!isPersonal && (
+        <>
       <h2 className="settings-section-title">Members ({activeRealMembers.length})</h2>
       <ul className="member-list">
         {activeRealMembers.map((m) => {
@@ -494,6 +503,8 @@ export default function GroupSettings() {
           Add guest
         </button>
       </form>
+        </>
+      )}
 
       <h2 className="settings-section-title">Categories</h2>
       <p className="muted">

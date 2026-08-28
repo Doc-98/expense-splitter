@@ -353,6 +353,11 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .auth-form .btn-primary { margin-top: 4px; }
 .auth-form .btn-link { margin-top: var(--space-sm); text-align: center; }
 .auth-magic-link-hint { margin: var(--space-sm) 0 0; font-size: 13px; line-height: 1.4; }
+/* A short caption directly under one field, not a whole form — tighter
+   than .auth-magic-link-hint (which sits under the whole magic-link
+   form), pulled up close to the input it's describing rather than
+   getting .auth-form .btn-link's own spacing rules. */
+.field-hint { margin: 4px 0 0; font-size: 12px; }
 
 /* ---------- Card lists (groups, bills) ---------- */
 .card-list { list-style: none; padding: 0; margin: 0; }

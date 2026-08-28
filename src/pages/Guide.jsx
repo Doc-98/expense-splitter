@@ -33,6 +33,27 @@ const GROUPS = [
         ),
       },
       {
+        id: 'personal',
+        title: 'Personal spending — tracking just your own',
+        keywords: 'personal solo alone just me financial companion budget my own spending',
+        body: (
+          <>
+            <p>
+              The <strong>Personal</strong> tab on the groups list opens a space that's just
+              yours — created automatically the first time you open it, no setup needed.
+              Categories, thresholds, receipt scanning, recurring bills, stats, and CSV export
+              all work exactly like a normal group; the only thing missing is anything about
+              other people (Invite, "paid by"/"split with" pickers, Settle Up), since there's
+              never anyone in it but you.
+            </p>
+            <p>
+              It counts toward <strong>Your Stats</strong> automatically, right alongside your
+              real groups.
+            </p>
+          </>
+        ),
+      },
+      {
         id: 'guests',
         title: 'Guests — people without an account',
         keywords: 'guest no account party archive restore',

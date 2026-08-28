@@ -48,6 +48,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes.
 - [Searching and filtering bills](#searching-and-filtering-bills)
 - [Bill actions: deleting and sharing](#bill-actions-deleting-and-sharing)
 - [Your groups & inviting people](#your-groups--inviting-people)
+- [Personal spending](#personal-spending)
 - [The in-app guide](#the-in-app-guide)
 - [Recaps, PDFs, and CSV](#recaps-pdfs-and-csv)
 - [How the data model works](#how-the-data-model-works)
@@ -84,9 +85,15 @@ the (tiny) hosting bill. Setup takes about 20 minutes.
    `items`, `item_shares`, `bill_payers`, `payments`, `group_members` — this
    is what makes edits show up live on every phone without refreshing.
 4. **Authentication → Sign In / Providers** → confirm **Email** is on
-   (default). For magic links to redirect to your deployed app instead of
-   `localhost`, set **Authentication → URL Configuration → Site URL** once
-   you've deployed (step 3 below).
+   (default). For magic links and password-reset links to redirect to your
+   deployed app instead of `localhost`, set **Authentication → URL
+   Configuration → Site URL** once you've deployed (step 3 below), and add
+   `your-deployed-url/reset-password` under **Redirect URLs** on the same
+   page — Supabase rejects a redirect target that isn't on this allowlist,
+   which otherwise silently breaks the "forgot password" flow specifically
+   (magic links happen to redirect to the Site URL's bare root, which is
+   already allowed by default; password resets redirect to `/reset-password`
+   on top of it, which isn't covered by that same default).
 
 ### 2. Get your API credentials
 
@@ -410,6 +417,16 @@ with "Create a new group" below it rather than above. **Invite** on a
 group's page gives a QR code (for someone standing next to you) plus a
 shareable link — both generated client-side, no third-party image service
 involved.
+
+## Personal spending
+
+The **Personal** tab on the groups list (`/`) opens a single-member group
+that's just yours — auto-created the first time you open the tab, no setup
+step. It's a real group under the hood (`groups.is_personal`), so
+categories, thresholds, receipt scanning, recurring bills, stats, and CSV
+export all just work; only Invite, "paid by"/"split with" pickers, and
+Settle Up are hidden, since there's never anyone but you in it. It folds
+into "Your Stats" automatically, same as any other group.
 
 ## The in-app guide
 
