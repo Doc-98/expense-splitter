@@ -20,6 +20,10 @@ export default function BillView() {
   const navigate = useNavigate()
   const { format } = useCurrency()
 
+  // Only ever needs the one flag — fetched once alongside the bill/members
+  // below, never refetched, since a bill can't change which group it
+  // belongs to.
+  const [group, setGroup] = useState(null)
   const [bill, setBill] = useState(null)
   const [billPayers, setBillPayers] = useState([]) // the last CONFIRMED multi-payer split, [] if this bill has a single payer
   const [payerModalOpen, setPayerModalOpen] = useState(false)
@@ -83,6 +87,8 @@ export default function BillView() {
       setNoteDraft(billData?.note || '')
       setAllMembers(await fetchAllGroupMembers(groupId))
       setCategories(await fetchCategories(groupId))
+      const { data: groupData } = await supabase.from('groups').select('is_personal').eq('id', groupId).single()
+      setGroup(groupData)
     }
     loadBillAndMembers()
     loadItems()
@@ -355,25 +361,32 @@ export default function BillView() {
         {noteSaved && <span className="muted note-saved">Saved</span>}
       </div>
 
-      <div className="paid-by-row">
-        <span className="muted">Paid by</span>
-        {isMultiPayer ? (
-          <button type="button" className="btn-link" onClick={() => setPayerModalOpen(true)}>
-            {billPayers.map((p) => nameOf(p.member_id)).join(', ')} (split)
-          </button>
-        ) : (
-          <select value={bill?.paid_by || ''} onChange={(e) => handlePaidBySelect(e.target.value)}>
-            {paidByOptions.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-                {m.isGuest ? ' (guest)' : ''}
-                {!m.active ? ' (left)' : ''}
-              </option>
-            ))}
-            <option value="__multiple__">Multiple payers…</option>
-          </select>
-        )}
-      </div>
+      {/* "Paid by" only ever means something when it could be someone other
+          than you — a personal space has exactly one member, forever, so
+          every bill is trivially paid by (and split with) just them; see
+          createBill in GroupView.jsx, which already defaults paid_by to
+          the creator with no picker involved. */}
+      {!group?.is_personal && (
+        <div className="paid-by-row">
+          <span className="muted">Paid by</span>
+          {isMultiPayer ? (
+            <button type="button" className="btn-link" onClick={() => setPayerModalOpen(true)}>
+              {billPayers.map((p) => nameOf(p.member_id)).join(', ')} (split)
+            </button>
+          ) : (
+            <select value={bill?.paid_by || ''} onChange={(e) => handlePaidBySelect(e.target.value)}>
+              {paidByOptions.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                  {m.isGuest ? ' (guest)' : ''}
+                  {!m.active ? ' (left)' : ''}
+                </option>
+              ))}
+              <option value="__multiple__">Multiple payers…</option>
+            </select>
+          )}
+        </div>
+      )}
 
       <div className="paid-by-row">
         <span className="muted">Category</span>
@@ -397,21 +410,23 @@ export default function BillView() {
       )}
       {error && <p className="status-error">{error}</p>}
 
-      <div className="default-buyers-row">
-        <span className="muted">New items split with:</span>
-        <div className="chip-row">
-          {activeMembers.map((m) => (
-            <label key={m.id} className={defaultBuyerIds.includes(m.id) ? 'buyer-chip active' : 'buyer-chip'}>
-              <input
-                type="checkbox"
-                checked={defaultBuyerIds.includes(m.id)}
-                onChange={() => toggleDefaultBuyer(m.id)}
-              />
-              {m.name}
-            </label>
-          ))}
+      {!group?.is_personal && (
+        <div className="default-buyers-row">
+          <span className="muted">New items split with:</span>
+          <div className="chip-row">
+            {activeMembers.map((m) => (
+              <label key={m.id} className={defaultBuyerIds.includes(m.id) ? 'buyer-chip active' : 'buyer-chip'}>
+                <input
+                  type="checkbox"
+                  checked={defaultBuyerIds.includes(m.id)}
+                  onChange={() => toggleDefaultBuyer(m.id)}
+                />
+                {m.name}
+              </label>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {bill && (
         <div className="bill-date-row">
@@ -439,6 +454,7 @@ export default function BillView() {
             members={allMembers}
             categories={categories}
             billCategoryId={bill?.category_id}
+            hideBuyers={group?.is_personal}
             onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
             onDelete={() => deleteItem(item.id)}
             onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}

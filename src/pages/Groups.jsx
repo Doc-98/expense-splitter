@@ -16,6 +16,14 @@ export default function Groups() {
   const [newGroupName, setNewGroupName] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState(null)
+  // Not a real view of its own — clicking "Personal" fetches (or, the very
+  // first time, silently creates) the one-per-account personal group via
+  // get_or_create_personal_group() and drops straight into it, the same
+  // place clicking any group card in the list below lands. So this is only
+  // ever true for the instant between the click and that navigation — long
+  // enough to disable the tab and show it's doing something, never a
+  // second page of its own.
+  const [openingPersonal, setOpeningPersonal] = useState(false)
 
   const visibleGroups = groups
     ? groups.slice(groupsPage * GROUPS_PAGE_SIZE, (groupsPage + 1) * GROUPS_PAGE_SIZE)
@@ -69,6 +77,12 @@ export default function Groups() {
       .from('groups')
       .select('id, name, invite_code')
       .in('id', groupIds)
+      // The personal group (see the Personal tab below) is a real row in
+      // this same table and this account is really a member of it, so
+      // without this filter it would otherwise show up as a perfectly
+      // ordinary — and confusingly invite-code-less, single-person — entry
+      // in "Your groups" too.
+      .eq('is_personal', false)
 
     if (groupsError) {
       setError(loadErrorMessage(groupsError))
@@ -76,6 +90,18 @@ export default function Groups() {
     }
 
     setGroups(data || [])
+  }
+
+  async function openPersonal() {
+    setOpeningPersonal(true)
+    setError(null)
+    const { data, error: rpcError } = await supabase.rpc('get_or_create_personal_group')
+    if (rpcError) {
+      setError(rpcError.message)
+      setOpeningPersonal(false)
+      return
+    }
+    navigate(`/groups/${data.id}`)
   }
 
   async function createGroup(e) {
@@ -104,6 +130,15 @@ export default function Groups() {
         <Link to="/stats" className="btn-link">
           Your stats
         </Link>
+      </div>
+
+      <div className="tab-row">
+        <button type="button" className="tab active">
+          Your groups
+        </button>
+        <button type="button" className="tab" onClick={openPersonal} disabled={openingPersonal}>
+          {openingPersonal ? 'Opening…' : 'Personal'}
+        </button>
       </div>
 
       {error && <p className="status-error">{error}</p>}

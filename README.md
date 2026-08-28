@@ -48,6 +48,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes.
 - [Searching and filtering bills](#searching-and-filtering-bills)
 - [Bill actions: deleting and sharing](#bill-actions-deleting-and-sharing)
 - [Your groups & inviting people](#your-groups--inviting-people)
+- [Personal spending](#personal-spending)
 - [The in-app guide](#the-in-app-guide)
 - [Recaps, PDFs, and CSV](#recaps-pdfs-and-csv)
 - [How the data model works](#how-the-data-model-works)
@@ -416,6 +417,16 @@ with "Create a new group" below it rather than above. **Invite** on a
 group's page gives a QR code (for someone standing next to you) plus a
 shareable link — both generated client-side, no third-party image service
 involved.
+
+## Personal spending
+
+The **Personal** tab on the groups list (`/`) opens a single-member group
+that's just yours — auto-created the first time you open the tab, no setup
+step. It's a real group under the hood (`groups.is_personal`), so
+categories, thresholds, receipt scanning, recurring bills, stats, and CSV
+export all just work; only Invite, "paid by"/"split with" pickers, and
+Settle Up are hidden, since there's never anyone but you in it. It folds
+into "Your Stats" automatically, same as any other group.
 
 ## The in-app guide
 

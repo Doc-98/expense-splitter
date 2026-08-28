@@ -631,30 +631,38 @@ export default function GroupView() {
       {error && <p className="status-error">{error}</p>}
 
       <div className="group-actions">
-        <InviteMenu
-          inviteUrl={group ? `${window.location.origin}/join/${group.invite_code}` : ''}
-          groupName={group?.name}
-        />
-        <div className="member-count-wrap" ref={memberPopoverRef}>
-          <button type="button" className="member-count-btn" onClick={() => setShowMembers((s) => !s)}>
-            {activeMembers.length} {activeMembers.length === 1 ? 'person' : 'people'}
-          </button>
-          {showMembers && (
-            <div className="member-count-popover">
-              <ul>
-                {activeMembers.map((m) => (
-                  <li key={m.id}>
-                    {m.name}
-                    {m.isGuest && <span className="muted"> (guest)</span>}
-                  </li>
-                ))}
-              </ul>
-              <Link to={`/groups/${groupId}/settings`} className="btn-link">
-                Manage members →
-              </Link>
+        {/* Invite (and, further down, the whole Settle Up section) only
+            ever means something once there's someone else who could owe or
+            be owed — a personal space is you and only ever you, so both
+            are skipped entirely rather than shown pointlessly empty. */}
+        {!group?.is_personal && (
+          <>
+            <InviteMenu
+              inviteUrl={group ? `${window.location.origin}/join/${group.invite_code}` : ''}
+              groupName={group?.name}
+            />
+            <div className="member-count-wrap" ref={memberPopoverRef}>
+              <button type="button" className="member-count-btn" onClick={() => setShowMembers((s) => !s)}>
+                {activeMembers.length} {activeMembers.length === 1 ? 'person' : 'people'}
+              </button>
+              {showMembers && (
+                <div className="member-count-popover">
+                  <ul>
+                    {activeMembers.map((m) => (
+                      <li key={m.id}>
+                        {m.name}
+                        {m.isGuest && <span className="muted"> (guest)</span>}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to={`/groups/${groupId}/settings`} className="btn-link">
+                    Manage members →
+                  </Link>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
         {/* Hidden once the search section itself is open — its own ↑
             (below) is what closes it again, so there's never two controls
             on screen at once for the same thing. */}
@@ -923,26 +931,34 @@ export default function GroupView() {
       </div>
       <Pagination page={billsPage} setPage={setBillsPage} totalItems={filteredBills.length} pageSize={BILLS_PAGE_SIZE} />
 
-      <SettlementSummary
-        transactions={settlement}
-        members={allMembers}
-        payments={payments}
-        onRecordPayment={recordPayment}
-        onDeletePayment={deletePayment}
-      />
+      {!group?.is_personal && (
+        <SettlementSummary
+          transactions={settlement}
+          members={allMembers}
+          payments={payments}
+          onRecordPayment={recordPayment}
+          onDeletePayment={deletePayment}
+        />
+      )}
 
       {settlement && (
         <>
           <div className="section-divider" />
           <div className="recap-actions">
-            <ShareButton
-              label="Share settle-up"
-              title={`Settle up — ${group?.name}`}
-              getText={() => formatSettlementRecap(group?.name, settlement, allMembers, format)}
-            />
+            {/* A settle-up recap is meaningless with nobody to settle up
+                with — but the CSV export is exactly as useful for a
+                personal space as for a real group, so that half of this
+                row stays. */}
+            {!group?.is_personal && (
+              <ShareButton
+                label="Share settle-up"
+                title={`Settle up — ${group?.name}`}
+                getText={() => formatSettlementRecap(group?.name, settlement, allMembers, format)}
+              />
+            )}
             {bills && bills.length > 0 && (
               <>
-                <span className="recap-divider" />
+                {!group?.is_personal && <span className="recap-divider" />}
                 <button type="button" className="btn-secondary" onClick={exportGroupCsv}>
                   Export CSV
                 </button>
@@ -951,7 +967,9 @@ export default function GroupView() {
           </div>
         </>
       )}
-      <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />
+      {!group?.is_personal && (
+        <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />
+      )}
 
       <h2 className="settings-section-title group-stats-preview-title">Quick stats</h2>
       <div className="stats-summary">

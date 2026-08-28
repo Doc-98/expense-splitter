@@ -44,7 +44,16 @@ create table groups (
   name text not null,
   invite_code text unique not null default substr(replace(gen_random_uuid()::text, '-', ''), 1, 8),
   created_by uuid references auth.users(id),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- One per account, auto-created the first time someone opens the
+  -- "Personal" tab (see get_or_create_personal_group() below) — a
+  -- single-member group under the hood, so every other feature (bills,
+  -- items, categories, thresholds, stats, receipt scanning, recurring
+  -- bills, CSV export) just works with zero duplication. Still has a
+  -- real invite_code column (every group does), but it's never surfaced —
+  -- join_group_by_code() below refuses to redeem it, so it's dead data,
+  -- not a real invite.
+  is_personal boolean not null default false
 );
 
 -- ---------------------------------------------------------------------------
@@ -854,6 +863,57 @@ end;
 $$;
 
 -- ============================================================================
+-- get_or_create_personal_group: the "Personal" tab on the groups landing
+-- page calls this every time it's opened rather than requiring any explicit
+-- setup step — idempotent, so the common case (already have one) is just a
+-- lookup. Mirrors create_group() above almost exactly (same starter
+-- categories, same admin bookkeeping), just scoped to is_personal = true and
+-- keyed off the caller's account instead of a chosen name. Only ever
+-- returns/creates a group where the caller is the (sole, active) member,
+-- so there's no ambiguity even though "one per account" isn't a hard
+-- database constraint.
+-- ============================================================================
+create function public.get_or_create_personal_group()
+returns groups
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  g groups;
+  new_member_id uuid;
+begin
+  select gr.* into g
+  from groups gr
+  join group_members gm on gm.group_id = gr.id
+  where gr.is_personal = true
+    and gm.user_id = auth.uid()
+    and gm.active = true
+  limit 1;
+
+  if g.id is not null then
+    return g;
+  end if;
+
+  insert into groups (name, created_by, is_personal) values ('Personal', auth.uid(), true) returning * into g;
+  insert into group_members (group_id, user_id) values (g.id, auth.uid()) returning id into new_member_id;
+  update groups set admin_id = new_member_id where id = g.id;
+  g.admin_id := new_member_id;
+
+  insert into categories (group_id, name, color) values
+    (g.id, 'Groceries', '#4a86e8'),
+    (g.id, 'Eating out', '#e69138'),
+    (g.id, 'Household', '#6aa84f'),
+    (g.id, 'Bills & utilities', '#a479e2'),
+    (g.id, 'Transport', '#45818e'),
+    (g.id, 'Health', '#cc4125'),
+    (g.id, 'Other', '#999999');
+
+  return g;
+end;
+$$;
+
+-- ============================================================================
 -- join_group_by_code: lets someone who isn't a member yet (or who left and
 -- is coming back) redeem an invite code, without needing broad SELECT
 -- access to the groups table. If they already have a group_members row
@@ -873,6 +933,14 @@ begin
   select * into g from groups where invite_code = invite;
 
   if g.id is null then
+    raise exception 'Invalid invite code';
+  end if;
+
+  -- Defense in depth: a personal group's invite_code is never shown to
+  -- anyone (see the is_personal comment on the groups table above), but
+  -- refuse it here too rather than relying solely on the UI never
+  -- displaying it.
+  if g.is_personal then
     raise exception 'Invalid invite code';
   end if;
 

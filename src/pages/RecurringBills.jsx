@@ -29,6 +29,7 @@ export default function RecurringBills() {
   const [members, setMembers] = useState([])
   const [categories, setCategories] = useState([])
   const [templates, setTemplates] = useState([])
+  const [isPersonal, setIsPersonal] = useState(false)
   const [error, setError] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null) // { template, count, total } | null
   const [deleting, setDeleting] = useState(false)
@@ -45,6 +46,8 @@ export default function RecurringBills() {
     setMembers(await fetchGroupMembers(groupId))
     setCategories(await fetchCategories(groupId))
     setTemplates(await fetchRecurringBills(supabase, groupId))
+    const { data: groupData } = await supabase.from('groups').select('is_personal').eq('id', groupId).single()
+    setIsPersonal(groupData?.is_personal || false)
   }, [groupId])
 
   useEffect(() => {
@@ -158,7 +161,8 @@ export default function RecurringBills() {
                 <strong>{t.title}</strong>
                 <span className="muted">
                   {' '}
-                  — {format(t.amount)} · paid by {nameOf(t.paid_by)} · {FREQUENCY_LABELS[t.frequency]} · next{' '}
+                  — {format(t.amount)}
+                  {!isPersonal && <> · paid by {nameOf(t.paid_by)}</>} · {FREQUENCY_LABELS[t.frequency]} · next{' '}
                   {new Date(`${t.next_due_date}T00:00:00`).toLocaleDateString()}
                   {!t.active && ' · paused'}
                 </span>
@@ -198,16 +202,18 @@ export default function RecurringBills() {
               ))}
             </select>
           </label>
-          <label className="muted">
-            Paid by
-            <select value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!isPersonal && (
+            <label className="muted">
+              Paid by
+              <select value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
 
         <div className="recurring-form-row">
@@ -225,19 +231,23 @@ export default function RecurringBills() {
           </label>
         </div>
 
-        <span className="muted">Split with:</span>
-        <div className="chip-row">
-          {members.map((m) => (
-            <label key={m.id} className={splitMemberIds.includes(m.id) ? 'buyer-chip active' : 'buyer-chip'}>
-              <input
-                type="checkbox"
-                checked={splitMemberIds.includes(m.id)}
-                onChange={() => toggleSplitMember(m.id)}
-              />
-              {m.name}
-            </label>
-          ))}
-        </div>
+        {!isPersonal && (
+          <>
+            <span className="muted">Split with:</span>
+            <div className="chip-row">
+              {members.map((m) => (
+                <label key={m.id} className={splitMemberIds.includes(m.id) ? 'buyer-chip active' : 'buyer-chip'}>
+                  <input
+                    type="checkbox"
+                    checked={splitMemberIds.includes(m.id)}
+                    onChange={() => toggleSplitMember(m.id)}
+                  />
+                  {m.name}
+                </label>
+              ))}
+            </div>
+          </>
+        )}
 
         <button type="submit" className="btn-primary">
           Add recurring bill

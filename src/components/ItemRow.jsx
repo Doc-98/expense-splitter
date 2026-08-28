@@ -8,7 +8,17 @@ import InlineEditable from './InlineEditable'
 // fields reconcile for each case (see the comment there). This component
 // only validates that what was typed is well-formed at all (non-empty
 // name, a real number for the money/quantity fields) before handing it up.
-export default function ItemRow({ item, members, categories, billCategoryId, onToggleBuyer, onDelete, onCategoryChange, onUpdate }) {
+export default function ItemRow({
+  item,
+  members,
+  categories,
+  billCategoryId,
+  hideBuyers,
+  onToggleBuyer,
+  onDelete,
+  onCategoryChange,
+  onUpdate,
+}) {
   const { format } = useCurrency()
   const buyerIds = new Set(item.item_shares.map((s) => s.member_id))
   // Always show current members (whether checked or not), plus anyone no
@@ -108,20 +118,27 @@ export default function ItemRow({ item, members, categories, billCategoryId, onT
           ×
         </button>
       </div>
-      <div className="item-buyers">
-        <span className="item-buyers-label">Split with:</span>
-        {visibleMembers.map((m) => (
-          <label
-            key={m.id}
-            className={`buyer-chip ${buyerIds.has(m.id) ? 'active' : ''} ${m.active ? '' : 'former'}`}
-          >
-            <input type="checkbox" checked={buyerIds.has(m.id)} onChange={() => onToggleBuyer(m.id)} />
-            {m.name}
-            {m.isGuest && ' (guest)'}
-            {!m.active && ' (left)'}
-          </label>
-        ))}
-      </div>
+      {/* In a personal space there's only ever one member, so "split
+          with" has nothing to actually offer — insertItemWithShares still
+          assigns every new item to that one person automatically (see
+          defaultBuyerIds in BillView.jsx), this is just the picker with
+          nothing to pick. */}
+      {!hideBuyers && (
+        <div className="item-buyers">
+          <span className="item-buyers-label">Split with:</span>
+          {visibleMembers.map((m) => (
+            <label
+              key={m.id}
+              className={`buyer-chip ${buyerIds.has(m.id) ? 'active' : ''} ${m.active ? '' : 'former'}`}
+            >
+              <input type="checkbox" checked={buyerIds.has(m.id)} onChange={() => onToggleBuyer(m.id)} />
+              {m.name}
+              {m.isGuest && ' (guest)'}
+              {!m.active && ' (left)'}
+            </label>
+          ))}
+        </div>
+      )}
       {categories.length > 0 && (
         <div className="item-category-row">
           <select value={item.category_id || ''} onChange={(e) => onCategoryChange(e.target.value)}>
@@ -134,7 +151,7 @@ export default function ItemRow({ item, members, categories, billCategoryId, onT
           </select>
         </div>
       )}
-      {buyerIds.size === 0 && (
+      {!hideBuyers && buyerIds.size === 0 && (
         <p className="item-warning">No one's assigned yet — this item won't be counted in the settle-up.</p>
       )}
     </div>
