@@ -180,7 +180,8 @@ const GROUPS = [
               </li>
               <li>
                 <strong>Google Gemini / Anthropic Claude</strong> — more accurate, needs your own
-                API key, set up once in <strong>Scan settings</strong> (account menu, top right).
+                API key, set up once in <strong>Settings → Scan settings</strong> (account menu,
+                top right).
               </li>
               <li>
                 <strong>A local Ollama model</strong> — private, runs on your own computer, also
@@ -392,7 +393,7 @@ const GROUPS = [
         body: (
           <>
             <p>
-              Set a monthly budget per category from <strong>account menu → Spending
+              Set a monthly budget per category from <strong>account menu → Settings → Spending
               thresholds</strong> — a personal setting, not a group one, since it's tracking your
               own spending across every group you're in, not any one group's total. There's one
               amount field for each of the seven default categories, plus one for every custom
@@ -456,15 +457,27 @@ const GROUPS = [
     sections: [
       {
         id: 'account-settings',
-        title: 'Currency, dark mode, and other account settings',
-        keywords: 'currency dollar euro pound symbol dark mode light theme account menu',
+        title: 'Your name, currency, dark mode, and other account settings',
+        keywords:
+          'currency dollar euro pound symbol dark mode light theme account menu settings username display name rename',
         body: (
-          <p>
-            The account menu (top right) has a currency picker (which symbol is shown throughout
-            the app — a display preference only, not real currency conversion), a dark/light mode
-            toggle, and links back to this guide, Your stats, Spending thresholds, and Scan
-            settings — all in one place.
-          </p>
+          <>
+            <p>
+              The account menu (top right) keeps this guide, Your stats, <strong>Settings</strong>,
+              About, and signing out — everything else account-level lives on the Settings page
+              itself now, one tap in: your own display name (shown to everyone in every group
+              you're part of — change it any time), a currency picker (which symbol is shown
+              throughout the app — a display preference only, not real currency conversion), a
+              dark mode switch, and — collapsed until you actually want them, since both are long
+              — Spending thresholds and Scan settings.
+            </p>
+            <p>
+              Spending thresholds and Scan settings also still work as their own direct links from
+              wherever else the app already points at them (Your Stats' own thresholds section,
+              wherever a scan strategy is shown) — Settings collecting everything in one place
+              doesn't take that away.
+            </p>
+          </>
         ),
       },
     ],

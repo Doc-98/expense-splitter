@@ -30,6 +30,7 @@ the (tiny) hosting bill. Setup takes about 20 minutes the first time.
 - [Receipt scanning](#receipt-scanning)
 - [Editing items](#editing-items)
 - [Backdating (or postdating) a bill](#backdating-or-postdating-a-bill)
+- [Settings page](#settings-page)
 - [Currency](#currency)
 - [Categories](#categories)
 - [Spending thresholds](#spending-thresholds)
@@ -166,7 +167,9 @@ afterward (create a fresh group, everyone re-joins via a new invite link).
 
 There's no server-side piece to deploy for this at all — every scanning
 strategy runs entirely in the browser, chosen per-person from **Scan
-settings** (account menu → Scan settings), stored only on that device.
+settings** (account menu → Settings → Scan settings, or directly at
+`/scan-settings` — see [Settings page](#settings-page)), stored only on
+that device.
 
 - **Free OCR (default, zero setup)** — before OCR even runs,
   `src/lib/receipt-parsing/imagePreprocess.js` cleans up the photo: converts
@@ -332,9 +335,41 @@ everywhere else) so it gets the browser's native date picker rather than a
 free-text box — the one visible difference from an ordinary click-to-edit
 field.
 
+## Settings page
+
+`/settings` (account menu → Settings) is everything account-level in one
+place: changing your own display name, appearance (dark mode), currency,
+and — collapsed by default, since both are long enough on their own to
+otherwise dominate the page — spending thresholds and scan settings. The
+account menu itself only holds a handful of things you'd actually reach for
+in the moment (the guide, your stats, this page, about, signing out); every
+other account-level control used to live directly in that menu and has
+moved here instead.
+
+**Changing your name.** `profiles.display_name` — the same field the
+signup trigger seeds from your email if you never set one explicitly (see
+[How the data model works](#how-the-data-model-works)) — editable any time,
+same "type, save" pattern a group's own name uses on Group Settings.
+Updating it writes straight through `AuthContext` (`src/context/AuthContext.jsx`),
+which is also where the header's own account chip reads its display name
+from now — the one shared value both places use, so a rename shows up in
+the header immediately with no refetch or reload needed to see your own new
+name.
+
+**Spending thresholds and Scan settings** are both still reachable as their
+own standalone pages too (`/thresholds`, `/scan-settings`) — existing deep
+links elsewhere in the app (Your Stats' "Manage thresholds →", the scan
+button's "change" link, CategorizeBills' scan-settings mention) still land
+directly on one or the other rather than a collapsed section you'd have to
+find and expand first. The actual UI/logic for each lives in its own
+component (`src/components/ThresholdsSection.jsx`,
+`src/components/ScanSettingsSection.jsx`) shared by both the standalone page
+and its collapsed form here — one source of truth either way, not two
+copies to keep in sync.
+
 ## Currency
 
-The account menu has a currency picker — a curated set of major currencies
+Settings has a currency picker — a curated set of major currencies
 (EUR, USD, GBP, CHF, JPY, CAD, AUD), not the full ISO list, and not real
 multi-currency support. Every amount stored in the database has always just
 been a plain number with no currency attached at all, so this is purely a
@@ -378,8 +413,10 @@ applies whatever's chosen immediately, no separate save step.
 
 ## Spending thresholds
 
-A personal monthly budget per category, set at **account menu → Spending
-thresholds** — deliberately a *profile*-level setting, not a group one: it's
+A personal monthly budget per category, set at **account menu → Settings →
+Spending thresholds** (or directly at `/thresholds` — see [Settings
+page](#settings-page)) — deliberately a *profile*-level setting, not a group
+one: it's
 a measure of your own spending, and you're very possibly in more than one
 group. (A group-level or shared variant is a plausible future addition, but
 low priority — nothing about the data model rules it out later.)

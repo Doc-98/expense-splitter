@@ -1,39 +1,21 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
-import { useTheme } from '../context/ThemeContext'
-import { useCurrency, CURRENCIES } from '../context/CurrencyContext'
 import { useClickOutside } from '../lib/useClickOutside'
 
 // Bumped by hand with each PR — "1.<PR number>" rather than semver, since PRs
 // merge in order on this branch and are already a visible, monotonic counter
 // of what's shipped (cross-referenceable against GitHub directly). No CI
 // wires this automatically, so it's on whoever opens the next PR to bump it.
-const APP_VERSION = 'v1.23'
+const APP_VERSION = 'v1.24'
 
 export default function AppHeader() {
-  const { user } = useAuth()
-  const { theme, toggleTheme } = useTheme()
-  const { code, setCurrency } = useCurrency()
-  const [displayName, setDisplayName] = useState('')
+  const { user, displayName } = useAuth()
   const [open, setOpen] = useState(false)
   const menuRef = useRef(null)
 
   useClickOutside(menuRef, () => setOpen(false), open)
-
-  useEffect(() => {
-    let cancelled = false
-    async function loadProfile() {
-      if (!user) return
-      const { data } = await supabase.from('profiles').select('display_name').eq('id', user.id).single()
-      if (!cancelled) setDisplayName(data?.display_name || user.email?.split('@')[0] || 'Account')
-    }
-    loadProfile()
-    return () => {
-      cancelled = true
-    }
-  }, [user])
 
   async function signOut() {
     await supabase.auth.signOut()
@@ -63,25 +45,17 @@ export default function AppHeader() {
             <Link to="/stats" className="dropdown-item" onClick={() => setOpen(false)}>
               Your stats
             </Link>
-            <Link to="/thresholds" className="dropdown-item" onClick={() => setOpen(false)}>
-              Spending thresholds
+            {/* Everything that used to sit directly in this menu — theme,
+                currency, thresholds, scan settings — now lives on this one
+                page instead, alongside the new "change username" feature
+                that's what actually called for a settings page to begin
+                with. Keeps the menu itself to the handful of things you'd
+                actually reach for in the moment (stats, the guide, signing
+                out), rather than every account-level control living here
+                permanently. */}
+            <Link to="/settings" className="dropdown-item" onClick={() => setOpen(false)}>
+              Settings
             </Link>
-            <Link to="/scan-settings" className="dropdown-item" onClick={() => setOpen(false)}>
-              Scan settings
-            </Link>
-            <button type="button" className="dropdown-item" onClick={toggleTheme}>
-              {theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            </button>
-            <div className="dropdown-item dropdown-item-currency">
-              <span>Currency</span>
-              <select value={code} onChange={(e) => setCurrency(e.target.value)}>
-                {CURRENCIES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.symbol} {c.code}
-                  </option>
-                ))}
-              </select>
-            </div>
             <Link to="/about" className="dropdown-item" onClick={() => setOpen(false)}>
               About
             </Link>
