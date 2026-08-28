@@ -60,8 +60,10 @@ const GROUPS = [
               transaction gets a category suggestion and a review checkbox before anything is
               saved; a charge that repeats on a regular schedule can be set up as a Recurring
               Bill in one click instead of importing it fresh each time, and a transaction that
-              looks like it's already been imported (an overlapping statement period) defaults
-              to unchecked.
+              looks like it's already been imported (an overlapping statement period) or already
+              recorded as a bill in one of your other groups (a shared expense showing up on your
+              own statement too) defaults to unchecked either way — still reviewable, in case
+              either flag is a false positive.
             </p>
           </>
         ),

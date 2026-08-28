@@ -471,6 +471,13 @@ Both run automatically, client-side, no AI needed — see
   amount within a few days defaults its checkbox off, flagged "possible
   duplicate" — for re-importing an overlapping statement period. Still
   editable, in case it's a false positive.
+- **Already recorded elsewhere**: a transaction matching a bill's *amount*
+  in one of the account's *other* groups, within the same few-day window,
+  is flagged "already in \<Group\>?" — a shared expense (split with a
+  friend, already a bill there) showing up on your own statement too.
+  Deliberately amount + date only, no title match required — a shared
+  bill's title has no reason to resemble the bank's own wording for the
+  same charge.
 
 </details>
 
