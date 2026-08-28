@@ -6,5 +6,6 @@ import { createLruCache } from './lruCache'
 // signing out and into a different account in the same tab without a full
 // reload, which would otherwise leave a stale entry behind for the old
 // account forever (small, but no reason not to bound it the same way as
-// groupViewCache/groupStatsCache).
-export const accountStatsCache = createLruCache(5)
+// groupViewCache/groupStatsCache). Mirrored to sessionStorage for the same
+// reason those two are — see lruCache.js.
+export const accountStatsCache = createLruCache(5, 'spesa-cache-account-stats')

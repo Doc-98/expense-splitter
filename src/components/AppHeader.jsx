@@ -3,12 +3,17 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useClickOutside } from '../lib/useClickOutside'
+import { clearCachedPersonalGroupId } from '../lib/personalGroupCache'
+import { groupViewCache } from '../lib/groupViewCache'
+import { groupStatsCache } from '../lib/groupStatsCache'
+import { accountStatsCache } from '../lib/accountStatsCache'
+import { groupsListCache } from '../lib/groupsListCache'
 
 // Bumped by hand with each PR — "1.<PR number>" rather than semver, since PRs
 // merge in order on this branch and are already a visible, monotonic counter
 // of what's shipped (cross-referenceable against GitHub directly). No CI
 // wires this automatically, so it's on whoever opens the next PR to bump it.
-const APP_VERSION = 'v1.26'
+const APP_VERSION = 'v1.27'
 
 export default function AppHeader() {
   const { user, displayName } = useAuth()
@@ -18,6 +23,19 @@ export default function AppHeader() {
   useClickOutside(menuRef, () => setOpen(false), open)
 
   async function signOut() {
+    // On a shared device, stale cached data left behind for the next
+    // person to sign in on this same tab — a personal-group id, or any of
+    // these caches (now mirrored to sessionStorage, so surviving even
+    // past this tab's own reload) — would paint the previous account's
+    // data on screen, however briefly, or send them straight into that
+    // account's own personal group. Every one of these is bare
+    // module-level state with no account scoping of its own, so this is
+    // the one place that has to know to clear all of them.
+    clearCachedPersonalGroupId()
+    groupsListCache.clear()
+    groupViewCache.clear()
+    groupStatsCache.clear()
+    accountStatsCache.clear()
     await supabase.auth.signOut()
   }
 

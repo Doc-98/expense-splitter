@@ -1,17 +1,28 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import Pagination from '../components/Pagination'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { useListKeyboardNav } from '../lib/useListKeyboardNav'
+import { getCachedPersonalGroupId, setCachedPersonalGroupId } from '../lib/personalGroupCache'
+import { getRecentGroupIds } from '../lib/recentGroups'
+import { warmUpTopGroups } from '../lib/prefetchGroup'
+import BootSplash from '../components/BootSplash'
+import { groupsListCache, GROUPS_LIST_CACHE_KEY } from '../lib/groupsListCache'
 
 const GROUPS_PAGE_SIZE = 10
 
 export default function Groups() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [groups, setGroups] = useState(null)
+  // Seeded straight from groupsListCache when there's anything there — a
+  // refresh (or a revisit to "/" later this session) then has real data to
+  // paint from its very first render, same as GroupView.jsx/GroupStats.jsx
+  // already do, rather than starting null and showing the boot splash (or,
+  // for a revisit, the plain "Loading your groups…" text) all over again
+  // for data it already had.
+  const [groups, setGroups] = useState(() => groupsListCache.get(GROUPS_LIST_CACHE_KEY) ?? null)
   const [groupsPage, setGroupsPage] = useState(0)
   const [newGroupName, setNewGroupName] = useState('')
   const [creating, setCreating] = useState(false)
@@ -24,6 +35,10 @@ export default function Groups() {
   // enough to disable the tab and show it's doing something, never a
   // second page of its own.
   const [openingPersonal, setOpeningPersonal] = useState(false)
+  // Fixed once, at mount, regardless of how many times this component
+  // re-renders before the initial load settles — see the comment on
+  // loadGroups' use of it below.
+  const startedWithNothingCachedRef = useRef(groups === null)
 
   const visibleGroups = groups
     ? groups.slice(groupsPage * GROUPS_PAGE_SIZE, (groupsPage + 1) * GROUPS_PAGE_SIZE)
@@ -62,14 +77,23 @@ export default function Groups() {
       .eq('user_id', user.id)
       .eq('active', true)
 
+    // The one case an error means `groups` needs to become a real (empty)
+    // value rather than staying null: starting with nothing cached, null
+    // would leave the boot splash up forever instead of ever showing the
+    // error banner. A reload that *does* have something on screen already
+    // (a cache hit, or any load that already succeeded once) just records
+    // the error and leaves the list as it was — no reason to blank out
+    // data that's still probably right.
     if (membershipError) {
       setError(loadErrorMessage(membershipError))
+      if (startedWithNothingCachedRef.current) setGroups([])
       return
     }
 
     const groupIds = (memberships || []).map((m) => m.group_id)
     if (groupIds.length === 0) {
       setGroups([])
+      groupsListCache.set(GROUPS_LIST_CACHE_KEY, [])
       return
     }
 
@@ -86,13 +110,35 @@ export default function Groups() {
 
     if (groupsError) {
       setError(loadErrorMessage(groupsError))
+      if (startedWithNothingCachedRef.current) setGroups([])
       return
     }
 
     setGroups(data || [])
+    groupsListCache.set(GROUPS_LIST_CACHE_KEY, data || [])
+
+    // Fire-and-forget — nothing here waits on it, it just warms
+    // groupViewCache in the background for whichever group (or the
+    // personal space) you open next. See prefetchGroup.js for why this is
+    // scoped to a recent window rather than each group's full history.
+    if (data && data.length > 0) {
+      warmUpTopGroups(
+        data.map((g) => g.id),
+        getRecentGroupIds(),
+        getCachedPersonalGroupId()
+      )
+    }
   }
 
   async function openPersonal() {
+    // Once we already know the id (from earlier this session), skip the
+    // round-trip entirely — get_or_create_personal_group() is cheap, but
+    // "already know where to go" beats "ask again" every time.
+    const cachedId = getCachedPersonalGroupId()
+    if (cachedId) {
+      navigate(`/groups/${cachedId}`)
+      return
+    }
     setOpeningPersonal(true)
     setError(null)
     const { data, error: rpcError } = await supabase.rpc('get_or_create_personal_group')
@@ -101,6 +147,7 @@ export default function Groups() {
       setOpeningPersonal(false)
       return
     }
+    setCachedPersonalGroupId(data.id)
     navigate(`/groups/${data.id}`)
   }
 
@@ -123,6 +170,13 @@ export default function Groups() {
     setCreating(false)
   }
 
+  // Nothing cached and the real fetch hasn't resolved yet — the only case
+  // left where there's truly nothing worth painting. Once this fires even
+  // once, `groups` is never null again for the life of this component (see
+  // loadGroups above), so this can never reappear later just because a
+  // reload is in flight.
+  if (groups === null) return <BootSplash />
+
   return (
     <div className="page">
       <div className="page-header">
@@ -143,7 +197,6 @@ export default function Groups() {
 
       {error && <p className="status-error">{error}</p>}
 
-      {groups === null && <p className="muted">Loading your groups…</p>}
       {groups?.length === 0 && (
         <p className="empty-state">
           No groups yet — create one below, or open an invite link a friend sent you.

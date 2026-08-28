@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { CurrencyProvider } from './context/CurrencyContext'
 import AppHeader from './components/AppHeader'
+import BootSplash from './components/BootSplash'
 import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
 import Groups from './pages/Groups'
@@ -40,7 +41,7 @@ function RequireAuth({ children }) {
   const { session } = useAuth()
   const location = useLocation()
 
-  if (session === undefined) return <div className="page-loading">Loading…</div>
+  if (session === undefined) return <BootSplash />
 
   if (session === null) {
     sessionStorage.setItem('redirectAfterLogin', location.pathname)
