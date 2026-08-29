@@ -5,6 +5,12 @@
 // one column-detection-plus-transaction-building pass, so CSV and Excel
 // don't drift into two different ideas of which column aliases are
 // recognized or how an amount gets parsed.
+//
+// Deliberately has no AI in it at all, unlike bankStatementTabular.js one
+// level up — this stays a pure, synchronous, standalone-testable pass so
+// CSV/Excel import keeps working with zero setup even for someone with no
+// AI configured at all; bankStatementTabular.js is what layers an optional
+// AI double-check of the column mapping produced here on top.
 const DATE_ALIASES = ['date', 'transaction date', 'posting date', 'value date', 'booking date']
 const DESC_ALIASES = ['description', 'payee', 'merchant', 'narrative', 'details', 'reference', 'memo', 'name']
 const AMOUNT_ALIASES = ['amount', 'value']
@@ -25,7 +31,7 @@ function findColumn(lowerHeader, aliases) {
 // should ever *need* to be anything but text, but a stray numeric or
 // date-typed cell there (a mis-mapped column, an odd export) shouldn't
 // throw, just read a bit strangely.
-function cellToString(cell) {
+export function cellToString(cell) {
   if (cell == null) return ''
   if (cell instanceof Date) return cell.toISOString()
   return String(cell).trim()
@@ -76,35 +82,40 @@ function parseColumnMagnitude(cell) {
   return Number.isFinite(value) ? Math.abs(value) : NaN
 }
 
-// Returns { transactions, warnings } — never throws. Each transaction is
-// { date (ISO string), description, amount (always positive), direction:
-// 'debit' | 'credit' } — the same shape the PDF/AI path produces (see
+// The alias-matching pass alone — split out from buildTransactionsFromRows
+// so bankStatementTabular.js can run it once, hand the same result to an
+// AI double-check alongside a few sample rows, and only fall back to
+// re-detecting nothing itself.
+export function detectColumns(header) {
+  const lower = header.map((h) => h.toLowerCase())
+  return {
+    dateIdx: findColumn(lower, DATE_ALIASES),
+    descIdx: findColumn(lower, DESC_ALIASES),
+    amountIdx: findColumn(lower, AMOUNT_ALIASES),
+    debitIdx: findColumn(lower, DEBIT_ALIASES),
+    creditIdx: findColumn(lower, CREDIT_ALIASES),
+  }
+}
+
+// A column mapping is usable when it has a date, a description, and at
+// least one way to read an amount (a single signed column, or either half
+// of a debit/credit pair — a statement that only ever has debits, say,
+// might reasonably have no credit column at all).
+export function isUsableColumnMapping(columns) {
+  return Boolean(columns) && columns.dateIdx !== -1 && columns.descIdx !== -1 &&
+    (columns.amountIdx !== -1 || columns.debitIdx !== -1 || columns.creditIdx !== -1)
+}
+
+// Builds transactions from data rows (header already stripped) given an
+// already-decided column mapping — either detectColumns' own heuristic
+// result, or an AI double-check's corrected one. Returns { transactions,
+// warnings }, never throws. Each transaction is { date (ISO string),
+// description, amount (always positive), direction: 'debit' | 'credit' }
+// — the same shape parseBankStatementPdf's AI pass produces (see
 // bank-statement-parsing/extractionPrompt.js), so ImportBankStatement.jsx
 // handles every input format identically from here on.
-export function buildTransactionsFromRows(rows) {
-  if (!rows || rows.length < 2) {
-    return { transactions: [], warnings: ['That file looks empty.'] }
-  }
-
-  const header = rows[0].map(cellToString)
-  const lower = header.map((h) => h.toLowerCase())
-  const dataRows = rows.slice(1)
-
-  const dateIdx = findColumn(lower, DATE_ALIASES)
-  const descIdx = findColumn(lower, DESC_ALIASES)
-  const amountIdx = findColumn(lower, AMOUNT_ALIASES)
-  const debitIdx = findColumn(lower, DEBIT_ALIASES)
-  const creditIdx = findColumn(lower, CREDIT_ALIASES)
-
-  if (dateIdx === -1 || descIdx === -1 || (amountIdx === -1 && debitIdx === -1 && creditIdx === -1)) {
-    return {
-      transactions: [],
-      warnings: [
-        "This doesn't look like a bank statement export — couldn't find date, description, and amount columns. Try the PDF import instead, or check the file has a header row.",
-      ],
-    }
-  }
-
+export function buildTransactionsFromColumns(dataRows, columns) {
+  const { dateIdx, descIdx, amountIdx, debitIdx, creditIdx } = columns
   const warnings = []
   const transactions = []
 
@@ -150,4 +161,29 @@ export function buildTransactionsFromRows(rows) {
   }
 
   return { transactions, warnings }
+}
+
+// Heuristic-only entry point — detects columns by header alias alone and
+// builds from them, no AI involved at any point. Used directly by
+// anything that just wants the free, zero-config pass (this is what the
+// standalone tests in this session exercise); bankStatementTabular.js is
+// the one that adds an AI double-check on top for the real import flow.
+export function buildTransactionsFromRows(rows) {
+  if (!rows || rows.length < 2) {
+    return { transactions: [], warnings: ['That file looks empty.'] }
+  }
+
+  const header = rows[0].map(cellToString)
+  const columns = detectColumns(header)
+
+  if (!isUsableColumnMapping(columns)) {
+    return {
+      transactions: [],
+      warnings: [
+        "This doesn't look like a bank statement export — couldn't find date, description, and amount columns. Try the PDF import instead, or check the file has a header row.",
+      ],
+    }
+  }
+
+  return buildTransactionsFromColumns(rows.slice(1), columns)
 }

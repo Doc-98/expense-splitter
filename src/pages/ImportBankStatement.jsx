@@ -70,6 +70,7 @@ export default function ImportBankStatement() {
   const [recurringClusters, setRecurringClusters] = useState([])
   const [recurringChoices, setRecurringChoices] = useState({}) // clusterKey -> boolean
   const [categorizing, setCategorizing] = useState(null) // { done, total } | null, only while the AI category pass runs
+  const [parseNotices, setParseNotices] = useState([]) // non-fatal notices from parsing itself, e.g. an AI column-detection disagreement
   const [importing, setImporting] = useState(false)
   const [importProgress, setImportProgress] = useState(null)
   const [result, setResult] = useState(null) // { billCount, recurringCount, skippedCount } | null
@@ -236,6 +237,7 @@ export default function ImportBankStatement() {
 
     setError(null)
     setResult(null)
+    setParseNotices([])
     const lowerName = file.name.toLowerCase()
     const isPdf = file.type === 'application/pdf' || lowerName.endsWith('.pdf')
     const isCsv = file.type === 'text/csv' || lowerName.endsWith('.csv')
@@ -260,15 +262,18 @@ export default function ImportBankStatement() {
 
     try {
       let parsedTransactions
+      let notices = []
       if (isCsv) {
         const text = await file.text()
-        const { transactions: parsed, warnings } = parseBankStatementCsv(text)
+        const { transactions: parsed, warnings } = await parseBankStatementCsv(text)
         if (parsed.length === 0) throw new Error(warnings[0] || 'No transactions found in that file.')
         parsedTransactions = parsed
+        notices = warnings
       } else if (isXlsx) {
         const { transactions: parsed, warnings } = await parseBankStatementXlsx(file)
         if (parsed.length === 0) throw new Error(warnings[0] || 'No transactions found in that file.')
         parsedTransactions = parsed
+        notices = warnings
       } else {
         const base64 = await fileToBase64(file)
         parsedTransactions = await parseBankStatementPdf(base64)
@@ -313,6 +318,7 @@ export default function ImportBankStatement() {
       setCrossGroupMatches(crossMatches)
       setRecurringClusters(clusters)
       setRecurringChoices({})
+      setParseNotices(notices)
       setStep('review')
 
       runCategorySuggestions(parsedTransactions)
@@ -460,9 +466,9 @@ export default function ImportBankStatement() {
         <>
           <p className="muted">
             Import transactions from a bank or credit-card statement — a CSV or Excel export from your
-            bank if it offers one (no AI involved, most reliable), or a PDF statement read by whichever
-            AI service you've set up in Scan settings. CSV and Excel exports both need a header row with
-            recognizable date/description/amount columns.
+            bank if it offers one (matched against a header row locally, most reliable), or a PDF
+            statement read by whichever AI service you've set up in Scan settings. CSV and Excel exports
+            need a header row with recognizable date/description/amount columns.
           </p>
           <p className="status-error">
             Before uploading a PDF: remove or black out anything sensitive it shows beyond the
@@ -472,8 +478,17 @@ export default function ImportBankStatement() {
           <p className="muted">
             {pdfConfigured
               ? `PDF statements will be read using: ${currentBankStatementStrategyLabel()}.`
-              : 'No AI service configured for PDF statements — set one up in Scan settings, or use a CSV export instead.'}
+              : 'No AI service configured for PDF statements — set one up in Scan settings, or use a CSV or Excel export instead.'}
           </p>
+          {classifyStrategy && (
+            <p className="muted">
+              {classifyStrategy.label} is also set up in Scan settings, so a CSV or Excel import will use
+              it too — suggesting a category for each transaction, and double-checking the automatic
+              column match against a few sample rows. Either of those sends transaction descriptions and
+              amounts (not full statement details) to that provider, same as the category suggestions
+              already offered on a PDF import.
+            </p>
+          )}
           <button type="button" className="btn-primary" onClick={() => fileInputRef.current?.click()}>
             Choose a statement file
           </button>
@@ -497,6 +512,11 @@ export default function ImportBankStatement() {
 
       {step === 'review' && !importing && (
         <>
+          {parseNotices.map((notice, i) => (
+            <p key={i} className="status-error">
+              {notice}
+            </p>
+          ))}
           <p>
             <strong>{includedCount}</strong> of <strong>{transactions.length}</strong> transaction
             {transactions.length === 1 ? '' : 's'} will be imported. Untick anything you don't want, tick

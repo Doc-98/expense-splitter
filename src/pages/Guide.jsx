@@ -54,15 +54,20 @@ const GROUPS = [
             <p>
               <strong>Group settings → Import a bank statement</strong> turns a bank or
               credit-card statement into bills — a CSV or Excel export from your bank if it
-              offers one (no AI, most reliable — Excel is there for mobile, since redacting a PDF
-              or exporting to CSV is realistically a desktop-only step), or a PDF read by
-              whichever AI service you've set up in <strong>Scan settings</strong>. Strip anything
-              sensitive beyond the transactions themselves before uploading a PDF — it's sent to
-              that provider to be read. Every transaction gets a category suggestion, an editable
-              description (tap it to fix up the bank's own wording before it becomes a bill
-              title), and a review checkbox before anything is saved; a charge that repeats on a
-              regular schedule can be set up as a Recurring Bill in one click instead of importing
-              it fresh each time, and a transaction that looks like it's already been imported (an
+              offers one (matched against a header row locally, no AI required — Excel is there
+              for mobile, since redacting a PDF or exporting to CSV is realistically a
+              desktop-only step), or a PDF read by whichever AI service you've set up in{' '}
+              <strong>Scan settings</strong>. Strip anything sensitive beyond the transactions
+              themselves before uploading a PDF — it's sent to that provider to be read. If you do
+              have an AI service configured, CSV and Excel imports use it too: it double-checks
+              the automatic column match against a few sample rows (only overriding it, with a
+              notice to double-check dates and amounts, when the two genuinely disagree) and
+              suggests a category for every transaction — the same AI pass PDF imports and{' '}
+              <strong>/categorize</strong> already use. Every transaction also gets an editable
+              description (tap it to fix up the bank's own wording before it becomes a bill title)
+              and a review checkbox before anything is saved; a charge that repeats on a regular
+              schedule can be set up as a Recurring Bill in one click instead of importing it
+              fresh each time, and a transaction that looks like it's already been imported (an
               overlapping statement period) or already recorded as a bill in one of your other
               groups (a shared expense showing up on your own statement too) defaults to unchecked
               either way — still reviewable, in case either flag is a false positive.

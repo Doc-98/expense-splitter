@@ -1,4 +1,4 @@
-import { buildTransactionsFromRows } from './bankStatementRows'
+import { parseTabularStatement } from './bankStatementTabular'
 
 // Dynamically imported, same convention as Tesseract.js elsewhere in this
 // app — a library only the Excel-import path needs shouldn't bloat every
@@ -20,5 +20,5 @@ export async function parseBankStatementXlsx(file) {
   } catch (err) {
     return { transactions: [], warnings: [`Couldn't read that Excel file: ${err.message}`] }
   }
-  return buildTransactionsFromRows(rows)
+  return parseTabularStatement(rows)
 }

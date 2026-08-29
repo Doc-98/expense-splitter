@@ -434,8 +434,8 @@ into "Your Stats" automatically, same as any other group.
 own Group Settings — not available for a real group yet) turns a bank or
 credit-card statement into bills. Three ways in:
 
-- **CSV or Excel export**, if your bank offers one — parsed locally, no AI
-  involved. Both formats share one column-detection-plus-parsing pass
+- **CSV or Excel export**, if your bank offers one — parsed locally first,
+  no AI required. Both formats share one column-detection-plus-parsing pass
   (`src/lib/bankStatementRows.js`) that matches by common column aliases
   (Date/Payee/Amount, or separate Debit/Credit columns) rather than one
   fixed shape, and handles currency symbols, thousands separators (either
@@ -446,6 +446,18 @@ credit-card statement into bills. Three ways in:
   bundle. Excel is here specifically for mobile: redacting a PDF or
   exporting-to-CSV is realistically a desktop-only step, and a mobile user
   whose bank only offers PDF/Excel downloads would otherwise be stuck.
+  **If Claude, Gemini, or Ollama is set up in Scan settings**, the
+  heuristic's column match also gets a second opinion from that same AI —
+  `src/lib/bankStatementColumns/` sends it the header row plus a handful of
+  sample rows (not the whole file) and asks it to independently point at
+  which column is which, to catch a header the alias list doesn't
+  recognize (a different language, an unusual bank's own wording). The
+  heuristic's own result is trusted by default; the AI's only replaces it
+  when the two actually disagree on a workable mapping, and doing so always
+  surfaces a review-screen notice asking you to double-check dates and
+  amounts, per this app's usual "flag, never apply silently" rule for any
+  AI suggestion (see `src/lib/bankStatementTabular.js`, the orchestrator
+  both formats go through).
 - **PDF statement** — read by whichever AI service you've set up in Scan
   settings (Claude or Gemini specifically; Ollama's local models don't
   reliably take a multi-page PDF document the way those two hosted APIs do,
@@ -454,13 +466,14 @@ credit-card statement into bills. Three ways in:
   number, name, address — before uploading**, since the file is sent to
   that provider to be read.
 
-Either path lands on the same review screen: every transaction (its
+Every path lands on the same review screen: every transaction (its
 description editable in place, for when the bank's own wording isn't what
 you'd want as a bill title), a category suggestion per row (reusing the
-exact same AI pass `/categorize` uses), and a checkbox to include or skip
-it — nothing is saved until you confirm. Credits (salary, refunds,
-incoming transfers) are shown but never imported by default, since they're
-not spending.
+exact same AI pass `/categorize` uses — CSV and Excel get this too,
+whenever an AI service is configured, not just PDF), and a checkbox to
+include or skip it — nothing is saved until you confirm. Credits (salary,
+refunds, incoming transfers) are shown but never imported by default, since
+they're not spending.
 
 <details>
 <summary>Recurring and duplicate detection</summary>
