@@ -7,7 +7,7 @@ import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
 import { fetchAllRows } from '../lib/fetchAllRows'
 import { getStatsWindowStart } from '../lib/timeRange'
-import { getReceiptSettings } from '../lib/receiptSettings'
+import { getReceiptSettings, setReceiptSettings } from '../lib/receiptSettings'
 import { parseBankStatementCsv } from '../lib/bankStatementCsv'
 import { parseBankStatementXlsx } from '../lib/bankStatementXlsx'
 import {
@@ -15,6 +15,7 @@ import {
   isBankStatementPdfConfigured,
   currentBankStatementStrategyLabel,
 } from '../lib/bank-statement-parsing'
+import { isColumnDetectionAvailable } from '../lib/bankStatementColumns'
 import { detectRecurringClusters, findDuplicateIndexes, findCrossGroupMatches } from '../lib/bankStatementDetection'
 import { classifyTitles, resolveClassifyStrategy } from '../lib/billCategorization'
 import { advanceDate, addRecurringBill } from '../lib/recurringBills'
@@ -74,10 +75,28 @@ export default function ImportBankStatement() {
   const [importing, setImporting] = useState(false)
   const [importProgress, setImportProgress] = useState(null)
   const [result, setResult] = useState(null) // { billCount, recurringCount, skippedCount } | null
+  // Unlike the PDF path (needs AI by design) and category suggestions
+  // (already opt-in via whether an AI service is configured at all), the
+  // CSV/Excel column-detection double-check is independently opt-outable
+  // even when a service *is* configured — someone temporarily out of API
+  // quota, or who'd rather not send transaction data to that provider for
+  // this specific check, can turn just this one thing off. See
+  // bankStatementColumns/index.js's isColumnDetectionEnabled(), which this
+  // setting feeds.
+  const [aiColumnCheckEnabled, setAiColumnCheckEnabled] = useState(
+    () => getReceiptSettings().bankStatementAiColumnCheck !== false
+  )
 
   const fileInputRef = useRef(null)
   const classifyStrategy = resolveClassifyStrategy()
   const pdfConfigured = isBankStatementPdfConfigured()
+  const columnCheckAvailable = isColumnDetectionAvailable()
+
+  function toggleAiColumnCheck() {
+    const next = !aiColumnCheckEnabled
+    setReceiptSettings({ bankStatementAiColumnCheck: next })
+    setAiColumnCheckEnabled(next)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -483,11 +502,25 @@ export default function ImportBankStatement() {
           {classifyStrategy && (
             <p className="muted">
               {classifyStrategy.label} is also set up in Scan settings, so a CSV or Excel import will use
-              it too — suggesting a category for each transaction, and double-checking the automatic
-              column match against a few sample rows. Either of those sends transaction descriptions and
-              amounts (not full statement details) to that provider, same as the category suggestions
-              already offered on a PDF import.
+              it too — suggesting a category for each transaction, and (unless turned off below)
+              double-checking the automatic column match against a few sample rows. Either of those sends
+              transaction descriptions and amounts (not full statement details) to that provider, same as
+              the category suggestions already offered on a PDF import.
             </p>
+          )}
+          {columnCheckAvailable && (
+            <label className="scan-option">
+              <input type="checkbox" checked={aiColumnCheckEnabled} onChange={toggleAiColumnCheck} />
+              <div>
+                <strong>Double-check CSV/Excel column detection with AI</strong>
+                <p className="muted">
+                  The automatic column match itself needs no AI and always runs regardless — this only
+                  controls the optional second opinion on top of it. Turn it off if you're out of API
+                  quota right now, or would rather this file's data not go to {classifyStrategy.label} at
+                  all — the plain column match alone is often enough for a well-formed export.
+                </p>
+              </div>
+            </label>
           )}
           <button type="button" className="btn-primary" onClick={() => fileInputRef.current?.click()}>
             Choose a statement file

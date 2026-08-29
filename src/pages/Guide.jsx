@@ -63,7 +63,11 @@ const GROUPS = [
               the automatic column match against a few sample rows (only overriding it, with a
               notice to double-check dates and amounts, when the two genuinely disagree) and
               suggests a category for every transaction — the same AI pass PDF imports and{' '}
-              <strong>/categorize</strong> already use. Every transaction also gets an editable
+              <strong>/categorize</strong> already use. Unlike a PDF, which needs AI to read at
+              all, CSV/Excel's own column match works standalone — so the double-check specifically
+              has its own on/off checkbox right on the import screen, for anyone who'd rather not
+              use it (out of API quota, or just doesn't want this file's data going to that
+              provider) without losing CSV/Excel import altogether. Every transaction also gets an editable
               description (tap it to fix up the bank's own wording before it becomes a bill title)
               and a review checkbox before anything is saved; a charge that repeats on a regular
               schedule can be set up as a Recurring Bill in one click instead of importing it

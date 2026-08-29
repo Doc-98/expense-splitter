@@ -457,7 +457,13 @@ credit-card statement into bills. Three ways in:
   surfaces a review-screen notice asking you to double-check dates and
   amounts, per this app's usual "flag, never apply silently" rule for any
   AI suggestion (see `src/lib/bankStatementTabular.js`, the orchestrator
-  both formats go through).
+  both formats go through). Unlike the PDF path, which needs AI by design,
+  the heuristic here already works standalone — so this one check has its
+  own opt-out checkbox on the landing screen (`bankStatementAiColumnCheck`
+  in `receiptSettings.js`, on by default), independent of whichever AI
+  service is configured for everything else. Category suggestions aren't
+  gated by it — they're already opt-in by nature of needing an AI service
+  configured at all, same as on a PDF import.
 - **PDF statement** — read by whichever AI service you've set up in Scan
   settings (Claude or Gemini specifically; Ollama's local models don't
   reliably take a multi-page PDF document the way those two hosted APIs do,

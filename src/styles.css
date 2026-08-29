@@ -961,7 +961,7 @@ input.item-editable-input {
   margin-bottom: var(--space-sm);
   cursor: pointer;
 }
-.scan-option input[type='radio'] { margin-top: 4px; }
+.scan-option input[type='radio'], .scan-option input[type='checkbox'] { margin-top: 4px; }
 .scan-option strong { display: block; margin-bottom: 4px; }
 .scan-option p { margin: 0; font-size: 13px; }
 .scan-option-detail {
