@@ -174,8 +174,27 @@ code {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   height: 100vh;
   color: var(--ink-soft);
+}
+
+/* A small spinning ring for a loading state that has visible text next to
+   it, unlike BootSplash's own full-screen one below — same spin
+   animation, reused rather than duplicated, just smaller and inline.
+   Left spinning through prefers-reduced-motion same as BootSplash's own
+   ring — see the reasoning by that media query below, this one is the
+   same case: the motion here is what tells someone work is still
+   happening, not a decorative flourish. */
+.inline-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: boot-splash-spin 0.8s linear infinite;
 }
 
 /* Visible only to screen readers — same pattern most component libraries
@@ -1058,22 +1077,53 @@ input.item-editable-input {
 
 /* ImportBankStatement.jsx's review rows — the label wraps the checkbox
    plus everything that identifies the row (date, description, any
-   flags), .member-list-actions on the same row holds the amount and
-   category picker, same split every other .member-list-item review row
-   already uses. */
+   flags); .member-list-actions holds the amount and category picker.
+   Unlike every other .member-list-item (a name/title plus one simple
+   control, comfortably one line even on a narrow phone), a bank-tx row
+   can carry a checkbox, a date, an editable description, AND one or two
+   flag pills all at once — enough that squeezing it onto one line with
+   the amount+select at *any* width tends to crush the description to
+   nothing or force everything to visibly overlap. So .bank-tx-item
+   stacks the two halves instead: the label's own full row width, the
+   amount+select right-aligned on the line below — simpler and more
+   robust than trying to tune a single-line squeeze to survive every
+   combination of a long Italian merchant description and a long
+   duplicate-flag group name. */
+.member-list-item.bank-tx-item { flex-direction: column; align-items: stretch; gap: 6px; }
+.bank-tx-item .member-list-actions { justify-content: flex-end; }
+
 /* flex-direction: row explicit, not left to default — the global `label`
    rule sets column, and being a class selector this wins on display but
-   not automatically on every property it doesn't itself repeat. */
+   not automatically on every property it doesn't itself repeat.
+   flex-wrap: wrap — within the label's own row, a long flag pill (never
+   shrinks, see .bank-tx-flag below) drops to its own line instead of
+   permanently claiming space the description needed just to show a
+   handful of characters. */
 .bank-tx-row {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-sm);
+  row-gap: 2px;
   min-width: 0;
   flex: 1;
   margin-bottom: 0;
 }
 .bank-tx-date { flex-shrink: 0; font-size: 12px; }
+/* The wrapping element InlineEditable's button sits inside (see
+   ImportBankStatement.jsx — it's there so tapping the description to
+   edit it doesn't also toggle the row's own checkbox via the label's
+   click-forwarding). A plain <button> is inline-block by default and
+   won't shrink to fit on its own, so without this the description would
+   either refuse to truncate or, worse, overflow and visually overlap
+   neighboring rows — display:flex plus min-width:0 here, and flex plus
+   min-width:0 on the button itself below, is what lets the actual
+   .categorize-row-title truncation (overflow/ellipsis) apply against a
+   real, shrinkable width instead of the button's own untruncated
+   content width. */
+.bank-tx-title-wrap { display: flex; min-width: 0; flex: 1; }
+.bank-tx-title-wrap > .categorize-row-title { flex: 1; min-width: 0; }
 /* The bank's own wording for a transaction is rarely what you'd want as a
    saved bill title — editable in place via InlineEditable, same
    dotted-underline .item-editable look ItemRow's fields already use.

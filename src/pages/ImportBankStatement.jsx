@@ -185,21 +185,21 @@ export default function ImportBankStatement() {
     const otherGroupIds = [...new Set((memberships || []).map((m) => m.group_id))].filter((id) => id !== groupId)
     if (otherGroupIds.length === 0) return []
 
-    const { data: groupsData, error: groupsError } = await supabase
-      .from('groups')
-      .select('id, name')
-      .in('id', otherGroupIds)
+    // Neither of these needs the other's result — both only need
+    // otherGroupIds — so there's no reason to make one wait on the other.
+    const [{ data: groupsData, error: groupsError }, bills] = await Promise.all([
+      supabase.from('groups').select('id, name').in('id', otherGroupIds),
+      fetchAllRows(() =>
+        supabase
+          .from('bills')
+          .select('group_id, created_at, items(total_price)', { count: 'exact' })
+          .in('group_id', otherGroupIds)
+          .gte('created_at', rangeStart.toISOString())
+          .lte('created_at', rangeEnd.toISOString())
+      ),
+    ])
     if (groupsError) throw groupsError
     const groupNameById = new Map((groupsData || []).map((g) => [g.id, g.name]))
-
-    const bills = await fetchAllRows(() =>
-      supabase
-        .from('bills')
-        .select('group_id, created_at, items(total_price)', { count: 'exact' })
-        .in('group_id', otherGroupIds)
-        .gte('created_at', rangeStart.toISOString())
-        .lte('created_at', rangeEnd.toISOString())
-    )
 
     return bills.map((b) => ({
       amount: (b.items || []).reduce((sum, it) => sum + Number(it.total_price), 0),
@@ -279,6 +279,15 @@ export default function ImportBankStatement() {
 
     setStep('parsing')
 
+    // Kicked off immediately, alongside the parse below rather than after
+    // it — this fetch only depends on the fixed stats window (see
+    // getStatsWindowStart), not on anything the parse itself produces, so
+    // there's no reason to make it wait in line behind however long
+    // reading the file takes. Its rejection is still caught below (via
+    // the Promise.all it's awaited in), same as if it had been started
+    // there to begin with.
+    const existingHistoryPromise = loadExistingHistory()
+
     try {
       let parsedTransactions
       let notices = []
@@ -302,7 +311,7 @@ export default function ImportBankStatement() {
       }
 
       const [existingHistory, crossGroupBills] = await Promise.all([
-        loadExistingHistory(),
+        existingHistoryPromise,
         loadCrossGroupBills(parsedTransactions.map((t) => t.date)),
       ])
       const debitTransactions = parsedTransactions.filter((t) => t.direction === 'debit')
@@ -535,11 +544,16 @@ export default function ImportBankStatement() {
         </>
       )}
 
-      {step === 'parsing' && <p className="page-loading">Reading your statement…</p>}
+      {step === 'parsing' && (
+        <p className="page-loading">
+          <span className="inline-spinner" aria-hidden="true" /> Reading your statement…
+        </p>
+      )}
 
       {step === 'review' && importing && (
         <p className="page-loading">
-          Importing… {importProgress ? `${importProgress.done}/${importProgress.total}` : ''}
+          <span className="inline-spinner" aria-hidden="true" /> Importing…{' '}
+          {importProgress ? `${importProgress.done}/${importProgress.total}` : ''}
         </p>
       )}
 
@@ -601,7 +615,7 @@ export default function ImportBankStatement() {
           <h2 className="settings-section-title">Transactions</h2>
           <ul className="member-list">
             {transactions.map((tx, i) => (
-              <li key={i} className="member-list-item">
+              <li key={i} className="member-list-item bank-tx-item">
                 <label className="bank-tx-row">
                   <input
                     type="checkbox"
@@ -615,7 +629,7 @@ export default function ImportBankStatement() {
                       otherwise also toggle it via the label's own click
                       forwarding — tapping the title to edit it shouldn't also
                       flip the include checkbox. */}
-                  <span onClick={(e) => e.stopPropagation()}>
+                  <span className="bank-tx-title-wrap" onClick={(e) => e.stopPropagation()}>
                     <InlineEditable
                       value={descriptionFor(i)}
                       display={descriptionFor(i)}
