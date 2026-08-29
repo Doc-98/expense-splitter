@@ -432,12 +432,20 @@ into "Your Stats" automatically, same as any other group.
 
 `/groups/:groupId/import-bank-statement` (linked from the Personal space's
 own Group Settings — not available for a real group yet) turns a bank or
-credit-card statement into bills. Two ways in:
+credit-card statement into bills. Three ways in:
 
-- **CSV export**, if your bank offers one — parsed locally
-  (`src/lib/bankStatementCsv.js`), no AI involved, matching by common column
-  aliases (Date/Payee/Amount, or separate Debit/Credit columns) rather than
-  one fixed shape.
+- **CSV or Excel export**, if your bank offers one — parsed locally, no AI
+  involved. Both formats share one column-detection-plus-parsing pass
+  (`src/lib/bankStatementRows.js`) that matches by common column aliases
+  (Date/Payee/Amount, or separate Debit/Credit columns) rather than one
+  fixed shape, and handles currency symbols, thousands separators (either
+  "1,234.56" or "1.234,56"), and parenthesized negatives when reading an
+  amount. `src/lib/bankStatementCsv.js` and `src/lib/bankStatementXlsx.js`
+  are thin per-format wrappers around it — Excel parsing is via
+  `read-excel-file`, loaded lazily so it doesn't add to every other page's
+  bundle. Excel is here specifically for mobile: redacting a PDF or
+  exporting-to-CSV is realistically a desktop-only step, and a mobile user
+  whose bank only offers PDF/Excel downloads would otherwise be stuck.
 - **PDF statement** — read by whichever AI service you've set up in Scan
   settings (Claude or Gemini specifically; Ollama's local models don't
   reliably take a multi-page PDF document the way those two hosted APIs do,
@@ -446,11 +454,13 @@ credit-card statement into bills. Two ways in:
   number, name, address — before uploading**, since the file is sent to
   that provider to be read.
 
-Either path lands on the same review screen: every transaction, a category
-suggestion per row (reusing the exact same AI pass `/categorize` uses),
-and a checkbox to include or skip it — nothing is saved until you confirm.
-Credits (salary, refunds, incoming transfers) are shown but never imported
-by default, since they're not spending.
+Either path lands on the same review screen: every transaction (its
+description editable in place, for when the bank's own wording isn't what
+you'd want as a bill title), a category suggestion per row (reusing the
+exact same AI pass `/categorize` uses), and a checkbox to include or skip
+it — nothing is saved until you confirm. Credits (salary, refunds,
+incoming transfers) are shown but never imported by default, since they're
+not spending.
 
 <details>
 <summary>Recurring and duplicate detection</summary>

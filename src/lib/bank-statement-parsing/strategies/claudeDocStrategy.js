@@ -24,8 +24,12 @@ async function callClaude(pdfBase64, apiKey, model) {
       model,
       // A full statement's worth of transactions is a much longer JSON
       // response than a receipt's handful of items — 2000 (what receipt
-      // scanning uses) would truncate a busy month partway through.
-      max_tokens: 8000,
+      // scanning uses) would truncate a busy month partway through. Even
+      // 8000 turned out tight for a genuinely busy statement (a full
+      // month of daily-card-use transactions can run well past that many
+      // tokens of JSON), so this is set with real headroom rather than
+      // just past the common case.
+      max_tokens: 16000,
       messages: [
         {
           role: 'user',

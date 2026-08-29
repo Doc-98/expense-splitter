@@ -27,7 +27,11 @@ async function callGemini(pdfBase64, apiKey, model) {
             ],
           },
         ],
-        generationConfig: { responseMimeType: 'application/json' },
+        // Matches claudeDocStrategy.js's own generous ceiling — Gemini's
+        // implicit per-model default isn't guaranteed to be enough for a
+        // full statement's worth of transactions, so this sets one
+        // explicitly rather than trusting that default to keep up.
+        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 16000 },
       }),
     }
   )
