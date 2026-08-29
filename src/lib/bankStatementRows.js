@@ -11,11 +11,21 @@
 // CSV/Excel import keeps working with zero setup even for someone with no
 // AI configured at all; bankStatementTabular.js is what layers an optional
 // AI double-check of the column mapping produced here on top.
-const DATE_ALIASES = ['date', 'transaction date', 'posting date', 'value date', 'booking date']
-const DESC_ALIASES = ['description', 'payee', 'merchant', 'narrative', 'details', 'reference', 'memo', 'name']
-const AMOUNT_ALIASES = ['amount', 'value']
-const DEBIT_ALIASES = ['debit', 'withdrawal', 'money out', 'paid out', 'out']
-const CREDIT_ALIASES = ['credit', 'deposit', 'money in', 'paid in', 'in']
+// Italian aliases alongside the English ones — same bilingual default this
+// app already uses for OCR (see receiptSettings.js's eng+ita default) —
+// rather than a second, separate list some other part of the pipeline
+// would need to know to also check.
+const DATE_ALIASES = [
+  'date', 'transaction date', 'posting date', 'value date', 'booking date',
+  'data', 'data operazione', 'data contabile', 'data valuta',
+]
+const DESC_ALIASES = [
+  'description', 'payee', 'merchant', 'narrative', 'details', 'reference', 'memo', 'name',
+  'operazione', 'descrizione', 'causale', 'beneficiario', 'ordinante',
+]
+const AMOUNT_ALIASES = ['amount', 'value', 'importo']
+const DEBIT_ALIASES = ['debit', 'withdrawal', 'money out', 'paid out', 'out', 'dare', 'uscite', 'addebiti', 'addebito']
+const CREDIT_ALIASES = ['credit', 'deposit', 'money in', 'paid in', 'in', 'avere', 'entrate', 'accrediti', 'accredito']
 
 function findColumn(lowerHeader, aliases) {
   for (const alias of aliases) {
@@ -106,6 +116,28 @@ export function isUsableColumnMapping(columns) {
     (columns.amountIdx !== -1 || columns.debitIdx !== -1 || columns.creditIdx !== -1)
 }
 
+// Some banks' exports — especially Excel ones — lead with a block of
+// report metadata (an account summary, the date range, a row count) before
+// the actual column-title row, rather than putting that row first the way
+// a plain CSV export almost always does. Scans down for the first row that
+// actually looks like a header (by the same alias match detectColumns
+// uses) instead of assuming row 0 always is one; bounded so a genuinely
+// header-less file doesn't scan its entire (possibly huge) row count
+// before giving up. Returns -1 if nothing in the scan window looks like a
+// header — callers fall back to treating row 0 as the header either way,
+// same as before this existed, so this only ever helps, never regresses a
+// file whose real header already was row 0.
+const MAX_HEADER_SCAN_ROWS = 40
+
+export function findHeaderRowIndex(rows) {
+  const limit = Math.min(rows.length, MAX_HEADER_SCAN_ROWS)
+  for (let i = 0; i < limit; i++) {
+    const header = rows[i].map(cellToString)
+    if (isUsableColumnMapping(detectColumns(header))) return i
+  }
+  return -1
+}
+
 // Builds transactions from data rows (header already stripped) given an
 // already-decided column mapping — either detectColumns' own heuristic
 // result, or an AI double-check's corrected one. Returns { transactions,
@@ -173,7 +205,9 @@ export function buildTransactionsFromRows(rows) {
     return { transactions: [], warnings: ['That file looks empty.'] }
   }
 
-  const header = rows[0].map(cellToString)
+  const headerIdx = findHeaderRowIndex(rows)
+  const headerRow = headerIdx === -1 ? 0 : headerIdx
+  const header = rows[headerRow].map(cellToString)
   const columns = detectColumns(header)
 
   if (!isUsableColumnMapping(columns)) {
@@ -185,5 +219,5 @@ export function buildTransactionsFromRows(rows) {
     }
   }
 
-  return buildTransactionsFromColumns(rows.slice(1), columns)
+  return buildTransactionsFromColumns(rows.slice(headerRow + 1), columns)
 }
