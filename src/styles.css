@@ -889,7 +889,14 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    here (unlike the tighter padding/border) — inputs stay at the global
    16px so focusing one doesn't trigger iOS's zoom-on-focus, even though
    that reads a little larger than the display text it replaces. */
-input.item-editable-input {
+/* textarea.item-editable-input alongside it — InlineEditable's
+   `multiline` mode (see ImportBankStatement.jsx's description field)
+   renders a <textarea> instead, which needs the same look but has no
+   competing global reset rule to out-specificity in the first place
+   (styles.css's own input/select reset above doesn't touch textarea) —
+   still written as an element+class selector for consistency with the
+   input rule right next to it. */
+input.item-editable-input, textarea.item-editable-input {
   color: inherit;
   border: 1px solid var(--accent);
   border-radius: 4px;
@@ -1115,21 +1122,43 @@ input.item-editable-input {
    ImportBankStatement.jsx — it's there so tapping the description to
    edit it doesn't also toggle the row's own checkbox via the label's
    click-forwarding). A plain <button> is inline-block by default and
-   won't shrink to fit on its own, so without this the description would
-   either refuse to truncate or, worse, overflow and visually overlap
-   neighboring rows — display:flex plus min-width:0 here, and flex plus
-   min-width:0 on the button itself below, is what lets the actual
-   .categorize-row-title truncation (overflow/ellipsis) apply against a
-   real, shrinkable width instead of the button's own untruncated
-   content width. */
+   won't shrink/wrap to fit on its own, so without this the description
+   would either refuse to wrap (squeezing everything else) or overflow
+   and visually overlap neighboring rows — display:flex plus min-width:0
+   here, and flex plus min-width:0 on the button itself below, is what
+   lets the button's own width actually track its real, shrinkable
+   allotment instead of its full unwrapped content width. */
 .bank-tx-title-wrap { display: flex; min-width: 0; flex: 1; }
-.bank-tx-title-wrap > .categorize-row-title { flex: 1; min-width: 0; }
+/* Deliberately NOT .categorize-row-title's usual single-line ellipsis —
+   this is the review screen's whole job (confirm every transaction is
+   right before it becomes a bill), so the description needs to be fully
+   readable, not clipped. Wraps across as many lines as it needs instead;
+   most rows (short merchant names) don't even notice, only the
+   occasional long one gets taller. */
+.bank-tx-title-wrap > .categorize-row-title {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  text-align: left;
+}
 /* The bank's own wording for a transaction is rarely what you'd want as a
    saved bill title — editable in place via InlineEditable, same
    dotted-underline .item-editable look ItemRow's fields already use.
-   Wider than .item-name-input (140px): a bank description tends to run
-   longer than an item name. */
-.bank-tx-title-input { width: 200px; max-width: 55vw; }
+   Editing uses a <textarea> (InlineEditable's `multiline`), not a
+   single-line <input> — same reasoning as the read-mode wrap above: a
+   90+ character description needs to stay fully visible and easy to
+   edit, not scrolled sideways inside a narrow box. Wider than
+   .item-name-input (140px) for the same reason. */
+.bank-tx-title-input {
+  display: block;
+  width: 240px;
+  max-width: 70vw;
+  min-height: 5.8em;
+  resize: vertical;
+  line-height: 1.3;
+}
 .bank-tx-flag {
   flex-shrink: 0;
   font-size: 11px;

@@ -634,6 +634,7 @@ export default function ImportBankStatement() {
                       value={descriptionFor(i)}
                       display={descriptionFor(i)}
                       onSave={(value) => setDescriptionFor(i, value)}
+                      multiline
                       className="categorize-row-title item-editable"
                       inputClassName="item-editable-input bank-tx-title-input"
                       ariaLabel={`Edit description for ${descriptionFor(i)}`}
