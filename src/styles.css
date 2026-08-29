@@ -961,7 +961,7 @@ input.item-editable-input {
   margin-bottom: var(--space-sm);
   cursor: pointer;
 }
-.scan-option input[type='radio'] { margin-top: 4px; }
+.scan-option input[type='radio'], .scan-option input[type='checkbox'] { margin-top: 4px; }
 .scan-option strong { display: block; margin-bottom: 4px; }
 .scan-option p { margin: 0; font-size: 13px; }
 .scan-option-detail {
@@ -1074,6 +1074,12 @@ input.item-editable-input {
   margin-bottom: 0;
 }
 .bank-tx-date { flex-shrink: 0; font-size: 12px; }
+/* The bank's own wording for a transaction is rarely what you'd want as a
+   saved bill title — editable in place via InlineEditable, same
+   dotted-underline .item-editable look ItemRow's fields already use.
+   Wider than .item-name-input (140px): a bank description tends to run
+   longer than an item name. */
+.bank-tx-title-input { width: 200px; max-width: 55vw; }
 .bank-tx-flag {
   flex-shrink: 0;
   font-size: 11px;

@@ -24,6 +24,16 @@ const DEFAULTS = {
   // shorthand for a recurring bill. A household fills this in once and it
   // applies to every group's run, not just one.
   categorizeHint: '',
+  // Whether a CSV/Excel bank statement import should ask the configured AI
+  // service to double-check its own free, offline column match (see
+  // bankStatementColumns/) — on by default, since it's a pure double-check
+  // that never applies silently (see bankStatementTabular.js), but some
+  // people would rather opt out entirely: unlike the PDF import path,
+  // which needs AI by design, CSV/Excel's own heuristic already works
+  // standalone, so someone temporarily out of API quota (or who'd simply
+  // rather not send transaction data to a third party for this) can turn
+  // this one thing off without losing CSV/Excel import altogether.
+  bankStatementAiColumnCheck: true,
 }
 
 export function getReceiptSettings() {

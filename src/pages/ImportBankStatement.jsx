@@ -7,16 +7,19 @@ import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
 import { fetchAllRows } from '../lib/fetchAllRows'
 import { getStatsWindowStart } from '../lib/timeRange'
-import { getReceiptSettings } from '../lib/receiptSettings'
+import { getReceiptSettings, setReceiptSettings } from '../lib/receiptSettings'
 import { parseBankStatementCsv } from '../lib/bankStatementCsv'
+import { parseBankStatementXlsx } from '../lib/bankStatementXlsx'
 import {
   parseBankStatementPdf,
   isBankStatementPdfConfigured,
   currentBankStatementStrategyLabel,
 } from '../lib/bank-statement-parsing'
+import { isColumnDetectionAvailable } from '../lib/bankStatementColumns'
 import { detectRecurringClusters, findDuplicateIndexes, findCrossGroupMatches } from '../lib/bankStatementDetection'
 import { classifyTitles, resolveClassifyStrategy } from '../lib/billCategorization'
 import { advanceDate, addRecurringBill } from '../lib/recurringBills'
+import InlineEditable from '../components/InlineEditable'
 
 const FREQUENCY_LABELS = { weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly' }
 
@@ -57,19 +60,43 @@ export default function ImportBankStatement() {
   // import, whether to set up a recurring template) lives in the
   // parallel state below instead, keyed by index.
   const [transactions, setTransactions] = useState([])
-  const [selections, setSelections] = useState([]) // parallel to transactions: { include, categoryId }
+  // Parallel to transactions: { include, categoryId, description }.
+  // `description` is `undefined` until the user actually edits that row —
+  // everywhere it's read, it falls back to the parsed transaction's own
+  // description, so an untouched row costs nothing and isn't treated as
+  // "edited."
+  const [selections, setSelections] = useState([])
   const [duplicateIndexes, setDuplicateIndexes] = useState(new Set())
   const [crossGroupMatches, setCrossGroupMatches] = useState(new Map()) // transaction index -> groupName
   const [recurringClusters, setRecurringClusters] = useState([])
   const [recurringChoices, setRecurringChoices] = useState({}) // clusterKey -> boolean
   const [categorizing, setCategorizing] = useState(null) // { done, total } | null, only while the AI category pass runs
+  const [parseNotices, setParseNotices] = useState([]) // non-fatal notices from parsing itself, e.g. an AI column-detection disagreement
   const [importing, setImporting] = useState(false)
   const [importProgress, setImportProgress] = useState(null)
   const [result, setResult] = useState(null) // { billCount, recurringCount, skippedCount } | null
+  // Unlike the PDF path (needs AI by design) and category suggestions
+  // (already opt-in via whether an AI service is configured at all), the
+  // CSV/Excel column-detection double-check is independently opt-outable
+  // even when a service *is* configured — someone temporarily out of API
+  // quota, or who'd rather not send transaction data to that provider for
+  // this specific check, can turn just this one thing off. See
+  // bankStatementColumns/index.js's isColumnDetectionEnabled(), which this
+  // setting feeds.
+  const [aiColumnCheckEnabled, setAiColumnCheckEnabled] = useState(
+    () => getReceiptSettings().bankStatementAiColumnCheck !== false
+  )
 
   const fileInputRef = useRef(null)
   const classifyStrategy = resolveClassifyStrategy()
   const pdfConfigured = isBankStatementPdfConfigured()
+  const columnCheckAvailable = isColumnDetectionAvailable()
+
+  function toggleAiColumnCheck() {
+    const next = !aiColumnCheckEnabled
+    setReceiptSettings({ bankStatementAiColumnCheck: next })
+    setAiColumnCheckEnabled(next)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -229,11 +256,18 @@ export default function ImportBankStatement() {
 
     setError(null)
     setResult(null)
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
-    const isCsv = file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')
+    setParseNotices([])
+    const lowerName = file.name.toLowerCase()
+    const isPdf = file.type === 'application/pdf' || lowerName.endsWith('.pdf')
+    const isCsv = file.type === 'text/csv' || lowerName.endsWith('.csv')
+    const isXlsx =
+      file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      file.type === 'application/vnd.ms-excel' ||
+      lowerName.endsWith('.xlsx') ||
+      lowerName.endsWith('.xls')
 
-    if (!isPdf && !isCsv) {
-      setError('That file is neither a PDF nor a CSV — export a statement in one of those formats and try again.')
+    if (!isPdf && !isCsv && !isXlsx) {
+      setError('That file is neither a PDF, CSV, nor Excel file — export a statement in one of those formats and try again.')
       return
     }
     if (isPdf && !pdfConfigured) {
@@ -247,11 +281,18 @@ export default function ImportBankStatement() {
 
     try {
       let parsedTransactions
+      let notices = []
       if (isCsv) {
         const text = await file.text()
-        const { transactions: parsed, warnings } = parseBankStatementCsv(text)
+        const { transactions: parsed, warnings } = await parseBankStatementCsv(text)
         if (parsed.length === 0) throw new Error(warnings[0] || 'No transactions found in that file.')
         parsedTransactions = parsed
+        notices = warnings
+      } else if (isXlsx) {
+        const { transactions: parsed, warnings } = await parseBankStatementXlsx(file)
+        if (parsed.length === 0) throw new Error(warnings[0] || 'No transactions found in that file.')
+        parsedTransactions = parsed
+        notices = warnings
       } else {
         const base64 = await fileToBase64(file)
         parsedTransactions = await parseBankStatementPdf(base64)
@@ -287,6 +328,7 @@ export default function ImportBankStatement() {
       const initialSelections = parsedTransactions.map((t, i) => ({
         include: t.direction === 'debit' && !duplicates.has(i) && !crossMatches.has(i),
         categoryId: '',
+        description: undefined,
       }))
 
       setTransactions(parsedTransactions)
@@ -295,6 +337,7 @@ export default function ImportBankStatement() {
       setCrossGroupMatches(crossMatches)
       setRecurringClusters(clusters)
       setRecurringChoices({})
+      setParseNotices(notices)
       setStep('review')
 
       runCategorySuggestions(parsedTransactions)
@@ -310,6 +353,18 @@ export default function ImportBankStatement() {
 
   function setCategoryFor(i, categoryId) {
     setSelections((prev) => prev.map((s, idx) => (idx === i ? { ...s, categoryId } : s)))
+  }
+
+  function setDescriptionFor(i, description) {
+    setSelections((prev) => prev.map((s, idx) => (idx === i ? { ...s, description } : s)))
+  }
+
+  // A bank's own wording ("AMAZON MKTPLACE PMTS*UK 123456") often isn't
+  // what you'd want sitting as a bill title — this is what every place
+  // that turns a transaction into a saved title reads, falling back to
+  // the parsed description untouched when the user hasn't edited it.
+  function descriptionFor(i) {
+    return selections[i]?.description ?? transactions[i]?.description
   }
 
   function toggleRecurringChoice(key) {
@@ -363,8 +418,8 @@ export default function ImportBankStatement() {
 
     try {
       let billCount = 0
-      for (const { tx, sel } of included) {
-        await insertTransactionAsBill(tx, sel.categoryId)
+      for (const { tx, sel, index } of included) {
+        await insertTransactionAsBill({ ...tx, description: descriptionFor(index) }, sel.categoryId)
         billCount++
         setImportProgress({ done: billCount, total: included.length })
       }
@@ -375,13 +430,15 @@ export default function ImportBankStatement() {
         if (!recurringChoices[key]) continue
         const latest = new Date(cluster.latestDate)
         const nextDue = advanceDate(latest, cluster.frequency, latest.getDate())
-        // Whichever category was picked for this cluster's own
-        // transactions, if any — they're all the same normalized
-        // merchant, so the first one's choice stands in for the group.
+        // Whichever category (and edited description) was picked for this
+        // cluster's own transactions, if any — they're all the same
+        // normalized merchant, so the first one's choices stand in for
+        // the group.
         const sampleIndex = cluster.newTransactionIndexes[0]
         const categoryId = sampleIndex != null ? selections[sampleIndex]?.categoryId : null
+        const title = sampleIndex != null ? descriptionFor(sampleIndex) : cluster.description
         await addRecurringBill(supabase, groupId, user.id, {
-          title: cluster.description,
+          title,
           amount: cluster.amount,
           categoryId: categoryId || null,
           paidBy: myParticipantId,
@@ -427,9 +484,10 @@ export default function ImportBankStatement() {
       {step === 'landing' && isPersonal && (
         <>
           <p className="muted">
-            Import transactions from a bank or credit-card statement — a CSV export from your bank if it
-            offers one (no AI involved, most reliable), or a PDF statement read by whichever AI service
-            you've set up in Scan settings.
+            Import transactions from a bank or credit-card statement — a CSV or Excel export from your
+            bank if it offers one (matched against a header row locally, most reliable), or a PDF
+            statement read by whichever AI service you've set up in Scan settings. CSV and Excel exports
+            need a header row with recognizable date/description/amount columns.
           </p>
           <p className="status-error">
             Before uploading a PDF: remove or black out anything sensitive it shows beyond the
@@ -439,15 +497,38 @@ export default function ImportBankStatement() {
           <p className="muted">
             {pdfConfigured
               ? `PDF statements will be read using: ${currentBankStatementStrategyLabel()}.`
-              : 'No AI service configured for PDF statements — set one up in Scan settings, or use a CSV export instead.'}
+              : 'No AI service configured for PDF statements — set one up in Scan settings, or use a CSV or Excel export instead.'}
           </p>
+          {classifyStrategy && (
+            <p className="muted">
+              {classifyStrategy.label} is also set up in Scan settings, so a CSV or Excel import will use
+              it too — suggesting a category for each transaction, and (unless turned off below)
+              double-checking the automatic column match against a few sample rows. Either of those sends
+              transaction descriptions and amounts (not full statement details) to that provider, same as
+              the category suggestions already offered on a PDF import.
+            </p>
+          )}
+          {columnCheckAvailable && (
+            <label className="scan-option">
+              <input type="checkbox" checked={aiColumnCheckEnabled} onChange={toggleAiColumnCheck} />
+              <div>
+                <strong>Double-check CSV/Excel column detection with AI</strong>
+                <p className="muted">
+                  The automatic column match itself needs no AI and always runs regardless — this only
+                  controls the optional second opinion on top of it. Turn it off if you're out of API
+                  quota right now, or would rather this file's data not go to {classifyStrategy.label} at
+                  all — the plain column match alone is often enough for a well-formed export.
+                </p>
+              </div>
+            </label>
+          )}
           <button type="button" className="btn-primary" onClick={() => fileInputRef.current?.click()}>
             Choose a statement file
           </button>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.csv,application/pdf,text/csv"
+            accept=".pdf,.csv,.xlsx,.xls,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             onChange={handleFile}
             style={{ display: 'none' }}
           />
@@ -464,6 +545,11 @@ export default function ImportBankStatement() {
 
       {step === 'review' && !importing && (
         <>
+          {parseNotices.map((notice, i) => (
+            <p key={i} className="status-error">
+              {notice}
+            </p>
+          ))}
           <p>
             <strong>{includedCount}</strong> of <strong>{transactions.length}</strong> transaction
             {transactions.length === 1 ? '' : 's'} will be imported. Untick anything you don't want, tick
@@ -524,7 +610,21 @@ export default function ImportBankStatement() {
                     onChange={() => toggleInclude(i)}
                   />
                   <span className="muted bank-tx-date">{new Date(tx.date).toLocaleDateString()}</span>
-                  <span className="categorize-row-title">{tx.description}</span>
+                  {/* stopPropagation: this label wraps the row's checkbox, and a
+                      nested clickable element (the InlineEditable button) would
+                      otherwise also toggle it via the label's own click
+                      forwarding — tapping the title to edit it shouldn't also
+                      flip the include checkbox. */}
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <InlineEditable
+                      value={descriptionFor(i)}
+                      display={descriptionFor(i)}
+                      onSave={(value) => setDescriptionFor(i, value)}
+                      className="categorize-row-title item-editable"
+                      inputClassName="item-editable-input bank-tx-title-input"
+                      ariaLabel={`Edit description for ${descriptionFor(i)}`}
+                    />
+                  </span>
                   {duplicateIndexes.has(i) && <span className="bank-tx-flag muted">possible duplicate</span>}
                   {crossGroupMatches.has(i) && (
                     <span className="bank-tx-flag muted">already in {crossGroupMatches.get(i)}?</span>

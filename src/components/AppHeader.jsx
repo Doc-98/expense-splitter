@@ -13,7 +13,7 @@ import { groupsListCache } from '../lib/groupsListCache'
 // merge in order on this branch and are already a visible, monotonic counter
 // of what's shipped (cross-referenceable against GitHub directly). No CI
 // wires this automatically, so it's on whoever opens the next PR to bump it.
-const APP_VERSION = 'v1.28'
+const APP_VERSION = 'v1.31'
 
 export default function AppHeader() {
   const { user, displayName } = useAuth()
