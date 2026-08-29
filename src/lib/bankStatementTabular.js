@@ -1,4 +1,10 @@
-import { cellToString, detectColumns, isUsableColumnMapping, buildTransactionsFromColumns } from './bankStatementRows'
+import {
+  cellToString,
+  detectColumns,
+  isUsableColumnMapping,
+  buildTransactionsFromColumns,
+  findHeaderRowIndex,
+} from './bankStatementRows'
 import { detectColumnsWithAI } from './bankStatementColumns'
 
 // How many data rows get shown to the AI double-check — enough for it to
@@ -35,8 +41,17 @@ export async function parseTabularStatement(rows) {
     return { transactions: [], warnings: ['That file looks empty.'] }
   }
 
-  const header = rows[0].map(cellToString)
-  const dataRows = rows.slice(1)
+  // Some exports (Excel ones especially) lead with a block of report
+  // metadata before the actual column-title row — see
+  // findHeaderRowIndex's own comment in bankStatementRows.js. Scanning for
+  // it here, once, up front means both the heuristic below and the AI
+  // double-check get the *real* header and real sample rows, instead of
+  // the AI dutifully double-checking a mapping built from someone's
+  // account summary.
+  const headerIdx = findHeaderRowIndex(rows)
+  const headerRow = headerIdx === -1 ? 0 : headerIdx
+  const header = rows[headerRow].map(cellToString)
+  const dataRows = rows.slice(headerRow + 1)
   const heuristicColumns = detectColumns(header)
   const heuristicUsable = isUsableColumnMapping(heuristicColumns)
 
