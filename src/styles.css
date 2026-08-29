@@ -174,8 +174,27 @@ code {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   height: 100vh;
   color: var(--ink-soft);
+}
+
+/* A small spinning ring for a loading state that has visible text next to
+   it, unlike BootSplash's own full-screen one below — same spin
+   animation, reused rather than duplicated, just smaller and inline.
+   Left spinning through prefers-reduced-motion same as BootSplash's own
+   ring — see the reasoning by that media query below, this one is the
+   same case: the motion here is what tells someone work is still
+   happening, not a decorative flourish. */
+.inline-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: boot-splash-spin 0.8s linear infinite;
 }
 
 /* Visible only to screen readers — same pattern most component libraries
@@ -870,7 +889,14 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    here (unlike the tighter padding/border) — inputs stay at the global
    16px so focusing one doesn't trigger iOS's zoom-on-focus, even though
    that reads a little larger than the display text it replaces. */
-input.item-editable-input {
+/* textarea.item-editable-input alongside it — InlineEditable's
+   `multiline` mode (see ImportBankStatement.jsx's description field)
+   renders a <textarea> instead, which needs the same look but has no
+   competing global reset rule to out-specificity in the first place
+   (styles.css's own input/select reset above doesn't touch textarea) —
+   still written as an element+class selector for consistency with the
+   input rule right next to it. */
+input.item-editable-input, textarea.item-editable-input {
   color: inherit;
   border: 1px solid var(--accent);
   border-radius: 4px;
@@ -1058,28 +1084,81 @@ input.item-editable-input {
 
 /* ImportBankStatement.jsx's review rows — the label wraps the checkbox
    plus everything that identifies the row (date, description, any
-   flags), .member-list-actions on the same row holds the amount and
-   category picker, same split every other .member-list-item review row
-   already uses. */
+   flags); .member-list-actions holds the amount and category picker.
+   Unlike every other .member-list-item (a name/title plus one simple
+   control, comfortably one line even on a narrow phone), a bank-tx row
+   can carry a checkbox, a date, an editable description, AND one or two
+   flag pills all at once — enough that squeezing it onto one line with
+   the amount+select at *any* width tends to crush the description to
+   nothing or force everything to visibly overlap. So .bank-tx-item
+   stacks the two halves instead: the label's own full row width, the
+   amount+select right-aligned on the line below — simpler and more
+   robust than trying to tune a single-line squeeze to survive every
+   combination of a long Italian merchant description and a long
+   duplicate-flag group name. */
+.member-list-item.bank-tx-item { flex-direction: column; align-items: stretch; gap: 6px; }
+.bank-tx-item .member-list-actions { justify-content: flex-end; }
+
 /* flex-direction: row explicit, not left to default — the global `label`
    rule sets column, and being a class selector this wins on display but
-   not automatically on every property it doesn't itself repeat. */
+   not automatically on every property it doesn't itself repeat.
+   flex-wrap: wrap — within the label's own row, a long flag pill (never
+   shrinks, see .bank-tx-flag below) drops to its own line instead of
+   permanently claiming space the description needed just to show a
+   handful of characters. */
 .bank-tx-row {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-sm);
+  row-gap: 2px;
   min-width: 0;
   flex: 1;
   margin-bottom: 0;
 }
 .bank-tx-date { flex-shrink: 0; font-size: 12px; }
+/* The wrapping element InlineEditable's button sits inside (see
+   ImportBankStatement.jsx — it's there so tapping the description to
+   edit it doesn't also toggle the row's own checkbox via the label's
+   click-forwarding). A plain <button> is inline-block by default and
+   won't shrink/wrap to fit on its own, so without this the description
+   would either refuse to wrap (squeezing everything else) or overflow
+   and visually overlap neighboring rows — display:flex plus min-width:0
+   here, and flex plus min-width:0 on the button itself below, is what
+   lets the button's own width actually track its real, shrinkable
+   allotment instead of its full unwrapped content width. */
+.bank-tx-title-wrap { display: flex; min-width: 0; flex: 1; }
+/* Deliberately NOT .categorize-row-title's usual single-line ellipsis —
+   this is the review screen's whole job (confirm every transaction is
+   right before it becomes a bill), so the description needs to be fully
+   readable, not clipped. Wraps across as many lines as it needs instead;
+   most rows (short merchant names) don't even notice, only the
+   occasional long one gets taller. */
+.bank-tx-title-wrap > .categorize-row-title {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  text-align: left;
+}
 /* The bank's own wording for a transaction is rarely what you'd want as a
    saved bill title — editable in place via InlineEditable, same
    dotted-underline .item-editable look ItemRow's fields already use.
-   Wider than .item-name-input (140px): a bank description tends to run
-   longer than an item name. */
-.bank-tx-title-input { width: 200px; max-width: 55vw; }
+   Editing uses a <textarea> (InlineEditable's `multiline`), not a
+   single-line <input> — same reasoning as the read-mode wrap above: a
+   90+ character description needs to stay fully visible and easy to
+   edit, not scrolled sideways inside a narrow box. Wider than
+   .item-name-input (140px) for the same reason. */
+.bank-tx-title-input {
+  display: block;
+  width: 240px;
+  max-width: 70vw;
+  min-height: 5.8em;
+  resize: vertical;
+  line-height: 1.3;
+}
 .bank-tx-flag {
   flex-shrink: 0;
   font-size: 11px;

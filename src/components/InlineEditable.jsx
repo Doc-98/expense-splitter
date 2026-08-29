@@ -26,12 +26,21 @@ import { useEffect, useRef, useState } from 'react'
 // of a plain text box, with `value`/`onSave` working in the input's own
 // "YYYY-MM-DD" format either way; the empty-reverts-always rule above
 // applies to that the same as any other value.
+//
+// `multiline` (default false) swaps the single-line <input> for a
+// <textarea> while editing — for a value that can run long enough to
+// need wrapping to stay fully visible/editable (a bank-import
+// description, say) rather than scrolling sideways inside a small box.
+// Enter still commits rather than inserting a newline (same
+// handleKeyDown either way) — this is for a long *single* value, not
+// actual multi-line text.
 export default function InlineEditable({
   value,
   display,
   onSave,
   inputMode,
   inputType = 'text',
+  multiline = false,
   className,
   inputClassName,
   ariaLabel,
@@ -70,6 +79,19 @@ export default function InlineEditable({
   }
 
   if (editing) {
+    if (multiline) {
+      return (
+        <textarea
+          ref={inputRef}
+          className={inputClassName}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={handleKeyDown}
+          aria-label={ariaLabel}
+        />
+      )
+    }
     return (
       <input
         ref={inputRef}
