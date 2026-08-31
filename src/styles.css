@@ -1167,11 +1167,6 @@ input.item-editable-input, textarea.item-editable-input {
   background: var(--surface-tint);
   white-space: nowrap;
 }
-/* .member-list-actions on a <label> (the recurring-cluster toggle) has
-   the same flex-direction: column to override as .bank-tx-row above —
-   its other, more common usage is on a plain <span>, so the override
-   lives on this modifier rather than on .member-list-actions itself. */
-.bank-tx-recurring-toggle { flex-direction: row; margin-bottom: 0; }
 
 /* Sits inline next to a "Common patterns" row's Apply button — the only
    feedback that a click actually did something, since the effect itself
