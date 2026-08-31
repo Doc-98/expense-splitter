@@ -16,12 +16,9 @@ import {
   currentBankStatementStrategyLabel,
 } from '../lib/bank-statement-parsing'
 import { isColumnDetectionAvailable } from '../lib/bankStatementColumns'
-import { detectRecurringClusters, findDuplicateIndexes, findCrossGroupMatches } from '../lib/bankStatementDetection'
+import { findDuplicateIndexes, findCrossGroupMatches } from '../lib/bankStatementDetection'
 import { classifyTitles, resolveClassifyStrategy } from '../lib/billCategorization'
-import { advanceDate, addRecurringBill } from '../lib/recurringBills'
 import InlineEditable from '../components/InlineEditable'
-
-const FREQUENCY_LABELS = { weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly' }
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -30,10 +27,6 @@ function fileToBase64(file) {
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
-}
-
-function clusterKey(cluster) {
-  return `${cluster.description}|${cluster.amount}`
 }
 
 export default function ImportBankStatement() {
@@ -68,8 +61,6 @@ export default function ImportBankStatement() {
   const [selections, setSelections] = useState([])
   const [duplicateIndexes, setDuplicateIndexes] = useState(new Set())
   const [crossGroupMatches, setCrossGroupMatches] = useState(new Map()) // transaction index -> groupName
-  const [recurringClusters, setRecurringClusters] = useState([])
-  const [recurringChoices, setRecurringChoices] = useState({}) // clusterKey -> boolean
   const [categorizing, setCategorizing] = useState(null) // { done, total } | null, only while the AI category pass runs
   const [parseNotices, setParseNotices] = useState([]) // non-fatal notices from parsing itself, e.g. an AI column-detection disagreement
   const [importing, setImporting] = useState(false)
@@ -314,18 +305,9 @@ export default function ImportBankStatement() {
         existingHistoryPromise,
         loadCrossGroupBills(parsedTransactions.map((t) => t.date)),
       ])
-      const debitTransactions = parsedTransactions.filter((t) => t.direction === 'debit')
 
       const duplicates = findDuplicateIndexes(parsedTransactions, existingHistory)
       const crossMatches = findCrossGroupMatches(parsedTransactions, crossGroupBills)
-      const clusters = detectRecurringClusters(debitTransactions, existingHistory).map((cluster) => ({
-        ...cluster,
-        // detectRecurringClusters indexes into debitTransactions, not the
-        // full parsedTransactions list this page works with everywhere
-        // else — remapped once here so nothing downstream needs to know
-        // that distinction exists.
-        newTransactionIndexes: cluster.newTransactionIndexes.map((i) => parsedTransactions.indexOf(debitTransactions[i])),
-      }))
 
       // Debits import by default (that's what this app tracks); credits —
       // income, refunds, salary — don't, since they're not spending, but
@@ -344,8 +326,6 @@ export default function ImportBankStatement() {
       setSelections(initialSelections)
       setDuplicateIndexes(duplicates)
       setCrossGroupMatches(crossMatches)
-      setRecurringClusters(clusters)
-      setRecurringChoices({})
       setParseNotices(notices)
       setStep('review')
 
@@ -374,10 +354,6 @@ export default function ImportBankStatement() {
   // the parsed description untouched when the user hasn't edited it.
   function descriptionFor(i) {
     return selections[i]?.description ?? transactions[i]?.description
-  }
-
-  function toggleRecurringChoice(key) {
-    setRecurringChoices((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
   async function insertTransactionAsBill(tx, categoryId) {
@@ -433,32 +409,7 @@ export default function ImportBankStatement() {
         setImportProgress({ done: billCount, total: included.length })
       }
 
-      let recurringCount = 0
-      for (const cluster of recurringClusters) {
-        const key = clusterKey(cluster)
-        if (!recurringChoices[key]) continue
-        const latest = new Date(cluster.latestDate)
-        const nextDue = advanceDate(latest, cluster.frequency, latest.getDate())
-        // Whichever category (and edited description) was picked for this
-        // cluster's own transactions, if any — they're all the same
-        // normalized merchant, so the first one's choices stand in for
-        // the group.
-        const sampleIndex = cluster.newTransactionIndexes[0]
-        const categoryId = sampleIndex != null ? selections[sampleIndex]?.categoryId : null
-        const title = sampleIndex != null ? descriptionFor(sampleIndex) : cluster.description
-        await addRecurringBill(supabase, groupId, user.id, {
-          title,
-          amount: cluster.amount,
-          categoryId: categoryId || null,
-          paidBy: myParticipantId,
-          splitMemberIds: [myParticipantId],
-          frequency: cluster.frequency,
-          startDate: nextDue,
-        })
-        recurringCount++
-      }
-
-      setResult({ billCount, recurringCount, skippedCount: transactions.length - included.length })
+      setResult({ billCount, skippedCount: transactions.length - included.length })
       setStep('done')
     } catch (err) {
       setError(err.message)
@@ -576,42 +527,6 @@ export default function ImportBankStatement() {
             </p>
           )}
 
-          {recurringClusters.length > 0 && (
-            <div>
-              <h2 className="settings-section-title">Looks recurring</h2>
-              <p className="muted">
-                These have shown up on a regular schedule — set one up as a Recurring Bill instead of a
-                one-off import, so next time's charge is generated automatically rather than needing
-                another statement import.
-              </p>
-              <ul className="member-list">
-                {recurringClusters.map((cluster) => {
-                  const key = clusterKey(cluster)
-                  return (
-                    <li key={key} className="member-list-item">
-                      <span className="categorize-row-title">
-                        {cluster.description}
-                        <span className="muted">
-                          {' '}
-                          — {format(cluster.amount)}, {FREQUENCY_LABELS[cluster.frequency]} (
-                          {cluster.occurrenceCount}x seen)
-                        </span>
-                      </span>
-                      <label className="member-list-actions bank-tx-recurring-toggle">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(recurringChoices[key])}
-                          onChange={() => toggleRecurringChoice(key)}
-                        />
-                        Set up as recurring
-                      </label>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          )}
-
           <h2 className="settings-section-title">Transactions</h2>
           <ul className="member-list">
             {transactions.map((tx, i) => (
@@ -676,11 +591,8 @@ export default function ImportBankStatement() {
       {step === 'done' && result && (
         <>
           <p className="status-success">
-            Imported {result.billCount} bill{result.billCount === 1 ? '' : 's'}
-            {result.recurringCount > 0
-              ? `, and set up ${result.recurringCount} recurring bill${result.recurringCount === 1 ? '' : 's'}`
-              : ''}
-            .{result.skippedCount > 0 ? ` ${result.skippedCount} transaction${result.skippedCount === 1 ? ' was' : 's were'} left out.` : ''}
+            Imported {result.billCount} bill{result.billCount === 1 ? '' : 's'}.
+            {result.skippedCount > 0 ? ` ${result.skippedCount} transaction${result.skippedCount === 1 ? ' was' : 's were'} left out.` : ''}
           </p>
           <Link to={`/groups/${groupId}`} className="btn-primary confirm-btn">
             Done

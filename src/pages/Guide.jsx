@@ -69,12 +69,13 @@ const GROUPS = [
               use it (out of API quota, or just doesn't want this file's data going to that
               provider) without losing CSV/Excel import altogether. Every transaction also gets an editable
               description (tap it to fix up the bank's own wording before it becomes a bill title)
-              and a review checkbox before anything is saved; a charge that repeats on a regular
-              schedule can be set up as a Recurring Bill in one click instead of importing it
-              fresh each time, and a transaction that looks like it's already been imported (an
-              overlapping statement period) or already recorded as a bill in one of your other
-              groups (a shared expense showing up on your own statement too) defaults to unchecked
-              either way — still reviewable, in case either flag is a false positive.
+              and a review checkbox before anything is saved; a transaction that looks like it's
+              already been imported (an overlapping statement period) or already recorded as a
+              bill in one of your other groups (a shared expense showing up on your own statement
+              too) defaults to unchecked either way — still reviewable, in case either flag is a
+              false positive. A charge that repeats on a regular schedule isn't detected
+              automatically here — set it up as a Recurring Bill by hand from Group Settings if
+              you'd like it generated automatically going forward.
             </p>
           </>
         ),

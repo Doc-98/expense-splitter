@@ -467,34 +467,20 @@ create policy "members can manage recurring bills" on recurring_bills
 -- bills / items / item_shares: gated on *active* group membership, walking
 -- the chain down. Untouched by guests existing — these checks are about
 -- who's asking (always a real account), never about who a row is *about*.
+-- All four bills policies route through is_group_member() (a STABLE
+-- function — see below) rather than an inline exists(), same reasoning as
+-- items/item_shares/bill_payers just below: bills is the table every one
+-- of those three ultimately walks back to, and the single most
+-- row-heavy, most-queried table in the app, so a query returning many
+-- bills for one group benefits from this the most, not least.
 create policy "members can view bills" on bills
-  for select using (
-    exists (
-      select 1 from group_members gm
-      where gm.group_id = bills.group_id and gm.user_id = auth.uid() and gm.active = true
-    )
-  );
+  for select using (public.is_group_member(bills.group_id));
 create policy "members can create bills" on bills
-  for insert with check (
-    exists (
-      select 1 from group_members gm
-      where gm.group_id = bills.group_id and gm.user_id = auth.uid() and gm.active = true
-    )
-  );
+  for insert with check (public.is_group_member(bills.group_id));
 create policy "members can update bills" on bills
-  for update using (
-    exists (
-      select 1 from group_members gm
-      where gm.group_id = bills.group_id and gm.user_id = auth.uid() and gm.active = true
-    )
-  );
+  for update using (public.is_group_member(bills.group_id));
 create policy "members can delete bills" on bills
-  for delete using (
-    exists (
-      select 1 from group_members gm
-      where gm.group_id = bills.group_id and gm.user_id = auth.uid() and gm.active = true
-    )
-  );
+  for delete using (public.is_group_member(bills.group_id));
 
 -- These three all route through is_group_member() (a STABLE function)
 -- rather than a hand-rolled join, and that's deliberate, not just style:

@@ -482,20 +482,21 @@ refunds, incoming transfers) are shown but never imported by default, since
 they're not spending.
 
 <details>
-<summary>Recurring and duplicate detection</summary>
+<summary>Duplicate detection</summary>
 
-Both run automatically, client-side, no AI needed — see
+Runs automatically, client-side, no AI needed — see
 `src/lib/bankStatementDetection.js`.
 
-- **Recurring**: transactions are clustered by merchant name and *exact*
-  amount (favors precision — missing a utility bill that genuinely varies
-  month to month — over guessing a pattern that isn't really there), looking
-  at both this batch and the Personal space's own recent bill history so a
-  subscription is recognized even on its first appearance in a given
-  statement. A cluster with a clean weekly/monthly/yearly gap between
-  occurrences is offered as a one-click Recurring Bill template, so the next
-  month's charge is generated automatically instead of needing another
-  import.
+(This used to also detect likely-recurring charges and offer a one-click
+Recurring Bill template, clustering transactions by merchant name and exact
+amount. Removed — in practice it clustered unrelated purchases that shared
+a payment processor's own generic descriptor rather than the actual
+merchant, e.g. every PayPal-routed direct debit reading as "PayPal Europe
+S.a.r.l. et Cie S.C.A" regardless of what was bought. That's not a
+tunable false-positive rate — the statement's own description field
+genuinely doesn't carry the distinguishing information in that case.
+Setting up a Recurring Bill by hand, from Group Settings, is unaffected.)
+
 - **Duplicates**: a transaction matching an existing bill's merchant and
   amount within a few days defaults its checkbox off, flagged "possible
   duplicate" — for re-importing an overlapping statement period. Still

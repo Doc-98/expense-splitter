@@ -1,12 +1,23 @@
-// Pure, no AI needed — recognizes two different kinds of pattern in a bank
-// statement import: money that's probably the same recurring charge you've
-// paid before (a candidate for a Recurring Bill template, not just a
-// one-off import), and money you've probably already imported once already
-// (this statement's period overlapping one you imported last time). Both
-// are offered as suggestions in ImportBankStatement.jsx's review step,
-// never applied silently — a false positive here just costs one extra
-// click to override, which is a far smaller problem than a false negative
-// silently duplicating a bill or missing an obvious subscription.
+// Pure, no AI needed — recognizes money you've probably already imported
+// once already (this statement's period overlapping one you imported last
+// time, in this group or another). Offered as a suggestion in
+// ImportBankStatement.jsx's review step, never applied silently — a false
+// positive here just costs one extra click to override, which is a far
+// smaller problem than a false negative silently duplicating a bill.
+//
+// This used to also detect likely-recurring charges (a candidate for a
+// Recurring Bill template) by clustering same-description-and-amount
+// transactions on a regular cadence. Removed — in practice it clustered
+// unrelated purchases that happened to share a payment processor's own
+// generic descriptor (every PayPal-routed direct debit reads as "PayPal
+// Europe S.a.r.l. et Cie S.C.A" regardless of what was actually bought, so
+// two coincidentally same-amount purchases through PayPal looked
+// "recurring" with nothing recurring about them). That's not a tunable
+// false-positive rate to fix — the bank statement's own description field
+// genuinely doesn't carry the distinguishing information in that case, so
+// no amount of smarter matching here could have told them apart. Setting
+// up a real Recurring Bill by hand (Group Settings → Recurring Bills)
+// isn't affected by any of this.
 
 // Strips reference numbers, card-terminal codes, and punctuation down to
 // the words a merchant name is actually made of, then keeps only the
@@ -27,93 +38,6 @@ function normalizeDescription(description) {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
-
-// Median gap between consecutive dates, in days — the median rather than
-// the mean so one unusually early or late occurrence (a subscription
-// charged a few days off its usual date one month) doesn't skew the
-// frequency guess.
-function medianGapDays(sortedDates) {
-  if (sortedDates.length < 2) return null
-  const gaps = []
-  for (let i = 1; i < sortedDates.length; i++) {
-    gaps.push((sortedDates[i] - sortedDates[i - 1]) / DAY_MS)
-  }
-  gaps.sort((a, b) => a - b)
-  const mid = Math.floor(gaps.length / 2)
-  return gaps.length % 2 === 0 ? (gaps[mid - 1] + gaps[mid]) / 2 : gaps[mid]
-}
-
-// Classifies a median gap into one of this app's own recurring-bill
-// frequencies (see the `frequency` check constraint on recurring_bills in
-// schema.sql) — generous tolerances since a "monthly" charge can land
-// anywhere from the 28th to the 31st depending on the month, and a
-// "weekly" one can slip a day or two around a weekend. Anything that
-// doesn't land cleanly in one of these bands isn't guessed at.
-function frequencyForGap(days) {
-  if (days >= 5 && days <= 9) return 'weekly'
-  if (days >= 25 && days <= 35) return 'monthly'
-  if (days >= 350 && days <= 380) return 'yearly'
-  return null
-}
-
-// `newTransactions` — this import's own debits, { date, description,
-// amount }. `existingDebits` — the personal group's own past bills,
-// already normalized to that same shape (see ImportBankStatement.jsx's
-// history load) — lets a pattern that spans further back than just this
-// one statement still be recognized, without ever touching or
-// re-suggesting anything for those old bills themselves. Clustered by
-// normalized description *and* exact amount — subscriptions, rent, and
-// memberships are almost always billed for the identical amount every
-// time, so this favors precision (missing a utility bill that genuinely
-// varies month to month) over recall (guessing a pattern that isn't
-// really there).
-//
-// Returns one entry per merchant+amount combination that looks recurring,
-// with which of *this batch's* transactions belong to it (by index) and a
-// suggested frequency — never the existing bills themselves, which are
-// only here to inform the detection, not to be re-offered.
-export function detectRecurringClusters(newTransactions, existingDebits = []) {
-  const byKey = new Map()
-
-  function addOccurrence(description, amount, date, isNew, txIndex) {
-    const normalized = normalizeDescription(description)
-    if (!normalized) return
-    const key = `${normalized}|${amount.toFixed(2)}`
-    if (!byKey.has(key)) byKey.set(key, { description, amount, occurrences: [] })
-    byKey.get(key).occurrences.push({ date: new Date(date), isNew, txIndex })
-  }
-
-  existingDebits.forEach((b) => addOccurrence(b.description, b.amount, b.date, false))
-  newTransactions.forEach((t, i) => addOccurrence(t.description, t.amount, t.date, true, i))
-
-  const clusters = []
-  for (const { description, amount, occurrences } of byKey.values()) {
-    if (occurrences.length < 2) continue
-    const newIndexes = occurrences.filter((o) => o.isNew).map((o) => o.txIndex)
-    if (newIndexes.length === 0) continue // nothing in *this* batch to actually offer
-
-    const sortedDates = occurrences.map((o) => o.date).sort((a, b) => a - b)
-    const gap = medianGapDays(sortedDates)
-    const frequency = gap === null ? null : frequencyForGap(gap)
-    if (!frequency) continue // no clean, regular cadence — don't guess
-
-    clusters.push({
-      description,
-      amount,
-      occurrenceCount: occurrences.length,
-      frequency,
-      newTransactionIndexes: newIndexes,
-      // The most recent occurrence across *all* of them (old bills
-      // included) — what a caller offering "set this up as a Recurring
-      // Bill" needs to compute the template's first still-in-the-future
-      // due date from (via advanceDate() in recurringBills.js), not just
-      // the latest one in this batch.
-      latestDate: sortedDates[sortedDates.length - 1],
-    })
-  }
-
-  return clusters
-}
 
 // A transaction counts as a likely duplicate when its normalized
 // description and amount match an existing bill within a few days — not
