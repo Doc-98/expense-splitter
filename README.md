@@ -472,14 +472,36 @@ credit-card statement into bills. Three ways in:
   number, name, address — before uploading**, since the file is sent to
   that provider to be read.
 
-Every path lands on the same review screen: every transaction (its
-description editable in place, for when the bank's own wording isn't what
-you'd want as a bill title), a category suggestion per row (reusing the
-exact same AI pass `/categorize` uses — CSV and Excel get this too,
-whenever an AI service is configured, not just PDF), and a checkbox to
-include or skip it — nothing is saved until you confirm. Credits (salary,
-refunds, incoming transfers) are shown but never imported by default, since
-they're not spending.
+Every path lands on the same review flow: one transaction at a time, not a
+single long list of everything at once — a 200-row statement felt
+overwhelming as a flat list, and a one-at-a-time card is also what makes
+the rest of this section possible (see below). Each card shows the date,
+amount, an editable description (for when the bank's own wording isn't
+what you'd want as a bill title), a category suggestion (reusing the exact
+same AI pass `/categorize` uses — CSV and Excel get this too, whenever an
+AI service is configured, not just PDF), and a checkbox to include or skip
+it. Credits (salary, refunds, incoming transfers) never get a card at all
+— they can't be imported either way, so there's nothing to review about
+one. A progress line ("47 of 180, 46 reviewed") and a **← Back** button sit
+alongside Next/Finish — human error is expected on a long statement, so
+going back to fix an earlier card is a first-class action, not an
+afterthought.
+
+Each transaction becomes a real bill the moment you move past its card
+(Next or Back both confirm the current one first) — not all at once at the
+very end. That's what makes **pausing genuinely safe**: closing the tab
+mid-statement doesn't lose anything already confirmed, and Group
+Settings' "Import a bank statement" link turns into "Resume bank statement
+import — N of M remaining" whenever an unfinished one exists
+(`bank_import_drafts` in schema.sql holds the still-unreviewed
+transactions and each one's review state; reviewed transactions aren't
+kept there twice, since they're already real bills by that point). Only
+one import can be in progress per group at a time — starting a new one
+while another's unfinished means resuming or discarding it first, from the
+wizard's own landing screen. Going back and changing an already-committed
+transaction updates that same bill rather than creating a second one
+alongside it — see `src/lib/bankImportDrafts.js` and
+`src/pages/ImportBankStatement.jsx`'s own `confirmCurrentCard`.
 
 <details>
 <summary>Duplicate detection</summary>
@@ -627,6 +649,7 @@ future run rather than retyped per group.
 | `recurring_bills` | A repeating-bill template; each occurrence is a normal `bills` row, linked via `recurring_bill_id` |
 | `departure_snapshots` | A frozen personal record (day-by-day, with a category breakdown) for someone who left a group |
 | `spending_thresholds` | A profile-level monthly budget per category *name* |
+| `bank_import_drafts` | An in-progress bank-statement import's still-unreviewed transactions, one row per group, so it survives a closed tab (see "Importing a bank statement" above) |
 
 The bill list groups under month/day date dividers, styled after Splitwise's
 own activity feed (`groupItemsByDate()` in `src/lib/dateGroups.js`).

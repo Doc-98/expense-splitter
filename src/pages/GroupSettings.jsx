@@ -20,6 +20,7 @@ import {
 } from '../lib/categories'
 import { shareOrCopyText } from '../lib/shareText'
 import { computeBalances, computeDailyTotalsForUser } from '../lib/settlement'
+import { fetchDraft } from '../lib/bankImportDrafts'
 import TypedConfirmModal from '../components/TypedConfirmModal'
 import ColorSwatchPicker from '../components/ColorSwatchPicker'
 import CategoryColorButton from '../components/CategoryColorButton'
@@ -71,11 +72,32 @@ export default function GroupSettings() {
     setCategories(await fetchCategories(groupId))
   }, [groupId])
 
+  // { reviewedCount, totalReviewable } for an unfinished bank statement
+  // import, or null — see bank_import_drafts in schema.sql. Only fetched
+  // once we know this is the personal space (the only place the feature's
+  // offered), not on every group's settings page.
+  const [bankImportDraft, setBankImportDraft] = useState(null)
+
+  const loadBankImportDraft = useCallback(async () => {
+    const draft = await fetchDraft(groupId)
+    if (!draft) {
+      setBankImportDraft(null)
+      return
+    }
+    const totalReviewable = draft.transactions.filter((t) => t.direction === 'debit').length
+    const reviewedCount = draft.review.filter((r, i) => draft.transactions[i].direction === 'debit' && r.reviewed).length
+    setBankImportDraft({ reviewedCount, totalReviewable })
+  }, [groupId])
+
   useEffect(() => {
     loadGroup()
     loadMembers()
     loadCategories()
   }, [loadGroup, loadMembers, loadCategories])
+
+  useEffect(() => {
+    if (isPersonal) loadBankImportDraft()
+  }, [isPersonal, loadBankImportDraft])
 
   async function saveName(e) {
     e.preventDefault()
@@ -599,7 +621,13 @@ export default function GroupSettings() {
           import (whose account, who's the payer, splitting a shared bill
           apart from the raw transaction list) is a different, bigger
           feature than this one, not yet built. */}
-      {isPersonal && (
+      {isPersonal && bankImportDraft && (
+        <Link to={`/groups/${groupId}/import-bank-statement`} className="btn-link import-link">
+          Resume bank statement import — {bankImportDraft.totalReviewable - bankImportDraft.reviewedCount} of{' '}
+          {bankImportDraft.totalReviewable} remaining
+        </Link>
+      )}
+      {isPersonal && !bankImportDraft && (
         <Link to={`/groups/${groupId}/import-bank-statement`} className="btn-link import-link">
           Import a bank statement
         </Link>

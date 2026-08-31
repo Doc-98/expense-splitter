@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
@@ -18,6 +18,7 @@ import {
 import { isColumnDetectionAvailable } from '../lib/bankStatementColumns'
 import { findDuplicateIndexes, findCrossGroupMatches } from '../lib/bankStatementDetection'
 import { classifyTitles, resolveClassifyStrategy } from '../lib/billCategorization'
+import { fetchDraft, createDraft, updateDraftReview, deleteDraft } from '../lib/bankImportDrafts'
 import InlineEditable from '../components/InlineEditable'
 
 function fileToBase64(file) {
@@ -29,43 +30,64 @@ function fileToBase64(file) {
   })
 }
 
+// Starting point for a freshly-parsed transaction — `reviewed` is what
+// separates "you've actually looked at and confirmed this one" from a
+// still-default value, both on a first pass and on resuming a draft.
+// billId/itemId stay null until the first time this entry is confirmed
+// with include: true — after that, confirming it again (via Back, editing
+// something, then Next again) updates those same rows instead of
+// inserting a duplicate. See bank_import_drafts in schema.sql.
+function initialReviewEntry(tx, duplicates, crossMatches, index) {
+  return {
+    include: tx.direction === 'debit' && !duplicates.has(index) && !crossMatches.has(index),
+    categoryId: '',
+    description: undefined,
+    reviewed: false,
+    billId: null,
+    itemId: null,
+  }
+}
+
 export default function ImportBankStatement() {
   const { groupId } = useParams()
   const { user } = useAuth()
   const { format } = useCurrency()
 
-  // 'loading' -> 'landing' -> 'parsing' -> 'review' -> 'done'. No separate
-  // 'importing' step — committing is something that happens *from*
-  // 'review' (the `importing` boolean below just swaps that step's own
-  // editable list for a progress line), not a whole screen of its own.
-  // 'landing' also covers the "not available for this group" case (see
-  // isPersonal below) — simplest place for it, since it's really just a
-  // different landing state, not a whole extra step.
+  // 'loading' -> 'landing' -> 'parsing' -> 'review' -> 'done', with
+  // 'draft-found' inserted between 'loading' and 'landing' whenever a
+  // previous import was left unfinished (see bank_import_drafts) — the
+  // one-at-a-time review step this page builds up to means an unfinished
+  // import is the normal, expected case for anyone who didn't get through
+  // a long statement in one sitting, not an edge case to just paper over.
   const [step, setStep] = useState('loading')
   const [error, setError] = useState(null)
   const [isPersonal, setIsPersonal] = useState(null)
   const [myParticipantId, setMyParticipantId] = useState(null)
   const [categories, setCategories] = useState([])
 
-  // Every extracted transaction, CSV or PDF alike, normalized to
-  // { date, description, amount, direction }. Never mutated after
-  // parsing — everything the review step changes (category, whether to
-  // import, whether to set up a recurring template) lives in the
-  // parallel state below instead, keyed by index.
+  const [draftId, setDraftId] = useState(null)
+  // Every extracted transaction, CSV/Excel/PDF alike, normalized to
+  // { date, description, amount, direction }. Immutable for the life of a
+  // draft/review pass — everything the review step changes lives in
+  // `review` below instead, keyed by the same index.
   const [transactions, setTransactions] = useState([])
-  // Parallel to transactions: { include, categoryId, description }.
-  // `description` is `undefined` until the user actually edits that row —
-  // everywhere it's read, it falls back to the parsed transaction's own
-  // description, so an untouched row costs nothing and isn't treated as
-  // "edited."
-  const [selections, setSelections] = useState([])
+  // Parallel to transactions — see initialReviewEntry above for the
+  // shape. `description` is `undefined` until the user actually edits
+  // that row — everywhere it's read, it falls back to the parsed
+  // transaction's own description, so an untouched row costs nothing and
+  // isn't treated as "edited."
+  const [review, setReview] = useState([])
   const [duplicateIndexes, setDuplicateIndexes] = useState(new Set())
   const [crossGroupMatches, setCrossGroupMatches] = useState(new Map()) // transaction index -> groupName
+  // Position within the *reviewable* (debit-only) subset — see
+  // reviewableIndexes below. Moves by exactly one per confirmed Back/Next,
+  // never by directly jumping, so it always reflects "how far into this
+  // pass you actually are," resumable exactly where you left off.
+  const [currentPosition, setCurrentPosition] = useState(0)
+  const [committing, setCommitting] = useState(false) // true while a Back/Next's own insert-or-update round trip is in flight
   const [categorizing, setCategorizing] = useState(null) // { done, total } | null, only while the AI category pass runs
   const [parseNotices, setParseNotices] = useState([]) // non-fatal notices from parsing itself, e.g. an AI column-detection disagreement
-  const [importing, setImporting] = useState(false)
-  const [importProgress, setImportProgress] = useState(null)
-  const [result, setResult] = useState(null) // { billCount, recurringCount, skippedCount } | null
+  const [result, setResult] = useState(null) // { billCount, skippedCount } | null
   // Unlike the PDF path (needs AI by design) and category suggestions
   // (already opt-in via whether an AI service is configured at all), the
   // CSV/Excel column-detection double-check is independently opt-outable
@@ -89,6 +111,20 @@ export default function ImportBankStatement() {
     setAiColumnCheckEnabled(next)
   }
 
+  // A credit (salary, a refund) is never importable, so it's never given
+  // its own review card at all — reviewableIndexes is the ordered list of
+  // *raw* transaction indexes that actually go through the one-at-a-time
+  // flow, and currentPosition is a position within this array, not into
+  // transactions directly.
+  const reviewableIndexes = useMemo(
+    () => transactions.map((_, i) => i).filter((i) => transactions[i].direction === 'debit'),
+    [transactions]
+  )
+  const totalReviewable = reviewableIndexes.length
+  const rawIndex = currentPosition < totalReviewable ? reviewableIndexes[currentPosition] : null
+  const currentTx = rawIndex != null ? transactions[rawIndex] : null
+  const currentEntry = rawIndex != null ? review[rawIndex] : null
+
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -106,11 +142,26 @@ export default function ImportBankStatement() {
           return
         }
 
-        const [members, categoriesData] = await Promise.all([fetchAllGroupMembers(groupId), fetchCategories(groupId)])
+        const [members, categoriesData, draft] = await Promise.all([
+          fetchAllGroupMembers(groupId),
+          fetchCategories(groupId),
+          fetchDraft(groupId),
+        ])
         if (cancelled) return
         setCategories(categoriesData)
         setMyParticipantId(members.find((m) => m.userId === user.id)?.id || null)
-        setStep('landing')
+
+        if (draft) {
+          setDraftId(draft.id)
+          setTransactions(draft.transactions)
+          setReview(draft.review)
+          setDuplicateIndexes(draft.duplicateIndexes)
+          setCrossGroupMatches(draft.crossGroupMatches)
+          setCurrentPosition(draft.currentPosition)
+          setStep('draft-found')
+        } else {
+          setStep('landing')
+        }
       } catch (err) {
         if (cancelled) return
         setError(err.message)
@@ -125,12 +176,11 @@ export default function ImportBankStatement() {
 
   // The personal group's own recent bills, in the same
   // { description, amount, date } shape bankStatementDetection.js expects
-  // — used to recognize a duplicate or a recurring pattern that spans
-  // further back than just this one statement. Windowed the same way
-  // GroupView/GroupStats already are (recent history, not the full
-  // account lifetime) — plenty for what either check needs, and keeps
-  // this from being a second unbounded fetch on an account with years of
-  // history.
+  // — used to recognize a duplicate that spans further back than just
+  // this one statement. Windowed the same way GroupView/GroupStats
+  // already are (recent history, not the full account lifetime) — plenty
+  // for what the check needs, and keeps this from being a second
+  // unbounded fetch on an account with years of history.
   async function loadExistingHistory() {
     const windowStart = getStatsWindowStart()
     const bills = await fetchAllRows(() =>
@@ -153,9 +203,9 @@ export default function ImportBankStatement() {
   // loadExistingHistory above (a broad recent window, since it's only one
   // group), this is scoped tightly to the statement's own date range,
   // padded by the same wiggle room findCrossGroupMatches itself checks —
-  // "trust the date match," per the reasoning that motivated this at all:
-  // no reason to search further than that wiggle room could ever match
-  // anyway, across however many other groups the account belongs to.
+  // "trust the date match" — no reason to search further than that wiggle
+  // room could ever match anyway, across however many other groups the
+  // account belongs to.
   const CROSS_GROUP_WINDOW_DAYS = 3
 
   async function loadCrossGroupBills(transactionDates) {
@@ -204,10 +254,24 @@ export default function ImportBankStatement() {
   // own review step on the AI pass: someone with no AI configured (or a
   // slow one) still gets a fully usable review immediately, with
   // categories arriving a moment later instead of gating the whole step
-  // on them.
-  async function runCategorySuggestions(parsedTransactions) {
+  // on them. Suggestions are persisted to the draft as they arrive (not
+  // just kept in local state) so closing the tab right after uploading —
+  // before reviewing even the first card — doesn't throw away AI work
+  // already done and cost it again on resume.
+  //
+  // Also called again on resumeDraft() below, in case a pause landed
+  // mid-pass — skips any transaction that already has a category *or* is
+  // already reviewed, so this is always a no-op once a first pass
+  // actually finished, and — critically — never overwrites an
+  // already-committed bill's category with a late suggestion arriving
+  // after the fact; a reviewed entry's category is done changing outside
+  // of Back explicitly revisiting it.
+  async function runCategorySuggestions(parsedTransactions, currentReview, currentDraftId) {
     if (!classifyStrategy) return
-    const debitDescriptions = [...new Set(parsedTransactions.filter((t) => t.direction === 'debit').map((t) => t.description))]
+    const pendingIndexes = parsedTransactions
+      .map((t, i) => i)
+      .filter((i) => parsedTransactions[i].direction === 'debit' && !currentReview[i]?.reviewed && !currentReview[i]?.categoryId)
+    const debitDescriptions = [...new Set(pendingIndexes.map((i) => parsedTransactions[i].description))]
     if (debitDescriptions.length === 0) return
 
     try {
@@ -221,15 +285,21 @@ export default function ImportBankStatement() {
         hint
       )
       const nameToId = new Map(categories.map((c) => [c.name, c.id]))
-      setSelections((prev) =>
-        prev.map((sel, i) => {
+      setReview((prev) => {
+        const next = prev.map((entry, i) => {
           const tx = parsedTransactions[i]
-          if (tx.direction !== 'debit' || sel.categoryId) return sel
+          if (tx.direction !== 'debit' || entry.reviewed || entry.categoryId) return entry
           const suggested = results.get(tx.description)
           const categoryId = suggested ? nameToId.get(suggested) : null
-          return categoryId ? { ...sel, categoryId } : sel
+          return categoryId ? { ...entry, categoryId } : entry
         })
-      )
+        updateDraftReview(currentDraftId, { review: next }).catch(() => {
+          // Suggestions still show for the rest of this session even if
+          // the draft write failed — a resume just wouldn't have them
+          // pre-filled, same as if no AI were configured at all.
+        })
+        return next
+      })
     } catch {
       // A failed AI pass just leaves every row's category exactly where
       // it started — "Uncategorized," pickable by hand — same as having
@@ -309,62 +379,95 @@ export default function ImportBankStatement() {
       const duplicates = findDuplicateIndexes(parsedTransactions, existingHistory)
       const crossMatches = findCrossGroupMatches(parsedTransactions, crossGroupBills)
 
-      // Debits import by default (that's what this app tracks); credits —
-      // income, refunds, salary — don't, since they're not spending, but
-      // they still show up in the review list rather than vanishing
-      // silently. A likely duplicate — this same statement re-imported, or
-      // this same expense already recorded in another group — defaults
-      // off regardless of direction, so nobody accidentally double-counts
-      // just because they didn't notice the flag.
-      const initialSelections = parsedTransactions.map((t, i) => ({
-        include: t.direction === 'debit' && !duplicates.has(i) && !crossMatches.has(i),
-        categoryId: '',
-        description: undefined,
-      }))
+      // A file that's entirely credits (a pure income/refund statement,
+      // say) has nothing reviewable at all — no draft worth creating for
+      // zero cards, straight to a "done" screen reporting everything as
+      // left out.
+      if (!parsedTransactions.some((t) => t.direction === 'debit')) {
+        setParseNotices(notices)
+        setResult({ billCount: 0, skippedCount: parsedTransactions.length })
+        setStep('done')
+        return
+      }
 
+      // Debits are reviewed (that's what this app tracks); credits —
+      // income, refunds, salary — never get a card at all, since they can
+      // never be imported either way (see reviewableIndexes). A likely
+      // duplicate — this same statement re-imported, or this same expense
+      // already recorded in another group — defaults off, so nobody
+      // accidentally double-counts just because they didn't notice the
+      // flag; still fully reviewable, in case it's a false positive.
+      const initialReview = parsedTransactions.map((t, i) => initialReviewEntry(t, duplicates, crossMatches, i))
+
+      const newDraftId = await createDraft(groupId, user.id, {
+        transactions: parsedTransactions,
+        review: initialReview,
+        duplicateIndexes: duplicates,
+        crossGroupMatches: crossMatches,
+      })
+
+      setDraftId(newDraftId)
       setTransactions(parsedTransactions)
-      setSelections(initialSelections)
+      setReview(initialReview)
       setDuplicateIndexes(duplicates)
       setCrossGroupMatches(crossMatches)
+      setCurrentPosition(0)
       setParseNotices(notices)
       setStep('review')
 
-      runCategorySuggestions(parsedTransactions)
+      runCategorySuggestions(parsedTransactions, initialReview, newDraftId)
     } catch (err) {
       setError(err.message)
       setStep('landing')
     }
   }
 
-  function toggleInclude(i) {
-    setSelections((prev) => prev.map((s, idx) => (idx === i ? { ...s, include: !s.include } : s)))
-  }
-
-  function setCategoryFor(i, categoryId) {
-    setSelections((prev) => prev.map((s, idx) => (idx === i ? { ...s, categoryId } : s)))
-  }
-
-  function setDescriptionFor(i, description) {
-    setSelections((prev) => prev.map((s, idx) => (idx === i ? { ...s, description } : s)))
+  function updateCurrentEntry(patch) {
+    if (rawIndex == null) return
+    setReview((prev) => prev.map((entry, idx) => (idx === rawIndex ? { ...entry, ...patch } : entry)))
   }
 
   // A bank's own wording ("AMAZON MKTPLACE PMTS*UK 123456") often isn't
-  // what you'd want sitting as a bill title — this is what every place
-  // that turns a transaction into a saved title reads, falling back to
-  // the parsed description untouched when the user hasn't edited it.
-  function descriptionFor(i) {
-    return selections[i]?.description ?? transactions[i]?.description
+  // what you'd want sitting as a bill title — falls back to the parsed
+  // description untouched when the user hasn't edited it.
+  function descriptionForEntry(tx, entry) {
+    return entry?.description ?? tx?.description
   }
 
-  async function insertTransactionAsBill(tx, categoryId) {
+  // Inserts a bill/item/item_share the first time a transaction is
+  // confirmed with include: true; updates those same rows on every
+  // subsequent confirm instead (Back, edit something, Next again) — see
+  // bank_import_drafts' own comment in schema.sql for why this matters:
+  // an already-committed transaction is a real bill the moment you move
+  // past it, and going back to fix a mistake should fix that bill, not
+  // create a second one alongside it.
+  async function upsertBillForEntry(tx, entry) {
+    const description = descriptionForEntry(tx, entry)
+
+    if (entry.billId) {
+      const { error: billError } = await supabase
+        .from('bills')
+        .update({ title: description, category_id: entry.categoryId || null, created_at: tx.date })
+        .eq('id', entry.billId)
+      if (billError) throw billError
+
+      const { error: itemError } = await supabase
+        .from('items')
+        .update({ name: description, unit_price: tx.amount, total_price: tx.amount, category_id: entry.categoryId || null })
+        .eq('id', entry.itemId)
+      if (itemError) throw itemError
+
+      return { billId: entry.billId, itemId: entry.itemId }
+    }
+
     const { data: bill, error: billError } = await supabase
       .from('bills')
       .insert({
         group_id: groupId,
-        title: tx.description,
+        title: description,
         note: 'Imported from bank statement',
         paid_by: myParticipantId,
-        category_id: categoryId || null,
+        category_id: entry.categoryId || null,
         created_by: user.id,
         created_at: tx.date,
       })
@@ -376,11 +479,11 @@ export default function ImportBankStatement() {
       .from('items')
       .insert({
         bill_id: bill.id,
-        name: tx.description,
+        name: description,
         unit_price: tx.amount,
         quantity: 1,
         total_price: tx.amount,
-        category_id: categoryId || null,
+        category_id: entry.categoryId || null,
       })
       .select()
       .single()
@@ -390,36 +493,105 @@ export default function ImportBankStatement() {
       .from('item_shares')
       .insert({ item_id: item.id, member_id: myParticipantId, shares: 1 })
     if (shareError) throw shareError
+
+    return { billId: bill.id, itemId: item.id }
   }
 
-  async function commitImport() {
-    setImporting(true)
+  // The bill created for an entry that was included, then un-included
+  // after going Back — deleting the bill cascades to its item and
+  // item_share (schema.sql), so this is the one call needed to fully
+  // retract it.
+  async function deleteBillForEntry(billId) {
+    const { error } = await supabase.from('bills').delete().eq('id', billId)
+    if (error) throw error
+  }
+
+  // Confirms whatever the current card's state is (insert, update, or
+  // retract its bill, matching include/billId) and persists both the
+  // updated review array and the new position to the draft — called by
+  // both Back and Next, since either one can be leaving behind an edit
+  // that hasn't been saved yet. Returns the updated review array so the
+  // caller can compute a final tally once the pass is actually done.
+  async function confirmCurrentCard(nextPosition) {
+    if (rawIndex == null) return review
+    const entry = review[rawIndex]
+    const tx = transactions[rawIndex]
+
+    let updatedEntry
+    if (entry.include) {
+      const { billId, itemId } = await upsertBillForEntry(tx, entry)
+      updatedEntry = { ...entry, billId, itemId, reviewed: true }
+    } else if (entry.billId) {
+      await deleteBillForEntry(entry.billId)
+      updatedEntry = { ...entry, billId: null, itemId: null, reviewed: true }
+    } else {
+      updatedEntry = { ...entry, reviewed: true }
+    }
+
+    const nextReview = review.map((e, idx) => (idx === rawIndex ? updatedEntry : e))
+    setReview(nextReview)
+    await updateDraftReview(draftId, { review: nextReview, currentPosition: nextPosition })
+    return nextReview
+  }
+
+  async function goNext() {
+    setCommitting(true)
     setError(null)
-
-    const included = transactions
-      .map((tx, i) => ({ tx, sel: selections[i], index: i }))
-      .filter((x) => x.sel.include)
-    setImportProgress({ done: 0, total: included.length })
-
     try {
-      let billCount = 0
-      for (const { tx, sel, index } of included) {
-        await insertTransactionAsBill({ ...tx, description: descriptionFor(index) }, sel.categoryId)
-        billCount++
-        setImportProgress({ done: billCount, total: included.length })
+      const finished = currentPosition + 1 >= totalReviewable
+      const nextReview = await confirmCurrentCard(finished ? currentPosition : currentPosition + 1)
+      if (finished) {
+        await deleteDraft(draftId)
+        const billCount = reviewableIndexes.filter((i) => nextReview[i].billId).length
+        setDraftId(null)
+        setResult({ billCount, skippedCount: transactions.length - billCount })
+        setStep('done')
+      } else {
+        setCurrentPosition(currentPosition + 1)
       }
-
-      setResult({ billCount, skippedCount: transactions.length - included.length })
-      setStep('done')
     } catch (err) {
       setError(err.message)
     } finally {
-      setImporting(false)
-      setImportProgress(null)
+      setCommitting(false)
     }
   }
 
-  const includedCount = selections.filter((s) => s.include).length
+  async function goBack() {
+    if (currentPosition === 0) return
+    setCommitting(true)
+    setError(null)
+    try {
+      await confirmCurrentCard(currentPosition - 1)
+      setCurrentPosition(currentPosition - 1)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setCommitting(false)
+    }
+  }
+
+  async function discardDraft() {
+    setError(null)
+    try {
+      await deleteDraft(draftId)
+      setDraftId(null)
+      setTransactions([])
+      setReview([])
+      setDuplicateIndexes(new Set())
+      setCrossGroupMatches(new Map())
+      setCurrentPosition(0)
+      setStep('landing')
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  function resumeDraft() {
+    setStep('review')
+    runCategorySuggestions(transactions, review, draftId)
+  }
+
+  const reviewedCount = reviewableIndexes.filter((i) => review[i]?.reviewed).length
 
   return (
     <div className="page">
@@ -439,6 +611,22 @@ export default function ImportBankStatement() {
           Bank statement import is only available for your Personal space right now.{' '}
           <Link to={`/groups/${groupId}`}>Back to this group</Link>
         </p>
+      )}
+
+      {step === 'draft-found' && (
+        <>
+          <p className="muted">
+            You have an unfinished bank statement import — {reviewedCount} of {totalReviewable} transaction
+            {totalReviewable === 1 ? '' : 's'} reviewed. Resume where you left off, or discard it to start a
+            new import instead.
+          </p>
+          <button type="button" className="btn-primary confirm-btn" onClick={resumeDraft}>
+            Resume ({totalReviewable - reviewedCount} left)
+          </button>
+          <button type="button" className="btn-link" onClick={discardDraft}>
+            Discard this import and start over
+          </button>
+        </>
       )}
 
       {step === 'landing' && isPersonal && (
@@ -497,94 +685,79 @@ export default function ImportBankStatement() {
 
       {step === 'parsing' && (
         <p className="page-loading">
-          <span className="inline-spinner" aria-hidden="true" /> Reading your statement…
+          <span className="inline-spinner" aria-hidden="true" /> Reading your statement… this can take a
+          minute or two for a long one.
         </p>
       )}
 
-      {step === 'review' && importing && (
-        <p className="page-loading">
-          <span className="inline-spinner" aria-hidden="true" /> Importing…{' '}
-          {importProgress ? `${importProgress.done}/${importProgress.total}` : ''}
-        </p>
-      )}
-
-      {step === 'review' && !importing && (
+      {step === 'review' && currentTx && currentEntry && (
         <>
           {parseNotices.map((notice, i) => (
             <p key={i} className="status-error">
               {notice}
             </p>
           ))}
-          <p>
-            <strong>{includedCount}</strong> of <strong>{transactions.length}</strong> transaction
-            {transactions.length === 1 ? '' : 's'} will be imported. Untick anything you don't want, tick
-            a credit if you actually do want it tracked, and fix any category before confirming — nothing
-            is saved until you do.
+          <p className="muted">
+            Transaction {currentPosition + 1} of {totalReviewable} ({reviewedCount} reviewed)
           </p>
+          <progress className="bank-tx-progress" value={reviewedCount} max={totalReviewable} />
           {categorizing && (
             <p className="muted">
               Asking AI about {categorizing.done} of {categorizing.total} descriptions…
             </p>
           )}
 
-          <h2 className="settings-section-title">Transactions</h2>
-          <ul className="member-list">
-            {transactions.map((tx, i) => (
-              <li key={i} className="member-list-item bank-tx-item">
-                <label className="bank-tx-row">
-                  <input
-                    type="checkbox"
-                    checked={selections[i]?.include || false}
-                    disabled={tx.direction === 'credit'}
-                    onChange={() => toggleInclude(i)}
-                  />
-                  <span className="muted bank-tx-date">{new Date(tx.date).toLocaleDateString()}</span>
-                  {/* stopPropagation: this label wraps the row's checkbox, and a
-                      nested clickable element (the InlineEditable button) would
-                      otherwise also toggle it via the label's own click
-                      forwarding — tapping the title to edit it shouldn't also
-                      flip the include checkbox. */}
-                  <span className="bank-tx-title-wrap" onClick={(e) => e.stopPropagation()}>
-                    <InlineEditable
-                      value={descriptionFor(i)}
-                      display={descriptionFor(i)}
-                      onSave={(value) => setDescriptionFor(i, value)}
-                      multiline
-                      className="categorize-row-title item-editable"
-                      inputClassName="item-editable-input bank-tx-title-input"
-                      ariaLabel={`Edit description for ${descriptionFor(i)}`}
-                    />
-                  </span>
-                  {duplicateIndexes.has(i) && <span className="bank-tx-flag muted">possible duplicate</span>}
-                  {crossGroupMatches.has(i) && (
-                    <span className="bank-tx-flag muted">already in {crossGroupMatches.get(i)}?</span>
-                  )}
-                  {tx.direction === 'credit' && <span className="bank-tx-flag muted">income — not imported</span>}
-                </label>
-                <span className="member-list-actions">
-                  <span className="mono">{format(tx.amount)}</span>
-                  {tx.direction === 'debit' && (
-                    <select
-                      className="categorize-row-select"
-                      value={selections[i]?.categoryId || ''}
-                      onChange={(e) => setCategoryFor(i, e.target.value)}
-                    >
-                      <option value="">Uncategorized</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="bank-tx-card">
+            <p className="muted">
+              {new Date(currentTx.date).toLocaleDateString()} · <span className="mono">{format(currentTx.amount)}</span>
+            </p>
+            {duplicateIndexes.has(rawIndex) && (
+              <p className="status-error">Possible duplicate — you may have already imported this one.</p>
+            )}
+            {crossGroupMatches.has(rawIndex) && (
+              <p className="status-error">Already in {crossGroupMatches.get(rawIndex)}?</p>
+            )}
+            <InlineEditable
+              value={descriptionForEntry(currentTx, currentEntry)}
+              display={descriptionForEntry(currentTx, currentEntry)}
+              onSave={(value) => updateCurrentEntry({ description: value })}
+              multiline
+              className="bank-tx-card-title item-editable"
+              inputClassName="item-editable-input bank-tx-card-title-input"
+              ariaLabel={`Edit description for ${descriptionForEntry(currentTx, currentEntry)}`}
+            />
+            <label className="bank-tx-card-include">
+              <input
+                type="checkbox"
+                checked={currentEntry.include}
+                onChange={(e) => updateCurrentEntry({ include: e.target.checked })}
+              />
+              Import this transaction
+            </label>
+            {currentEntry.include && (
+              <select
+                className="bank-tx-card-category"
+                value={currentEntry.categoryId || ''}
+                onChange={(e) => updateCurrentEntry({ categoryId: e.target.value })}
+              >
+                <option value="">Uncategorized</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
-          <button type="button" className="btn-primary confirm-btn" disabled={includedCount === 0} onClick={commitImport}>
-            Import {includedCount} transaction{includedCount === 1 ? '' : 's'}
-          </button>
+          <div className="modal-actions">
+            <button type="button" className="btn-link" onClick={goBack} disabled={currentPosition === 0 || committing}>
+              ← Back
+            </button>
+            <button type="button" className="btn-primary" onClick={goNext} disabled={committing}>
+              {committing ? 'Saving…' : currentPosition + 1 < totalReviewable ? 'Next' : 'Finish'}
+            </button>
+          </div>
         </>
       )}
 

@@ -67,15 +67,21 @@ const GROUPS = [
               all, CSV/Excel's own column match works standalone — so the double-check specifically
               has its own on/off checkbox right on the import screen, for anyone who'd rather not
               use it (out of API quota, or just doesn't want this file's data going to that
-              provider) without losing CSV/Excel import altogether. Every transaction also gets an editable
-              description (tap it to fix up the bank's own wording before it becomes a bill title)
-              and a review checkbox before anything is saved; a transaction that looks like it's
+              provider) without losing CSV/Excel import altogether. Review happens one transaction
+              at a time rather than a single long list — each card has an editable description
+              (tap it to fix up the bank's own wording before it becomes a bill title), a category
+              suggestion, and a checkbox before it's saved; a transaction that looks like it's
               already been imported (an overlapping statement period) or already recorded as a
               bill in one of your other groups (a shared expense showing up on your own statement
               too) defaults to unchecked either way — still reviewable, in case either flag is a
-              false positive. A charge that repeats on a regular schedule isn't detected
-              automatically here — set it up as a Recurring Bill by hand from Group Settings if
-              you'd like it generated automatically going forward.
+              false positive. A <strong>← Back</strong> button is always there to fix an earlier
+              card if you catch a mistake. Every transaction becomes a real bill the moment you
+              move past its card, not all at once at the end — so closing the tab partway through
+              a long statement loses nothing already confirmed; <strong>Group settings</strong>{' '}
+              shows "Resume bank statement import" the next time you're ready to finish the rest.
+              A charge that repeats on a regular schedule isn't detected automatically here — set
+              it up as a Recurring Bill by hand from Group Settings if you'd like it generated
+              automatically going forward.
             </p>
           </>
         ),
