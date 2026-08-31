@@ -36,7 +36,7 @@ const GROUPS = [
         id: 'personal',
         title: 'Personal spending — tracking just your own',
         keywords:
-          'personal solo alone just me financial companion budget my own spending bank statement import transactions recurring duplicate excel xlsx csv',
+          'personal solo alone just me financial companion budget my own spending bank statement import transactions recurring duplicate excel xlsx csv chatgpt claude gemini prompt copy paste api key',
         body: (
           <>
             <p>
@@ -58,7 +58,12 @@ const GROUPS = [
               for mobile, since redacting a PDF or exporting to CSV is realistically a
               desktop-only step), or a PDF read by whichever AI service you've set up in{' '}
               <strong>Scan settings</strong>. Strip anything sensitive beyond the transactions
-              themselves before uploading a PDF — it's sent to that provider to be read. If you do
+              themselves before uploading a PDF — it's sent to that provider to be read. No Claude
+              or Gemini key set up here at all? A collapsible section on that same screen holds a
+              ready-made prompt to copy into whichever AI chat app you already use (ChatGPT,
+              Claude.ai, Gemini) — attach your own redacted statement there and paste the CSV it
+              hands back in; the prompt asks for a category guess too, using your group's own
+              categories, so it goes straight through the same review flow as an upload. If you do
               have an AI service configured, CSV and Excel imports use it too: it double-checks
               the automatic column match against a few sample rows (only overriding it, with a
               notice to double-check dates and amounts, when the two genuinely disagree) and
