@@ -1129,6 +1129,24 @@ input.item-editable-input, textarea.item-editable-input {
 .bank-tx-card-include { display: flex; flex-direction: row; align-items: center; gap: 8px; margin-bottom: 0; }
 .bank-tx-card-category { width: 100%; }
 
+/* The "Match bank categories" step, ahead of the one-at-a-time review
+   above — one card per distinct bank category name found in the
+   statement, same visual language as .bank-tx-card since it's the same
+   wizard, just a different question ("what does the bank's own wording
+   mean?" instead of "is this transaction right?"). */
+.category-mapping-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: var(--space-md);
+  margin: var(--space-sm) 0;
+}
+.category-mapping-card-label { font-size: 16px; font-weight: 500; }
+.category-mapping-card select { width: 100%; }
+
 /* The wizard's own progress — how far into *this* statement's reviewable
    (debit) transactions the current card is, not a generic loading
    indicator. Native <progress>, styled to match the app's own accent

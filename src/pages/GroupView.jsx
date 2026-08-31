@@ -972,17 +972,24 @@ export default function GroupView() {
                     const billAmount = (
                       <span className="bill-amount-block">
                         <span className="mono bill-amount-total">{format(billTotal(bill))}</span>
-                        {net === null ? (
-                          <span className="bill-amount-status bill-amount-status-neutral">
-                            You are not involved
-                          </span>
-                        ) : net < 0 ? (
-                          <span className="bill-amount-status balance-negative">
-                            You borrowed {format(-net)}
-                          </span>
-                        ) : (
-                          <span className="bill-amount-status balance-positive">You lent {format(net)}</span>
-                        )}
+                        {/* "Lent"/"borrowed" only means anything when there's
+                            someone else in the bill to lend to or borrow
+                            from — in the Personal space it's always just your
+                            own money, so this line never says anything a
+                            personal user doesn't already know. */}
+                        {group &&
+                          !group.is_personal &&
+                          (net === null ? (
+                            <span className="bill-amount-status bill-amount-status-neutral">
+                              You are not involved
+                            </span>
+                          ) : net < 0 ? (
+                            <span className="bill-amount-status balance-negative">
+                              You borrowed {format(-net)}
+                            </span>
+                          ) : (
+                            <span className="bill-amount-status balance-positive">You lent {format(net)}</span>
+                          ))}
                       </span>
                     )
                     const flatIndex = visibleBills.findIndex((b) => b.id === bill.id)

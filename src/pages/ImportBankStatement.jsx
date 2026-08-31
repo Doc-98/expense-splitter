@@ -19,6 +19,7 @@ import { isColumnDetectionAvailable } from '../lib/bankStatementColumns'
 import { findDuplicateIndexes, findCrossGroupMatches } from '../lib/bankStatementDetection'
 import { classifyTitles, resolveClassifyStrategy } from '../lib/billCategorization'
 import { fetchDraft, createDraft, updateDraftReview, deleteDraft } from '../lib/bankImportDrafts'
+import { getBankCategoryMappings, saveBankCategoryMappings } from '../lib/bankCategoryMappings'
 import InlineEditable from '../components/InlineEditable'
 
 function fileToBase64(file) {
@@ -38,17 +39,22 @@ function fileToBase64(file) {
 // something, then Next again) updates those same rows instead of
 // inserting a duplicate. See bank_import_drafts in schema.sql.
 //
-// categoryId is pre-filled from tx.categoryHint when it resolves against
-// this group's real categories — set only by a CSV with a recognized
-// Category column (see bankStatementRows.js's CATEGORY_ALIASES), which in
-// practice today means the "bring your own AI chat" path below: its own
-// prompt asks for a category from this exact list, so a label that
-// doesn't match one either means a stale category list (renamed/deleted
-// since the prompt was copied) or the model not finding a fit — either
-// way, falling back to blank (pickable by hand, or by this app's own AI
-// pass below) is the right default, not guessing further.
-function initialReviewEntry(tx, duplicates, crossMatches, index, categoryNameToId) {
-  const hintedCategoryId = tx.categoryHint ? categoryNameToId.get(tx.categoryHint.toLowerCase()) : null
+// categoryId is pre-filled from tx.categoryHint whenever hintCategoryMap
+// (lowercased hint -> categoryId or null, see resolveCategoryHints below)
+// already has an answer for it — either because it matched one of this
+// group's real category names exactly (the shape the "bring your own AI
+// chat" path's own prompt always produces, see byoAiPrompt below), or
+// because a person already matched that exact bank category name to one of
+// this group's categories, just now or on a previous import (see
+// bankCategoryMappings.js). A hint with no answer in the map at all never
+// reaches here — resolveCategoryHints treats that as still needing to be
+// asked about, not resolved to blank. A resolved-but-empty categoryId
+// (mapped to "leave uncategorized") is a deliberate answer, same as one
+// resolving to a real category: falling back to '' either way is what a
+// blank entry already means, pickable by hand or by this app's own AI
+// suggestion pass below.
+function initialReviewEntry(tx, duplicates, crossMatches, index, hintCategoryMap) {
+  const hintedCategoryId = tx.categoryHint ? hintCategoryMap.get(tx.categoryHint.toLowerCase()) : null
   return {
     include: tx.direction === 'debit' && !duplicates.has(index) && !crossMatches.has(index),
     categoryId: hintedCategoryId || '',
@@ -57,6 +63,42 @@ function initialReviewEntry(tx, duplicates, crossMatches, index, categoryNameToI
     billId: null,
     itemId: null,
   }
+}
+
+// Splits every distinct categoryHint in a freshly-parsed statement into two
+// buckets: `resolved` (lowercase hint -> categoryId | null) is already
+// answered, either because it matches one of this group's real category
+// names exactly (categoryNameToId — the shape the "bring your own AI chat"
+// path's own prompt always produces) or because storedMappings already has
+// a per-group answer from a previous import (bankCategoryMappings.js) —
+// null there means "answered: leave uncategorized," not "never asked."
+// `unresolved` is everything else: almost always a real bank's own category
+// wording, which rarely matches this app's category names or even
+// language, and has never been mapped before either — collected as
+// { label, count } per hint (label keeps the original casing for display;
+// count is only ever used to tell someone how much is riding on their
+// answer) for ImportBankStatement's own "Match bank categories" step to ask
+// about, once per name rather than once per transaction.
+function resolveCategoryHints(parsedTransactions, categoryNameToId, storedMappings) {
+  const resolved = new Map()
+  const unresolved = new Map()
+  for (const tx of parsedTransactions) {
+    if (!tx.categoryHint) continue
+    const key = tx.categoryHint.toLowerCase()
+    if (resolved.has(key)) continue
+    if (unresolved.has(key)) {
+      unresolved.get(key).count += 1
+      continue
+    }
+    if (categoryNameToId.has(key)) {
+      resolved.set(key, categoryNameToId.get(key))
+    } else if (key in storedMappings) {
+      resolved.set(key, storedMappings[key])
+    } else {
+      unresolved.set(key, { label: tx.categoryHint, count: 1 })
+    }
+  }
+  return { resolved, unresolved }
 }
 
 export default function ImportBankStatement() {
@@ -70,6 +112,12 @@ export default function ImportBankStatement() {
   // one-at-a-time review step this page builds up to means an unfinished
   // import is the normal, expected case for anyone who didn't get through
   // a long statement in one sitting, not an edge case to just paper over.
+  // 'match-categories' is inserted between 'parsing' and 'review' whenever
+  // the statement's own category column has a bank category name this
+  // group hasn't been matched to a real category before (see
+  // proceedAfterParse/resolveCategoryHints) — skipped entirely for a file
+  // with no category column, or once every name it has has been matched
+  // before.
   const [step, setStep] = useState('loading')
   const [error, setError] = useState(null)
   const [isPersonal, setIsPersonal] = useState(null)
@@ -114,6 +162,17 @@ export default function ImportBankStatement() {
   // handlePastedCsv) and the copy-feedback for its prompt button.
   const [pastedCsv, setPastedCsv] = useState('')
   const [promptCopied, setPromptCopied] = useState(false)
+
+  // The 'match-categories' step's own state — see resolveCategoryHints and
+  // proceedAfterParse below. pendingImport holds the already-parsed file
+  // (transactions/notices/history-fetch) while that step is up, since
+  // parsing already finished by the time it's known this step is even
+  // needed; null the rest of the time, including once the step's own
+  // Continue hands off to processParsedTransactions.
+  const [pendingImport, setPendingImport] = useState(null) // { parsedTransactions, notices, existingHistoryPromise } | null
+  const [resolvedHints, setResolvedHints] = useState(new Map()) // lowercase bank category -> categoryId | null, the half already known
+  const [unresolvedHints, setUnresolvedHints] = useState([]) // [{ key, label, count }], the half this step is asking about
+  const [categoryChoices, setCategoryChoices] = useState({}) // key -> categoryId, this step's own in-progress form state
 
   const fileInputRef = useRef(null)
   const classifyStrategy = resolveClassifyStrategy()
@@ -366,10 +425,15 @@ Date,Description,Amount,Category`
   // Shared by every input path once it's produced a plain parsed-
   // transaction list — handleFile (PDF/CSV/Excel) and handlePastedCsv (the
   // "bring your own AI chat" path below) both call this once they've done
-  // their own format-specific parsing. existingHistoryPromise is passed in
-  // rather than started here so a caller that can kick it off earlier
-  // (alongside its own parse) still gets that benefit — see handleFile.
-  async function processParsedTransactions(parsedTransactions, notices, existingHistoryPromise) {
+  // their own format-specific parsing (by way of proceedAfterParse, which
+  // decides whether the "Match bank categories" step needs to run first).
+  // existingHistoryPromise is passed in rather than started here so a
+  // caller that can kick it off earlier (alongside its own parse) still
+  // gets that benefit — see handleFile. hintCategoryMap is
+  // resolveCategoryHints' own `resolved` map, already fully answered by
+  // the time this runs — defaults to empty for a file with no category
+  // column at all, the ordinary case.
+  async function processParsedTransactions(parsedTransactions, notices, existingHistoryPromise, hintCategoryMap = new Map()) {
     const [existingHistory, crossGroupBills] = await Promise.all([
       existingHistoryPromise,
       loadCrossGroupBills(parsedTransactions.map((t) => t.date)),
@@ -396,7 +460,7 @@ Date,Description,Amount,Category`
     // already recorded in another group — defaults off, so nobody
     // accidentally double-counts just because they didn't notice the
     // flag; still fully reviewable, in case it's a false positive.
-    const initialReview = parsedTransactions.map((t, i) => initialReviewEntry(t, duplicates, crossMatches, i, categoryNameToId))
+    const initialReview = parsedTransactions.map((t, i) => initialReviewEntry(t, duplicates, crossMatches, i, hintCategoryMap))
 
     const newDraftId = await createDraft(groupId, user.id, {
       transactions: parsedTransactions,
@@ -415,6 +479,70 @@ Date,Description,Amount,Category`
     setStep('review')
 
     runCategorySuggestions(parsedTransactions, initialReview, newDraftId)
+  }
+
+  // The one thing every parse path (handleFile, handlePastedCsv) does
+  // before handing off to processParsedTransactions: decide whether any of
+  // this statement's own category hints still need a person's input. Most
+  // imports have no category column at all (resolveCategoryHints just
+  // returns nothing unresolved) and skip straight through, same as before
+  // this step existed; a real bank export with its own category column
+  // almost always has *something* unresolved the first time (its wording
+  // essentially never matches this app's category names, often not even
+  // its language) — that's what the "Match bank categories" step is for.
+  async function proceedAfterParse(parsedTransactions, notices, existingHistoryPromise) {
+    const { resolved, unresolved } = resolveCategoryHints(
+      parsedTransactions,
+      categoryNameToId,
+      getBankCategoryMappings(groupId)
+    )
+    if (unresolved.size > 0) {
+      setPendingImport({ parsedTransactions, notices, existingHistoryPromise })
+      setResolvedHints(resolved)
+      setUnresolvedHints([...unresolved.entries()].map(([key, v]) => ({ key, ...v })))
+      setCategoryChoices(Object.fromEntries([...unresolved.keys()].map((k) => [k, ''])))
+      setStep('match-categories')
+      return
+    }
+    await processParsedTransactions(parsedTransactions, notices, existingHistoryPromise, resolved)
+  }
+
+  function updateCategoryChoice(key, categoryId) {
+    setCategoryChoices((prev) => ({ ...prev, [key]: categoryId }))
+  }
+
+  // "Continue" on the "Match bank categories" step — folds this round's
+  // choices into resolvedHints (a blank choice becomes null: "leave
+  // uncategorized," a real answer same as any other resolved hint, see
+  // resolveCategoryHints), persists them for next time this bank's own
+  // category names show up (saveBankCategoryMappings — one write for the
+  // whole batch, not one per hint), then hands the already-parsed file off
+  // to processParsedTransactions exactly like a file with nothing to ask
+  // about would have gone straight there.
+  async function confirmCategoryMapping() {
+    if (!pendingImport) return
+    const chosen = {}
+    const combined = new Map(resolvedHints)
+    for (const { key } of unresolvedHints) {
+      const categoryId = categoryChoices[key] || null
+      chosen[key] = categoryId
+      combined.set(key, categoryId)
+    }
+    saveBankCategoryMappings(groupId, chosen)
+
+    const { parsedTransactions, notices, existingHistoryPromise } = pendingImport
+    setPendingImport(null)
+    setUnresolvedHints([])
+    setCategoryChoices({})
+    await processParsedTransactions(parsedTransactions, notices, existingHistoryPromise, combined)
+  }
+
+  function cancelCategoryMapping() {
+    setPendingImport(null)
+    setResolvedHints(new Map())
+    setUnresolvedHints([])
+    setCategoryChoices({})
+    setStep('landing')
   }
 
   async function handleFile(e) {
@@ -478,7 +606,7 @@ Date,Description,Amount,Category`
         }
       }
 
-      await processParsedTransactions(parsedTransactions, notices, existingHistoryPromise)
+      await proceedAfterParse(parsedTransactions, notices, existingHistoryPromise)
     } catch (err) {
       setError(err.message)
       setStep('landing')
@@ -505,7 +633,7 @@ Date,Description,Amount,Category`
     try {
       const { transactions: parsed, warnings } = await parseBankStatementCsv(text)
       if (parsed.length === 0) throw new Error(warnings[0] || "That doesn't look like a CSV with any transactions in it.")
-      await processParsedTransactions(parsed, warnings, loadExistingHistory())
+      await proceedAfterParse(parsed, warnings, loadExistingHistory())
       setPastedCsv('')
     } catch (err) {
       setError(err.message)
@@ -818,6 +946,40 @@ Date,Description,Amount,Category`
           <span className="inline-spinner" aria-hidden="true" /> Reading your statement… this can take a
           minute or two for a long one.
         </p>
+      )}
+
+      {step === 'match-categories' && (
+        <>
+          <p className="muted">
+            This statement already has its own category for each transaction — worth trusting over a
+            guess, since the bank presumably knows what it's talking about. Its own names almost never
+            match yours though (a different bank, possibly a different language), so match each one below
+            to one of your categories, or leave it uncategorized. This only comes up once per bank
+            category name — it's remembered for next time you import from this bank.
+          </p>
+          {unresolvedHints.map(({ key, label, count }) => (
+            <div key={key} className="category-mapping-card">
+              <span className="category-mapping-card-label">
+                {label}
+                <span className="muted"> — {count} transaction{count === 1 ? '' : 's'}</span>
+              </span>
+              <select value={categoryChoices[key] || ''} onChange={(e) => updateCategoryChoice(key, e.target.value)}>
+                <option value="">Leave uncategorized</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+          <button type="button" className="btn-primary confirm-btn" onClick={confirmCategoryMapping}>
+            Continue
+          </button>
+          <button type="button" className="btn-link" onClick={cancelCategoryMapping}>
+            Cancel import
+          </button>
+        </>
       )}
 
       {step === 'review' && currentTx && currentEntry && (
