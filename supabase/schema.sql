@@ -312,6 +312,63 @@ create table spending_thresholds (
 );
 
 -- ---------------------------------------------------------------------------
+-- bank_import_drafts: one in-progress bank-statement import per group — the
+-- transactions a file was parsed into, plus each one's review state,
+-- surviving a closed tab/browser so the one-at-a-time review wizard
+-- (ImportBankStatement.jsx) can be resumed later instead of losing
+-- everything not yet gotten through. Only ever holds what's still *unread*
+-- as far as review is concerned — a transaction that's been reviewed is a
+-- real row in `bills` by that point, not something this table needs to
+-- remember too; see bankImportDrafts.js for the read/write shape both
+-- columns are expected to hold.
+--
+-- `unique (group_id)` — deliberately only one draft at a time per group
+-- (Personal is the only group this feature is offered on today, so in
+-- practice one per account): starting a new import while one's still
+-- unfinished means resuming or discarding it first, rather than juggling
+-- two statements' worth of pending review state and duplicate-checking
+-- against each other.
+create table bank_import_drafts (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references groups(id) on delete cascade,
+  created_by uuid not null references auth.users(id) on delete cascade,
+  -- The full parsed list, immutable for the life of the draft — every
+  -- other column here is either a position into this array or a parallel
+  -- per-transaction review state, never a copy of the transaction data
+  -- itself. Shape: [{ date, description, amount, direction }, ...].
+  transactions jsonb not null,
+  -- Parallel to transactions — shape: [{ include, categoryId,
+  -- description, reviewed, billId, itemId }, ...]. billId/itemId are
+  -- null until `reviewed` is first set true (the transaction was
+  -- included and actually committed); going back to re-edit an
+  -- already-reviewed one updates those same rows instead of inserting a
+  -- duplicate. A `reviewed: true` entry with `include: false` means "you
+  -- looked at this one and chose not to import it" — still remembered on
+  -- resume, not re-offered as if untouched.
+  review jsonb not null,
+  -- Computed once at draft creation from the personal group's own
+  -- history and the account's other groups (see loadExistingHistory /
+  -- loadCrossGroupBills in ImportBankStatement.jsx) and then left alone
+  -- for the life of the draft, rather than recomputed on every resume —
+  -- recomputing partway through would let a transaction already
+  -- committed by *this same import* feed back into its own duplicate
+  -- check for whatever's still pending. Shapes: an array of transaction
+  -- indexes, and an object mapping transaction index (as a string key,
+  -- jsonb's own requirement) to the other group's name.
+  duplicate_indexes jsonb not null default '[]'::jsonb,
+  cross_group_matches jsonb not null default '{}'::jsonb,
+  -- Position within the *reviewable* (debit-only) subset of
+  -- transactions, not a raw index into transactions itself — a credit
+  -- can never be imported, so it's never given its own review card to
+  -- begin with (see ImportBankStatement.jsx), and this column has
+  -- nothing to record for one.
+  current_position integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (group_id)
+);
+
+-- ---------------------------------------------------------------------------
 -- Indexes: Postgres never auto-indexes a foreign key column, only primary
 -- keys and explicit unique constraints — item_shares/bill_payers already
 -- get one for free since their own primary keys lead with item_id/bill_id,
@@ -362,6 +419,7 @@ alter table bill_payers enable row level security;
 alter table payments enable row level security;
 alter table departure_snapshots enable row level security;
 alter table spending_thresholds enable row level security;
+alter table bank_import_drafts enable row level security;
 
 -- Helper: checks *active* group membership from inside a SECURITY DEFINER
 -- function, so it runs with the function owner's privileges and doesn't
@@ -462,6 +520,14 @@ create policy "members can manage categories" on categories
 create policy "members can view recurring bills" on recurring_bills
   for select using (public.is_group_member(group_id));
 create policy "members can manage recurring bills" on recurring_bills
+  for all using (public.is_group_member(group_id));
+
+-- bank_import_drafts: same single group-membership check as recurring
+-- bills — no separate "view" vs "manage" split needed, since unlike bills
+-- (guests can be *paid_by* a bill without being the one asking) every
+-- draft's own creator is necessarily the same active member reading and
+-- writing it.
+create policy "members can manage bank import drafts" on bank_import_drafts
   for all using (public.is_group_member(group_id));
 
 -- bills / items / item_shares: gated on *active* group membership, walking
