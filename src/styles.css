@@ -1532,6 +1532,34 @@ input.item-editable-input, textarea.item-editable-input {
 }
 .collapsible-section[open] summary { margin-bottom: var(--space-sm); }
 
+/* "Bring your own AI chat" section, ImportBankStatement.jsx — the prompt
+   text is shown read-only (pre-wrap so it's actually readable, not one
+   unbroken line) alongside a one-click copy button, then a paste box for
+   whatever CSV comes back. */
+.byo-ai-prompt {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-sm);
+  margin: var(--space-sm) 0;
+}
+.byo-ai-paste-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+}
+.byo-ai-paste {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
 /* ---------- Categories ---------- */
 .category-dot {
   display: inline-block;

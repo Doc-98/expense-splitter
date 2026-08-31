@@ -26,6 +26,15 @@ const DESC_ALIASES = [
 const AMOUNT_ALIASES = ['amount', 'value', 'importo']
 const DEBIT_ALIASES = ['debit', 'withdrawal', 'money out', 'paid out', 'out', 'dare', 'uscite', 'addebiti', 'addebito']
 const CREDIT_ALIASES = ['credit', 'deposit', 'money in', 'paid in', 'in', 'avere', 'entrate', 'accrediti', 'accredito']
+// Not something a real bank export ever has under a standard name — this
+// is specifically for a CSV produced by ImportBankStatement.jsx's own
+// "bring your own AI chat" prompt (see byoAiPrompt there), which asks for
+// this exact column deliberately so a category guess round-trips back in
+// without a second, separate classification pass. Optional everywhere it
+// matters (isUsableColumnMapping below doesn't require it) — a category
+// column just never gets read on an ordinary bank export that doesn't
+// have one.
+const CATEGORY_ALIASES = ['category', 'categoria']
 
 function findColumn(lowerHeader, aliases) {
   for (const alias of aliases) {
@@ -104,6 +113,7 @@ export function detectColumns(header) {
     amountIdx: findColumn(lower, AMOUNT_ALIASES),
     debitIdx: findColumn(lower, DEBIT_ALIASES),
     creditIdx: findColumn(lower, CREDIT_ALIASES),
+    categoryIdx: findColumn(lower, CATEGORY_ALIASES),
   }
 }
 
@@ -142,12 +152,21 @@ export function findHeaderRowIndex(rows) {
 // already-decided column mapping — either detectColumns' own heuristic
 // result, or an AI double-check's corrected one. Returns { transactions,
 // warnings }, never throws. Each transaction is { date (ISO string),
-// description, amount (always positive), direction: 'debit' | 'credit' }
-// — the same shape parseBankStatementPdf's AI pass produces (see
-// bank-statement-parsing/extractionPrompt.js), so ImportBankStatement.jsx
-// handles every input format identically from here on.
+// description, amount (always positive), direction: 'debit' | 'credit',
+// categoryHint } — the same base shape parseBankStatementPdf's AI pass
+// produces (see bank-statement-parsing/extractionPrompt.js), so
+// ImportBankStatement.jsx handles every input format identically from
+// here on; categoryHint is the extra piece only a category column (or a
+// future PDF/Excel equivalent) ever sets — the raw label text as written,
+// left for the caller to resolve against the group's real categories
+// (never assumed to already match one), or null when there's no category
+// column at all. `columns.categoryIdx ?? -1` rather than a plain
+// destructure — the AI column-check's own mapping (see
+// bankStatementTabular.js) never proposes one, so that key can be
+// entirely absent, not just -1.
 export function buildTransactionsFromColumns(dataRows, columns) {
   const { dateIdx, descIdx, amountIdx, debitIdx, creditIdx } = columns
+  const categoryIdx = columns.categoryIdx ?? -1
   const warnings = []
   const transactions = []
 
@@ -180,11 +199,14 @@ export function buildTransactionsFromColumns(dataRows, columns) {
       continue
     }
 
+    const categoryHint = categoryIdx !== -1 ? cellToString(row[categoryIdx]) || null : null
+
     transactions.push({
       date: parsedDate.toISOString(),
       description,
       amount: Math.abs(amount),
       direction: amount < 0 ? 'debit' : 'credit',
+      categoryHint,
     })
   }
 

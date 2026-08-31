@@ -37,10 +37,21 @@ function fileToBase64(file) {
 // with include: true — after that, confirming it again (via Back, editing
 // something, then Next again) updates those same rows instead of
 // inserting a duplicate. See bank_import_drafts in schema.sql.
-function initialReviewEntry(tx, duplicates, crossMatches, index) {
+//
+// categoryId is pre-filled from tx.categoryHint when it resolves against
+// this group's real categories — set only by a CSV with a recognized
+// Category column (see bankStatementRows.js's CATEGORY_ALIASES), which in
+// practice today means the "bring your own AI chat" path below: its own
+// prompt asks for a category from this exact list, so a label that
+// doesn't match one either means a stale category list (renamed/deleted
+// since the prompt was copied) or the model not finding a fit — either
+// way, falling back to blank (pickable by hand, or by this app's own AI
+// pass below) is the right default, not guessing further.
+function initialReviewEntry(tx, duplicates, crossMatches, index, categoryNameToId) {
+  const hintedCategoryId = tx.categoryHint ? categoryNameToId.get(tx.categoryHint.toLowerCase()) : null
   return {
     include: tx.direction === 'debit' && !duplicates.has(index) && !crossMatches.has(index),
-    categoryId: '',
+    categoryId: hintedCategoryId || '',
     description: undefined,
     reviewed: false,
     billId: null,
@@ -99,11 +110,53 @@ export default function ImportBankStatement() {
   const [aiColumnCheckEnabled, setAiColumnCheckEnabled] = useState(
     () => getReceiptSettings().bankStatementAiColumnCheck !== false
   )
+  // The "bring your own AI chat" path's own paste box (see
+  // handlePastedCsv) and the copy-feedback for its prompt button.
+  const [pastedCsv, setPastedCsv] = useState('')
+  const [promptCopied, setPromptCopied] = useState(false)
 
   const fileInputRef = useRef(null)
   const classifyStrategy = resolveClassifyStrategy()
   const pdfConfigured = isBankStatementPdfConfigured()
   const columnCheckAvailable = isColumnDetectionAvailable()
+  // Lowercased category name -> id, for resolving a CSV's own category
+  // hint (see initialReviewEntry) back to a real category in this group —
+  // built once per categories load rather than re-scanning the array per
+  // transaction.
+  const categoryNameToId = useMemo(() => new Map(categories.map((c) => [c.name.toLowerCase(), c.id])), [categories])
+
+  // For anyone without Claude/Gemini API access set up here — a Claude Pro
+  // subscriber with no API tokens, say — but who'd still like AI help:
+  // copy this into whichever AI chat app they already use, alongside their
+  // own redacted statement, and paste back the CSV it produces (see
+  // handlePastedCsv). Asks for the group's own real category names
+  // specifically, using the exact "Category" column bankStatementRows.js
+  // already recognizes, so a guess round-trips straight back into
+  // categoryId without a second, separate classification pass once it's
+  // pasted in.
+  const byoAiPrompt = useMemo(() => {
+    const categoryList = categories.map((c) => c.name).join(', ')
+    return `You are reading a bank or credit-card statement for me, to import into an expense-tracking app. I've already removed or blacked out anything sensitive beyond the transactions themselves.
+
+For every real transaction in the statement (skip running balances, page headers, and anything that isn't an actual transaction), give me:
+- Date, in YYYY-MM-DD format.
+- A short description — the merchant or payee, not the bank's full reference-number-laden text.
+- Amount, as a plain number with no currency symbol — negative for money spent, positive for money received (a refund, a deposit, income).
+- Your best-guess category, chosen ONLY from this exact list: ${categoryList}. Make your best guess even when you're not fully sure — I'll review every single one myself and can correct it, so a plausible guess is more useful to me than leaving it blank. Only leave it empty when truly nothing on the list is even a reasonable fit. The statement may be in any language — that's fine, categorize based on what the transaction actually is.
+
+Output ONLY a CSV with this exact header row and nothing else — no explanation before or after, no markdown code fence, no extra columns:
+Date,Description,Amount,Category`
+  }, [categories])
+
+  function copyByoAiPrompt() {
+    navigator.clipboard
+      .writeText(byoAiPrompt)
+      .then(() => {
+        setPromptCopied(true)
+        setTimeout(() => setPromptCopied(false), 2000)
+      })
+      .catch(() => setError('Could not copy automatically — select and copy the prompt text by hand instead.'))
+  }
 
   function toggleAiColumnCheck() {
     const next = !aiColumnCheckEnabled
@@ -310,6 +363,60 @@ export default function ImportBankStatement() {
     }
   }
 
+  // Shared by every input path once it's produced a plain parsed-
+  // transaction list — handleFile (PDF/CSV/Excel) and handlePastedCsv (the
+  // "bring your own AI chat" path below) both call this once they've done
+  // their own format-specific parsing. existingHistoryPromise is passed in
+  // rather than started here so a caller that can kick it off earlier
+  // (alongside its own parse) still gets that benefit — see handleFile.
+  async function processParsedTransactions(parsedTransactions, notices, existingHistoryPromise) {
+    const [existingHistory, crossGroupBills] = await Promise.all([
+      existingHistoryPromise,
+      loadCrossGroupBills(parsedTransactions.map((t) => t.date)),
+    ])
+
+    const duplicates = findDuplicateIndexes(parsedTransactions, existingHistory)
+    const crossMatches = findCrossGroupMatches(parsedTransactions, crossGroupBills)
+
+    // A file that's entirely credits (a pure income/refund statement,
+    // say) has nothing reviewable at all — no draft worth creating for
+    // zero cards, straight to a "done" screen reporting everything as
+    // left out.
+    if (!parsedTransactions.some((t) => t.direction === 'debit')) {
+      setParseNotices(notices)
+      setResult({ billCount: 0, skippedCount: parsedTransactions.length })
+      setStep('done')
+      return
+    }
+
+    // Debits are reviewed (that's what this app tracks); credits —
+    // income, refunds, salary — never get a card at all, since they can
+    // never be imported either way (see reviewableIndexes). A likely
+    // duplicate — this same statement re-imported, or this same expense
+    // already recorded in another group — defaults off, so nobody
+    // accidentally double-counts just because they didn't notice the
+    // flag; still fully reviewable, in case it's a false positive.
+    const initialReview = parsedTransactions.map((t, i) => initialReviewEntry(t, duplicates, crossMatches, i, categoryNameToId))
+
+    const newDraftId = await createDraft(groupId, user.id, {
+      transactions: parsedTransactions,
+      review: initialReview,
+      duplicateIndexes: duplicates,
+      crossGroupMatches: crossMatches,
+    })
+
+    setDraftId(newDraftId)
+    setTransactions(parsedTransactions)
+    setReview(initialReview)
+    setDuplicateIndexes(duplicates)
+    setCrossGroupMatches(crossMatches)
+    setCurrentPosition(0)
+    setParseNotices(notices)
+    setStep('review')
+
+    runCategorySuggestions(parsedTransactions, initialReview, newDraftId)
+  }
+
   async function handleFile(e) {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -371,51 +478,35 @@ export default function ImportBankStatement() {
         }
       }
 
-      const [existingHistory, crossGroupBills] = await Promise.all([
-        existingHistoryPromise,
-        loadCrossGroupBills(parsedTransactions.map((t) => t.date)),
-      ])
+      await processParsedTransactions(parsedTransactions, notices, existingHistoryPromise)
+    } catch (err) {
+      setError(err.message)
+      setStep('landing')
+    }
+  }
 
-      const duplicates = findDuplicateIndexes(parsedTransactions, existingHistory)
-      const crossMatches = findCrossGroupMatches(parsedTransactions, crossGroupBills)
+  // The "bring your own AI chat" path — someone without Claude/Gemini API
+  // access (a Claude Pro subscriber with no API tokens, say) copies
+  // byoAiPrompt below into whichever chat app they already use, attaches
+  // their own redacted statement there, and pastes the CSV it hands back
+  // here. From here on this is indistinguishable from an ordinary CSV
+  // upload — same parseBankStatementCsv, same column detection, same
+  // (optional) AI double-check if one's configured for that too — the
+  // only difference is where the text came from.
+  async function handlePastedCsv() {
+    const text = pastedCsv.trim()
+    if (!text) return
 
-      // A file that's entirely credits (a pure income/refund statement,
-      // say) has nothing reviewable at all — no draft worth creating for
-      // zero cards, straight to a "done" screen reporting everything as
-      // left out.
-      if (!parsedTransactions.some((t) => t.direction === 'debit')) {
-        setParseNotices(notices)
-        setResult({ billCount: 0, skippedCount: parsedTransactions.length })
-        setStep('done')
-        return
-      }
+    setError(null)
+    setResult(null)
+    setParseNotices([])
+    setStep('parsing')
 
-      // Debits are reviewed (that's what this app tracks); credits —
-      // income, refunds, salary — never get a card at all, since they can
-      // never be imported either way (see reviewableIndexes). A likely
-      // duplicate — this same statement re-imported, or this same expense
-      // already recorded in another group — defaults off, so nobody
-      // accidentally double-counts just because they didn't notice the
-      // flag; still fully reviewable, in case it's a false positive.
-      const initialReview = parsedTransactions.map((t, i) => initialReviewEntry(t, duplicates, crossMatches, i))
-
-      const newDraftId = await createDraft(groupId, user.id, {
-        transactions: parsedTransactions,
-        review: initialReview,
-        duplicateIndexes: duplicates,
-        crossGroupMatches: crossMatches,
-      })
-
-      setDraftId(newDraftId)
-      setTransactions(parsedTransactions)
-      setReview(initialReview)
-      setDuplicateIndexes(duplicates)
-      setCrossGroupMatches(crossMatches)
-      setCurrentPosition(0)
-      setParseNotices(notices)
-      setStep('review')
-
-      runCategorySuggestions(parsedTransactions, initialReview, newDraftId)
+    try {
+      const { transactions: parsed, warnings } = await parseBankStatementCsv(text)
+      if (parsed.length === 0) throw new Error(warnings[0] || "That doesn't look like a CSV with any transactions in it.")
+      await processParsedTransactions(parsed, warnings, loadExistingHistory())
+      setPastedCsv('')
     } catch (err) {
       setError(err.message)
       setStep('landing')
@@ -680,6 +771,45 @@ export default function ImportBankStatement() {
             onChange={handleFile}
             style={{ display: 'none' }}
           />
+
+          <details className="collapsible-section">
+            <summary>No Claude or Gemini API key set up? Use an AI chat app instead</summary>
+            <div className="collapsible-section-body">
+              <p className="muted">
+                If you'd rather use an AI chat app you already have — ChatGPT, Claude.ai, Gemini, whatever
+                you pay for or have open — instead of setting up an API key here, copy the prompt below,
+                paste it into that chat alongside your statement, then paste the CSV it gives you back in
+                below.
+              </p>
+              <p className="status-error">
+                Before attaching your statement there: remove or black out anything sensitive beyond the
+                transactions themselves — your account number, full name, and address — since it's sent to
+                whichever AI provider you use to read it, outside this app's own control.
+              </p>
+              <button type="button" className="btn-secondary" onClick={copyByoAiPrompt}>
+                {promptCopied ? 'Copied!' : 'Copy prompt'}
+              </button>
+              <pre className="byo-ai-prompt">{byoAiPrompt}</pre>
+              <label className="byo-ai-paste-label">
+                Paste the CSV it gives you back
+                <textarea
+                  className="byo-ai-paste"
+                  value={pastedCsv}
+                  onChange={(e) => setPastedCsv(e.target.value)}
+                  placeholder="Date,Description,Amount,Category&#10;2026-08-14,Coop,-42.10,Groceries&#10;..."
+                  rows={6}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handlePastedCsv}
+                disabled={!pastedCsv.trim()}
+              >
+                Use this CSV
+              </button>
+            </div>
+          </details>
         </>
       )}
 

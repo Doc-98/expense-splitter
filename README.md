@@ -471,6 +471,28 @@ credit-card statement into bills. Three ways in:
   **Strip anything sensitive beyond the transactions themselves — account
   number, name, address — before uploading**, since the file is sent to
   that provider to be read.
+- **Bring your own AI chat**, for anyone without a Claude or Gemini API key
+  set up here at all — a Claude Pro subscriber with no API tokens, say. A
+  collapsible section on the landing screen (reusing the same
+  `.collapsible-section` styling as Settings' own collapsed panels) holds a
+  ready-made prompt (`byoAiPrompt` in `ImportBankStatement.jsx`, built from
+  the group's own real category names) with a one-click copy button — paste
+  it into whichever AI chat app you already use, attach your own redacted
+  statement there, and paste the CSV it hands back into the textarea below.
+  The prompt asks for the exact same `Date,Description,Amount,Category`
+  shape the rest of this pipeline already understands, so a pasted CSV goes
+  through the identical `parseBankStatementCsv` → column-detection →
+  review flow as an uploaded one — indistinguishable from here on, not a
+  separate code path. It's also how a category guess round-trips straight
+  into `categoryId` without a second, separate classification pass:
+  `bankStatementRows.js` recognizes a `Category`/`Categoria` column
+  (`CATEGORY_ALIASES`) and sets each transaction's `categoryHint`, which
+  `initialReviewEntry` resolves against the group's real categories by
+  name. A hint that doesn't match one (a renamed/deleted category since the
+  prompt was copied, or the model missing a fit) just falls back to blank,
+  same as an ordinary uncategorized transaction. Same redaction warning as
+  the PDF path applies here too, since the statement is being shown to a
+  third-party AI chat app outside this app's own control either way.
 
 Every path lands on the same review flow: one transaction at a time, not a
 single long list of everything at once — a 200-row statement felt
@@ -607,8 +629,14 @@ bill only changes once you review and confirm:
    "Dining out" → "Eating out").
 2. **AI, for whatever's left** — classifies by title alone, using whichever
    provider is already configured in Scan settings. Never invents a new
-   category (only ever chooses from the group's existing list) and returns
-   `null` rather than guess when unsure.
+   category (only ever chooses from the group's existing list). Favors
+   guessing over `null`: since every suggestion is a pre-fill a person
+   reviews and can correct before anything is saved (here and on a bank
+   statement import alike, see `src/lib/billCategorization/classifyPrompt.js`),
+   a plausible guess is worth more than an empty one — `null` is reserved
+   for a title with genuinely nothing to go on (pure noise, a bare
+   reference number, an in-joke with no recognizable expense type), not
+   just "not fully sure."
 
 <details>
 <summary>Title deduplication and keyword clustering</summary>
