@@ -494,6 +494,30 @@ credit-card statement into bills. Three ways in:
   the PDF path applies here too, since the statement is being shown to a
   third-party AI chat app outside this app's own control either way.
 
+**A real bank's own category column is trusted, not re-guessed** — plenty of
+CSV/Excel exports carry one already, and the bank presumably knows what it's
+talking about better than a title-only guess would. Its own category names
+essentially never match this app's though (a different bank's own wording,
+often a different language from the app's category names entirely), so a
+**"Match bank categories" step** runs once, right after parsing and before
+the one-at-a-time review below, whenever the statement has at least one
+category name (`categoryHint`, same field the "bring your own AI chat" path
+above sets) that doesn't already match one of this group's own category
+names and hasn't been matched before. Skipped entirely for a file with no
+category column, or once every name it has has already been matched.
+`src/lib/bankCategoryMappings.js` remembers each choice per group,
+localStorage-only (a device's own view of how a bank's wording lines up
+with a group's categories, not something worth a database table or syncing
+across devices) — so this only ever asks about a given bank category name
+once per group, not once per statement. A transaction whose category
+resolves this way — exact name match, a previous mapping, or one just
+chosen — is never second-guessed by this app's own AI suggestion pass
+either (same `!entry.categoryId` skip that already protects an
+already-reviewed entry from a stale late suggestion, see
+`runCategorySuggestions` in `ImportBankStatement.jsx`); choosing "Leave
+uncategorized" for a bank category is remembered too, so that answer sticks
+without blocking the AI pass from still taking its own guess at those.
+
 Every path lands on the same review flow: one transaction at a time, not a
 single long list of everything at once — a 200-row statement felt
 overwhelming as a flat list, and a one-at-a-time card is also what makes

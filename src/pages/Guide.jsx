@@ -36,7 +36,7 @@ const GROUPS = [
         id: 'personal',
         title: 'Personal spending — tracking just your own',
         keywords:
-          'personal solo alone just me financial companion budget my own spending bank statement import transactions recurring duplicate excel xlsx csv chatgpt claude gemini prompt copy paste api key',
+          'personal solo alone just me financial companion budget my own spending bank statement import transactions recurring duplicate excel xlsx csv chatgpt claude gemini prompt copy paste api key match bank categories mapping',
         body: (
           <>
             <p>
@@ -72,7 +72,12 @@ const GROUPS = [
               all, CSV/Excel's own column match works standalone — so the double-check specifically
               has its own on/off checkbox right on the import screen, for anyone who'd rather not
               use it (out of API quota, or just doesn't want this file's data going to that
-              provider) without losing CSV/Excel import altogether. Review happens one transaction
+              provider) without losing CSV/Excel import altogether. If your bank's own export
+              already has a category for each transaction, that's trusted over a fresh guess — but
+              since a bank's own category names almost never match yours (and might be in a
+              different language), a one-time "Match bank categories" step comes up first, asking
+              you to match each one to a category of yours. That choice is remembered, so the same
+              bank's categories only ever need matching once. Review happens one transaction
               at a time rather than a single long list — each card has an editable description
               (tap it to fix up the bank's own wording before it becomes a bill title), a category
               suggestion, and a checkbox before it's saved; a transaction that looks like it's

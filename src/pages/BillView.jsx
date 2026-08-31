@@ -77,18 +77,28 @@ export default function BillView() {
 
   useEffect(() => {
     async function loadBillAndMembers() {
-      const { data: billData } = await supabase
-        .from('bills')
-        .select('*, bill_payers(member_id, amount)')
-        .eq('id', billId)
-        .single()
+      // Run in parallel and land in one setState pass, rather than four
+      // sequential awaits each committing its own render — the "paid by"/
+      // "split with" rows below only ever show once `group` is known
+      // (never for the split second beforehand where its absence would
+      // otherwise read as "not personal, go ahead and show them"), but a
+      // fetch that lagged behind the others still meant those rows
+      // flashed visible then vanished the instant it caught up. Fetching
+      // everything together removes that lag rather than just papering
+      // over it.
+      const [billResult, allMembersData, categoriesData, groupResult] = await Promise.all([
+        supabase.from('bills').select('*, bill_payers(member_id, amount)').eq('id', billId).single(),
+        fetchAllGroupMembers(groupId),
+        fetchCategories(groupId),
+        supabase.from('groups').select('is_personal').eq('id', groupId).single(),
+      ])
+      const billData = billResult.data
       setBill(billData)
       setBillPayers(billData?.bill_payers || [])
       setNoteDraft(billData?.note || '')
-      setAllMembers(await fetchAllGroupMembers(groupId))
-      setCategories(await fetchCategories(groupId))
-      const { data: groupData } = await supabase.from('groups').select('is_personal').eq('id', groupId).single()
-      setGroup(groupData)
+      setAllMembers(allMembersData)
+      setCategories(categoriesData)
+      setGroup(groupResult.data)
     }
     loadBillAndMembers()
     loadItems()
@@ -380,7 +390,7 @@ export default function BillView() {
           every bill is trivially paid by (and split with) just them; see
           createBill in GroupView.jsx, which already defaults paid_by to
           the creator with no picker involved. */}
-      {!group?.is_personal && (
+      {group && !group.is_personal && (
         <div className="paid-by-row">
           <span className="muted">Paid by</span>
           {isMultiPayer ? (
@@ -424,7 +434,7 @@ export default function BillView() {
       )}
       {error && <p className="status-error">{error}</p>}
 
-      {!group?.is_personal && (
+      {group && !group.is_personal && (
         <div className="default-buyers-row">
           <span className="muted">New items split with:</span>
           <div className="chip-row">
@@ -468,7 +478,7 @@ export default function BillView() {
             members={allMembers}
             categories={categories}
             billCategoryId={bill?.category_id}
-            hideBuyers={group?.is_personal}
+            hideBuyers={!group || group.is_personal}
             onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
             onDelete={() => deleteItem(item.id)}
             onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}
