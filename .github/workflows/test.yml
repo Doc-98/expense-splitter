@@ -19,7 +19,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # jsdom 30's bundled undici needs a Node internal webidl API that
+          # Node 20 doesn't have — `npm test` failed on the runner with
+          # "webidl.util.markAsUncloneable is not a function" until bumped
+          # here (Node 20 was also this repo's original choice mostly by
+          # default; 22 matches what's actually been used to develop and
+          # verify this suite locally).
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run lint
