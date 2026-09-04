@@ -126,6 +126,50 @@ URL** setting so magic links redirect correctly.
 
 It now behaves like a native app icon — full screen, no browser bar.
 
+### Running the tests
+
+```bash
+npm test             # runs the whole suite once
+npm run test:watch   # re-runs on file change, for working on one thing
+```
+
+[Vitest](https://vitest.dev), no separate config beyond `vitest.config.js`
+(deliberately its own file, not merged into `vite.config.js` — that one's
+VitePWA plugin generates a service worker on every build, which a test run
+shouldn't pay for). `npm run lint`, `npm test`, and `npm run build` all run
+on every push/PR via `.github/workflows/test.yml` — no Supabase project or
+any other secret needed for any of the three.
+
+**What's covered**: `src/lib/*.test.js`, colocated next to the module they
+test (`splitEvenly.js` → `splitEvenly.test.js`, same folder) — this app's
+pure business logic: balance/settlement math (`settlement.js`, the one most
+worth trusting completely — a wrong number there is the worst kind of bug
+this app can ship), bank statement parsing and column detection
+(`bankStatementRows.js`, `bankStatementDetection.js`), the category-mapping
+logic behind the bank-import wizard's "Match bank categories" step
+(`bankStatementReview.js`, `bankCategoryMappings.js`), the AI categorization
+prompt/response handling (`billCategorization/classifyPrompt.js`), CSV
+parsing/export (`csv.js`), and the smaller date/number-formatting helpers
+each of those leans on.
+
+**What isn't**: components/pages (nothing under `src/pages/` or
+`src/components/` has a test file), anything that talks to Supabase
+directly, and the AI-calling strategy modules themselves
+(`billCategorization/strategies/`, `bank-statement-parsing/`,
+`receipt-parsing/` — these make real network calls to whichever provider is
+configured, so testing them meaningfully needs mocking the provider
+response, not just running the code). If you're adding a test for one of
+those, `vi.mock()` the strategy/provider boundary rather than the whole
+module — keeps the test exercising real parsing/matching logic, not a
+hand-waved stub of it.
+
+**Adding a test**: colocate `yourModule.test.js` next to `yourModule.js`,
+`import { describe, it, expect } from 'vitest'`. Vitest runs under jsdom
+(see `vitest.config.js`), so `localStorage` and other browser globals work
+directly — no environment setup needed even for something like
+`bankCategoryMappings.test.js`, which exercises real `localStorage` rather
+than a mock of it.
+
 ### Resetting the database
 
 Only relevant to the guest/multi-payer schema change flagged above — skip
