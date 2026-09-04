@@ -1,0 +1,33 @@
+name: Test
+
+# Runs the checks a contributor would run locally before pushing — lint,
+# unit tests, and a production build (catches the class of bug the other
+# two don't, e.g. an import that only breaks under Rollup's bundling) — on
+# every push and PR against master. No Supabase credentials or any other
+# secret is needed: everything here is either a static check or exercises
+# src/lib/*.test.js's pure logic in isolation (see README's own "Testing"
+# section for what that does and doesn't cover).
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # jsdom 30's bundled undici needs a Node internal webidl API that
+          # Node 20 doesn't have — `npm test` failed on the runner with
+          # "webidl.util.markAsUncloneable is not a function" until bumped
+          # here (Node 20 was also this repo's original choice mostly by
+          # default; 22 matches what's actually been used to develop and
+          # verify this suite locally).
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
