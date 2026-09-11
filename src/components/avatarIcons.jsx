@@ -109,36 +109,55 @@ export function DuckIcon({ size = 20, ...props }) {
 }
 
 export function CatIcon({ size = 20, ...props }) {
+  // Closed triangle ears (not just two open lines) so the silhouette reads
+  // clearly on its own, plus a bit more face — bigger eyes and a wider
+  // whisker spread — than the first pass had.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path d="M7 8.6L5.6 4.2l3.7 3" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M17 8.6l1.4-4.4l-3.7 3" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <circle cx="12" cy="13.4" r="6.1" stroke="currentColor" strokeWidth="1.8" />
-      <circle cx="9.6" cy="12.7" r="0.85" fill="currentColor" />
-      <circle cx="14.4" cy="12.7" r="0.85" fill="currentColor" />
-      <path d="M11.2 15.4h1.6l-.8 1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-      <path d="M4.7 14.8h3.1M4.9 16.4l2.9-.6M16.2 14.8h3.1M16.2 15.8l2.9.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path
+        d="M6.6 9.4L4.8 3.6l4.7 3.7z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M17.4 9.4l1.8-5.8l-4.7 3.7z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="13.6" r="6.2" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="9.4" cy="12.8" r="1" fill="currentColor" />
+      <circle cx="14.6" cy="12.8" r="1" fill="currentColor" />
+      <path d="M11.1 15.9h1.8l-.9 1.1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <path
+        d="M3.9 15.1h3.4M4.1 16.9l3.3-.8M16.7 15.1h3.4M16.6 16.9l3.3-.8"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
     </svg>
   )
 }
 
 export function TurtleIcon({ size = 20, ...props }) {
+  // Top-down view — shell as a rounded oval with a simple segmented
+  // pattern, head poking out the top, tail out the bottom, four legs
+  // poking out the sides. Reads clearer at avatar size than trying to
+  // draw a turtle from the side.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path d="M4.5 14a7.5 5.6 0 0115 0" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="12" cy="6.1" r="1.8" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M12.7 19.3l-.7 2l-.7-2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <ellipse cx="5.3" cy="8.9" rx="1.9" ry="1.2" transform="rotate(-35 5.3 8.9)" stroke="currentColor" strokeWidth="1.4" />
+      <ellipse cx="18.7" cy="8.9" rx="1.9" ry="1.2" transform="rotate(35 18.7 8.9)" stroke="currentColor" strokeWidth="1.4" />
+      <ellipse cx="5.3" cy="16.7" rx="1.9" ry="1.2" transform="rotate(35 5.3 16.7)" stroke="currentColor" strokeWidth="1.4" />
+      <ellipse cx="18.7" cy="16.7" rx="1.9" ry="1.2" transform="rotate(-35 18.7 16.7)" stroke="currentColor" strokeWidth="1.4" />
+      <ellipse cx="12" cy="12.7" rx="5.8" ry="7" stroke="currentColor" strokeWidth="1.8" />
       <path
-        d="M3.2 14c0 2.9 3.9 5.3 8.8 5.3s8.8-2.4 8.8-5.3"
+        d="M12 7.2v11.2M8.2 9.9c1.2.6 2.5.9 3.8.9s2.6-.3 3.8-.9M8.2 15.9c1.2-.6 2.5-.9 3.8-.9s2.6.3 3.8.9"
         stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path d="M9 14v3.3M12 14.2v3.6M15 14v3.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      <circle cx="20.3" cy="12.6" r="1.9" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M2.7 13.6l-1.7-.6l.6 1.9z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-      <path
-        d="M5 17.7c-.9.5-1.6 1.3-1.9 2.3M19 17.7c.9.5 1.6 1.3 1.9 2.3"
-        stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="1.2"
         strokeLinecap="round"
       />
     </svg>
@@ -158,17 +177,28 @@ export function BeeIcon({ size = 20, ...props }) {
 }
 
 export function OctopusIcon({ size = 20, ...props }) {
+  // Rounder, fuller mantle than the first pass (a flat-topped dome read
+  // too close to jellyfish) plus tentacles that curl back slightly at the
+  // tip instead of hanging straight — the two cues that actually separate
+  // "octopus" from "jellyfish" in a plain outline this small.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path d="M5 13.2a7 7 0 0114 0v.5H5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <circle cx="9.3" cy="10.4" r="0.9" fill="currentColor" />
-      <circle cx="14.7" cy="10.4" r="0.9" fill="currentColor" />
+      <ellipse cx="12" cy="10.4" rx="6.5" ry="5.8" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="9.3" cy="9.4" r="0.9" fill="currentColor" />
+      <circle cx="14.7" cy="9.4" r="0.9" fill="currentColor" />
       <path
-        d="M5.6 13.7c.5 1.7-.6 2.9.3 4.7M8.6 13.7c.3 1.9-.9 3.1.4 4.9M12 13.7v5.6M15.4 13.7c-.3 1.9.9 3.1-.4 4.9M18.4 13.7c-.5 1.7.6 2.9-.3 4.7"
+        d="M6.7 14.6c-.6 1.7-1.6 2.7-1.1 4.5c.3 1 1.4 1.3 1.9.4M9.3 15.6c-.2 2-.9 3.3.1 5c.5.9 1.6.8 1.8-.2M12 15.9v5.6M14.7 15.6c.2 2 .9 3.3-.1 5c-.5.9-1.6.8-1.8-.2M17.3 14.6c.6 1.7 1.6 2.7 1.1 4.5c-.3 1-1.4 1.3-1.9.4"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="1.4"
         strokeLinecap="round"
       />
+      {/* A couple of suction-cup dots on the front tentacles — the one
+          unambiguous "octopus, not jellyfish" cue a plain outline this
+          small can still carry. */}
+      <circle cx="9.1" cy="17.2" r="0.4" fill="currentColor" />
+      <circle cx="9.6" cy="19.6" r="0.4" fill="currentColor" />
+      <circle cx="14.9" cy="17.2" r="0.4" fill="currentColor" />
+      <circle cx="14.4" cy="19.6" r="0.4" fill="currentColor" />
     </svg>
   )
 }
@@ -196,38 +226,44 @@ export function ButterflyIcon({ size = 20, ...props }) {
 }
 
 export function PufferfishIcon({ size = 20, ...props }) {
+  // Bigger body, shorter spikes than the first pass — that one had the
+  // spikes doing most of the work and the body reading as an afterthought,
+  // the opposite of "puffed up".
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <circle cx="10.2" cy="12.6" r="4.4" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="11" cy="12.6" r="5.5" stroke="currentColor" strokeWidth="1.9" />
       {[0, 36, 72, 108, 144, 180, 216, 252, 288, 324].map((deg) => (
         <line
           key={deg}
-          x1="10.2"
-          y1="8.2"
-          x2="10.2"
-          y2="5.4"
+          x1="11"
+          y1="7.1"
+          x2="11"
+          y2="5.6"
           stroke="currentColor"
-          strokeWidth="1.4"
+          strokeWidth="1.5"
           strokeLinecap="round"
-          transform={`rotate(${deg} 10.2 12.6)`}
+          transform={`rotate(${deg} 11 12.6)`}
         />
       ))}
-      <circle cx="8.6" cy="11" r="0.85" fill="currentColor" />
-      <path d="M8.1 14.4c.8.7 1.9.8 2.7.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      <path d="M15.4 11l3.6-2.2l-.5 4.3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <circle cx="9.1" cy="10.8" r="0.9" fill="currentColor" />
+      <path d="M8.5 14.9c.9.8 2.1.9 3-.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M16.5 11.6l3.8-2.4l-.5 4.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
     </svg>
   )
 }
 
 export function FlowerIcon({ size = 20, ...props }) {
+  // Fuller, rounder petals (closed shapes with real width at the belly)
+  // instead of thin sliver outlines — much closer to how flower icons are
+  // usually drawn.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       {[0, 72, 144, 216, 288].map((deg) => (
         <path
           key={deg}
-          d="M12 9.4c-1.7-2.3-1.3-4.9 0-5.9c1.3 1 1.7 3.6 0 5.9z"
+          d="M12 11.6c-2.7-1.5-3.4-5-1.9-7.3c.7-1 1.3-1.4 1.9-1.4s1.2.4 1.9 1.4c1.5 2.3.8 5.8-1.9 7.3z"
           stroke="currentColor"
-          strokeWidth="1.6"
+          strokeWidth="1.5"
           strokeLinejoin="round"
           transform={`rotate(${deg} 12 12)`}
         />
@@ -238,6 +274,11 @@ export function FlowerIcon({ size = 20, ...props }) {
 }
 
 export function LemonIcon({ size = 20, ...props }) {
+  // The first pass put the leaf and the bottom nub at the wrong corners —
+  // rotate(-25) on this ellipse actually points its long axis from
+  // upper-*left* to lower-*right*, not upper-right to lower-left, so both
+  // were floating off the fruit's actual tips instead of sitting on them.
+  // Fixed here by computing the real tip points instead of eyeballing them.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <ellipse
@@ -249,13 +290,19 @@ export function LemonIcon({ size = 20, ...props }) {
         stroke="currentColor"
         strokeWidth="1.8"
       />
+      {/* Leaf, attached right at the upper-left tip (9, 6.3) and pointing
+          further out along that same axis — a proper pointed almond shape
+          plus a center vein, not a blob, now that it's actually attached
+          where it should be. */}
       <path
-        d="M17.4 5.8c.6-1 1.8-1.5 2.9-1.2c-.2 1.1-1.1 2-2.2 2.2z"
+        d="M9 6.3C7.7 6.6 6.6 6 6.3 3.3C7.8 3.4 9.3 4.4 9 6.3Z"
         stroke="currentColor"
-        strokeWidth="1.4"
+        strokeWidth="1.3"
         strokeLinejoin="round"
       />
-      <path d="M6.6 19.4c-.7.6-1.6.8-2.4.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M8.7 5.9L6.7 3.8" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+      {/* Small nub at the opposite (lower-right) tip. */}
+      <path d="M15 18.9c.9.5 1.9.5 2.7-.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
       <circle cx="10.2" cy="10.5" r="0.55" fill="currentColor" />
       <circle cx="13.6" cy="12.9" r="0.55" fill="currentColor" />
       <circle cx="10.8" cy="15.3" r="0.55" fill="currentColor" />
@@ -264,13 +311,29 @@ export function LemonIcon({ size = 20, ...props }) {
 }
 
 export function FireIcon({ size = 20, ...props }) {
+  // A single smooth, asymmetric loop (bigger bulge on the bottom-right, a
+  // waist near the top-right, a plainer curve on the left) rather than the
+  // first pass's inward "carve" meant to suggest an inner flame — that
+  // tight S-curve nearly crossed itself and read as a gap in the outline
+  // instead of shading. One un-pinched loop is unambiguous at this size.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <path
-        d="M12 2.8c1.6 2.4.9 4.3-.4 6c-1.6 2.1-3 3.6-3 5.7a3.4 3.4 0 006.8 0c0-1-.4-1.7-.8-2.4c.9.5 1.7 1.6 1.7 3.1a5.2 5.2 0 01-10.4 0c0-3.7 2.5-5.4 4.1-7.7c1-1.4 1.6-2.8 2-4.7z"
+        d="M12 2.7C9 6 6 9 6 13.4c0 4.5 3.3 7.6 7.2 7.3c3.3-.3 5.8-3 5.8-6.4c0-2.1-1-3.7-2.2-5c-1.5-2.9-3.5-5.2-4.8-6.6z"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="1.7"
         strokeLinejoin="round"
+      />
+      {/* A plain closed teardrop reads as a water drop just as easily as a
+          flame — this inner curl is what actually says "fire": a small
+          flame-within-the-flame, same idea as a two-tone flame icon but
+          drawn as one open stroke instead of a second filled shape, since
+          this set stays outline-only throughout. */}
+      <path
+        d="M12.3 10.2c1.5 1.7 1.8 3.4.7 4.9c-.6.9-1.3 1.6-1.3 2.6c0 1.3 1 2.2 2.1 2.3"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
       />
     </svg>
   )
