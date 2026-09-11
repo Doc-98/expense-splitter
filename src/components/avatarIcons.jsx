@@ -158,33 +158,62 @@ export function DuckIcon({ size = 20, ...props }) {
 }
 
 export function CatIcon({ size = 20, ...props }) {
-  // Closed triangle ears (not just two open lines) so the silhouette reads
-  // clearly on its own, plus a bit more face — bigger eyes and a wider
-  // whisker spread — than the first pass had.
+  // Traced 1:1 from the user's own redraw (auto-vectorized on iPad in
+  // Linearity Curve, starting from a PNG) — path data unchanged from the
+  // source SVG's viewBox="0 0 75 75" / <g transform="translate(0,75)
+  // scale(0.1,-0.1)"> pair, just fill="#000000" -> "currentColor". A
+  // filled silhouette-of-the-stroke rather than an actual `stroke`, but
+  // the traced line art reads identically to the rest of the set.
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M6.6 9.4L4.8 3.6l4.7 3.7z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M17.4 9.4l1.8-5.8l-4.7 3.7z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinejoin="round"
-      />
-      <circle cx="12" cy="13.6" r="6.2" stroke="currentColor" strokeWidth="1.8" />
-      <circle cx="9.4" cy="12.8" r="1" fill="currentColor" />
-      <circle cx="14.6" cy="12.8" r="1" fill="currentColor" />
-      <path d="M11.1 15.9h1.8l-.9 1.1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-      <path
-        d="M3.9 15.1h3.4M4.1 16.9l3.3-.8M16.7 15.1h3.4M16.6 16.9l3.3-.8"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
+    <svg width={size} height={size} viewBox="0 0 75 75" fill="none" aria-hidden="true" {...props}>
+      <g transform="translate(0,75) scale(0.1,-0.1)" fill="currentColor" stroke="none">
+        <path d="M105 676 c-30 -30 -39 -78 -31 -164 3 -37 6 -71 7 -77 0 -5 -3 -36
+-7 -68 -6 -47 -11 -60 -28 -67 -56 -21 -60 -77 -5 -66 36 7 48 -13 29 -49 -18
+-34 -6 -59 25 -51 19 5 35 0 58 -18 61 -46 114 -61 222 -61 108 0 161 15 222
+61 23 18 39 23 58 18 31 -8 43 17 25 51 -19 36 -7 56 29 49 55 -11 51 45 -5
+66 -17 7 -22 20 -28 67 -4 32 -7 63 -7 68 1 6 4 40 7 77 8 86 -1 134 -31 164
+-33 33 -80 31 -136 -4 -40 -25 -52 -28 -134 -27 -80 0 -95 4 -136 28 -57 34
+-102 35 -134 3z m120 -63 c37 -25 48 -27 147 -28 103 -2 110 0 150 27 78 51
+108 33 108 -65 0 -52 -1 -54 -25 -49 -35 6 -44 -22 -16 -52 20 -21 41 -74 41
+-103 0 -6 -10 -13 -22 -15 -34 -5 -37 -45 -4 -58 32 -12 25 -38 -12 -42 -24
+-3 -27 -7 -25 -36 1 -31 -3 -36 -45 -55 -67 -31 -227 -31 -294 0 -42 19 -46
+24 -45 55 2 29 -1 33 -25 36 -37 4 -44 30 -12 42 33 13 30 53 -3 58 -13 2 -23
+9 -23 15 0 29 21 82 41 103 28 30 19 58 -16 52 -24 -5 -25 -3 -25 49 0 97 31
+116 105 66z" />
+        <path d="M240 371 c-30 -57 17 -130 58 -89 16 16 16 80 0 96 -18 18 -46 14
+-58 -7z" />
+        <path d="M452 378 c-15 -15 -16 -63 -2 -89 24 -43 70 -12 70 48 0 32 -16 53
+-40 53 -9 0 -21 -5 -28 -12z" />
+        <path d="M335 260 c-21 -23 -14 -46 19 -62 20 -9 30 -8 51 6 29 19 32 38 9 60
+-21 22 -57 20 -79 -4z" />
+      </g>
+    </svg>
+  )
+}
+
+export function GhostIcon({ size = 20, ...props }) {
+  // Traced 1:1 from the user's own redraw (auto-vectorized on iPad in
+  // Linearity Curve, starting from a PNG) — replaces the octopus in the
+  // picker, per the user's preference. Same convention as CatIcon above.
+  return (
+    <svg width={size} height={size} viewBox="0 0 75 75" fill="none" aria-hidden="true" {...props}>
+      <g transform="translate(0,75) scale(0.1,-0.1)" fill="currentColor" stroke="none">
+        <path d="M310 741 c-46 -15 -85 -39 -116 -73 -59 -62 -66 -86 -85 -323 -10
+-121 -18 -241 -19 -267 0 -46 2 -48 37 -63 23 -10 48 -14 63 -10 31 8 63 8
+111 0 23 -4 39 -3 43 4 9 14 53 14 62 0 4 -7 20 -8 43 -4 48 8 80 8 111 0 15
+-4 40 0 63 10 35 15 37 17 37 63 -1 26 -9 146 -19 267 -19 237 -26 261 -85
+323 -17 19 -49 43 -70 54 -43 22 -136 32 -176 19z m114 -42 c24 -6 60 -24 80
+-41 64 -53 75 -86 91 -295 8 -104 17 -213 20 -244 5 -51 4 -57 -17 -66 -17 -8
+-31 -6 -55 5 -30 14 -36 14 -69 -1 -32 -16 -37 -16 -57 -2 -27 19 -57 19 -84
+0 -20 -14 -25 -14 -57 2 -33 15 -39 15 -69 1 -24 -11 -38 -13 -55 -5 -21 9
+-22 15 -17 66 3 31 12 140 20 244 16 208 27 244 90 294 31 25 90 50 123 52 7
+1 33 -4 56 -10z" />
+        <path d="M227 502 c-25 -27 -22 -78 5 -96 46 -33 108 -4 108 49 0 55 -77 87
+-113 47z m86 -14 c7 -21 -4 -38 -23 -38 -23 0 -34 16 -26 35 7 18 43 20 49 3z" />
+        <path d="M430 500 c-58 -58 20 -142 88 -94 28 19 30 74 4 97 -25 23 -68 21
+-92 -3z m88 -23 c4 -20 -25 -34 -40 -19 -15 15 -1 44 19 40 10 -2 19 -11 21
+-21z" />
+      </g>
     </svg>
   )
 }
@@ -238,33 +267,6 @@ export function BeeIcon({ size = 20, ...props }) {
   )
 }
 
-export function OctopusIcon({ size = 20, ...props }) {
-  // Rounder, fuller mantle than the first pass (a flat-topped dome read
-  // too close to jellyfish) plus tentacles that curl back slightly at the
-  // tip instead of hanging straight — the two cues that actually separate
-  // "octopus" from "jellyfish" in a plain outline this small.
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <ellipse cx="12" cy="10.4" rx="6.5" ry="5.8" stroke="currentColor" strokeWidth="1.8" />
-      <circle cx="9.3" cy="9.4" r="0.9" fill="currentColor" />
-      <circle cx="14.7" cy="9.4" r="0.9" fill="currentColor" />
-      <path
-        d="M6.7 14.6c-.6 1.7-1.6 2.7-1.1 4.5c.3 1 1.4 1.3 1.9.4M9.3 15.6c-.2 2-.9 3.3.1 5c.5.9 1.6.8 1.8-.2M12 15.9v5.6M14.7 15.6c.2 2 .9 3.3-.1 5c-.5.9-1.6.8-1.8-.2M17.3 14.6c.6 1.7 1.6 2.7 1.1 4.5c-.3 1-1.4 1.3-1.9.4"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-      {/* A couple of suction-cup dots on the front tentacles — the one
-          unambiguous "octopus, not jellyfish" cue a plain outline this
-          small can still carry. */}
-      <circle cx="9.1" cy="17.2" r="0.4" fill="currentColor" />
-      <circle cx="9.6" cy="19.6" r="0.4" fill="currentColor" />
-      <circle cx="14.9" cy="17.2" r="0.4" fill="currentColor" />
-      <circle cx="14.4" cy="19.6" r="0.4" fill="currentColor" />
-    </svg>
-  )
-}
-
 export function ButterflyIcon({ size = 20, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
@@ -288,53 +290,52 @@ export function ButterflyIcon({ size = 20, ...props }) {
 }
 
 export function PufferfishIcon({ size = 20, ...props }) {
-  // Traced from a reference PNG — a round, spiky body, a big ring eye, a
-  // smiling mouth, a few small chevron "spot" marks scattered on the body,
-  // and a two-lobe fin. The first pass at this packed 12 spikes in so
-  // tight (base width ~ the gap between them) that they merged into a
-  // solid gear/sun shape and buried the fin underneath — this one uses
-  // fewer, narrower spikes with real gaps between them, offset so a clear
-  // gap falls at the fin's attachment point instead of a spike sitting
-  // right on top of it.
+  // Traced 1:1 from the user's own redraw (auto-vectorized on iPad in
+  // Linearity Curve, starting from a PNG) — same convention as CatIcon.
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <circle cx="10.5" cy="13" r="6" stroke="currentColor" strokeWidth="1.7" />
-      {[0, 36, 72, 108, 144, 180, 216, 252, 288, 324].map((deg) => (
-        <path
-          key={deg}
-          d="M9.5 7L10.5 4.5L11.5 7"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          transform={`rotate(${deg} 10.5 13)`}
-        />
-      ))}
-      <circle cx="7.5" cy="10.5" r="1.4" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M8.1 15.8c.8.8 1.9.9 2.7.1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      {[
-        [9.7, 8.3],
-        [13.5, 8],
-        [14.5, 11.5],
-        [8.3, 16.5],
-        [12.6, 17],
-      ].map(([x, y]) => (
-        <path
-          key={`${x}-${y}`}
-          d={`M${x - 0.55} ${y + 0.45}L${x} ${y - 0.45}L${x + 0.55} ${y + 0.45}`}
-          stroke="currentColor"
-          strokeWidth="1"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ))}
-      <path
-        d="M16.5 10.8L21 13L16.5 15.2"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width={size} height={size} viewBox="0 0 75 75" fill="none" aria-hidden="true" {...props}>
+      <g transform="translate(0,75) scale(0.1,-0.1)" fill="currentColor" stroke="none">
+        <path d="M326 652 c-9 -26 -80 -43 -105 -26 -22 15 -31 9 -31 -21 0 -27 -49
+-75 -76 -75 -30 0 -35 -9 -19 -34 16 -25 9 -40 -22 -50 -19 -6 -23 -15 -23
+-48 0 -31 4 -41 19 -45 18 -5 39 -63 31 -88 -12 -44 -12 -45 11 -45 29 0 79
+-47 79 -75 0 -30 9 -36 31 -21 25 17 96 0 105 -26 7 -23 31 -23 38 0 8 25 78
+43 101 26 22 -17 35 -9 35 20 0 28 49 76 78 76 23 0 28 15 13 39 -10 16 6 71
+20 71 5 0 21 -7 34 -16 39 -26 48 -15 49 60 1 76 -9 88 -49 62 -13 -9 -29 -16
+-34 -16 -15 0 -33 62 -21 74 17 17 11 36 -12 36 -29 0 -78 48 -78 76 0 29 -13
+37 -35 20 -23 -17 -93 1 -101 26 -7 23 -31 23 -38 0z m82 -51 c23 -6 47 -9 52
+-6 6 3 10 1 10 -5 0 -14 69 -80 84 -80 6 0 11 -15 12 -32 0 -18 4 -45 8 -60 8
+-26 6 -28 -23 -28 -45 0 -123 20 -142 36 -25 22 -76 16 -189 -21 -128 -43
+-145 -44 -145 -10 0 17 5 25 18 25 21 0 40 44 31 73 -4 11 -2 17 4 13 12 -7
+82 60 82 80 0 8 5 12 11 9 11 -8 98 13 113 26 5 5 14 5 20 1 6 -5 30 -14 54
+-21z m-11 -197 c3 -9 2 -33 -3 -53 -11 -43 -42 -53 -73 -22 -30 30 -26 44 9
+39 20 -3 30 0 30 9 0 7 -11 13 -25 13 -14 0 -25 4 -25 9 0 24 78 28 87 5z
+m261 2 c-10 -7 -18 -16 -18 -20 0 -3 8 -7 18 -7 16 -1 16 -2 0 -6 -10 -2 -18
+-7 -18 -10 0 -3 8 -12 18 -19 14 -10 10 -10 -20 -1 -50 16 -53 48 -5 64 44 14
+44 14 25 -1z m-383 -26 c-8 -25 20 -67 57 -86 27 -14 32 -14 54 0 13 9 26 29
+30 44 3 15 7 32 9 38 2 7 27 6 80 -4 75 -15 76 -16 69 -41 -4 -14 -8 -41 -8
+-58 -1 -19 -6 -33 -13 -33 -18 0 -83 -71 -76 -83 4 -7 0 -8 -11 -4 -18 7 -93
+-10 -110 -24 -5 -5 -14 -5 -20 -1 -21 16 -94 32 -112 25 -11 -4 -15 -3 -11 4
+7 12 -58 83 -76 83 -7 0 -12 12 -12 28 0 15 -4 39 -8 53 -6 25 -4 27 76 52 45
+14 83 26 85 26 2 1 1 -8 -3 -19z" />
+        <path d="M247 552 c-23 -26 -22 -28 18 -28 40 0 43 6 17 30 -18 15 -20 15 -35
+-2z" />
+        <path d="M382 558 c-19 -19 -14 -24 22 -25 32 -1 34 1 23 18 -14 22 -28 24
+-45 7z" />
+        <path d="M174 496 c-10 -26 4 -48 28 -44 33 4 33 52 0 56 -13 2 -25 -3 -28
+-12z" />
+        <path d="M320 490 c-11 -21 -11 -22 20 -22 11 0 22 0 25 1 9 2 -15 41 -25 41
+-5 0 -14 -9 -20 -20z" />
+        <path d="M467 462 c-19 -21 -11 -38 10 -21 10 9 17 8 28 -1 12 -10 15 -10 15
+2 0 14 -19 38 -30 38 -4 0 -14 -8 -23 -18z" />
+        <path d="M190 307 c0 -8 7 -20 15 -27 13 -10 19 -10 35 5 22 20 16 43 -6 24
+-11 -9 -17 -9 -29 1 -12 10 -15 10 -15 -3z" />
+        <path d="M470 302 c0 -5 6 -17 14 -28 15 -19 15 -19 37 3 24 24 20 44 -5 24
+-10 -8 -16 -9 -21 -1z" />
+        <path d="M270 222 c0 -5 8 -16 18 -26 18 -15 20 -15 37 4 20 23 13 39 -9 21
+-10 -8 -16 -9 -21 -1z" />
+        <path d="M400 221 c0 -5 9 -16 21 -27 20 -18 21 -18 35 1 20 27 18 31 -21 32
+-19 1 -35 -2 -35 -6z" />
+      </g>
     </svg>
   )
 }
@@ -361,38 +362,35 @@ export function FlowerIcon({ size = 20, ...props }) {
 }
 
 export function LemonIcon({ size = 20, ...props }) {
-  // The first pass put the leaf and the bottom nub at the wrong corners —
-  // rotate(-25) on this ellipse actually points its long axis from
-  // upper-*left* to lower-*right*, not upper-right to lower-left, so both
-  // were floating off the fruit's actual tips instead of sitting on them.
-  // Fixed here by computing the real tip points instead of eyeballing them.
+  // Traced 1:1 from the user's own redraw (auto-vectorized on iPad in
+  // Linearity Curve, starting from a PNG) — same convention as CatIcon.
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <ellipse
-        cx="12"
-        cy="12.6"
-        rx="5"
-        ry="7"
-        transform="rotate(-25 12 12.6)"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      {/* Leaf, attached right at the upper-left tip (9, 6.3) and pointing
-          further out along that same axis — a proper pointed almond shape
-          plus a center vein, not a blob, now that it's actually attached
-          where it should be. */}
-      <path
-        d="M9 6.3C7.7 6.6 6.6 6 6.3 3.3C7.8 3.4 9.3 4.4 9 6.3Z"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-      />
-      <path d="M8.7 5.9L6.7 3.8" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
-      {/* Small nub at the opposite (lower-right) tip. */}
-      <path d="M15 18.9c.9.5 1.9.5 2.7-.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      <circle cx="10.2" cy="10.5" r="0.55" fill="currentColor" />
-      <circle cx="13.6" cy="12.9" r="0.55" fill="currentColor" />
-      <circle cx="10.8" cy="15.3" r="0.55" fill="currentColor" />
+    <svg width={size} height={size} viewBox="0 0 75 75" fill="none" aria-hidden="true" {...props}>
+      <g transform="translate(0,75) scale(0.1,-0.1)" fill="currentColor" stroke="none">
+        <path d="M292 685 c-32 -14 -33 -15 -18 -43 15 -28 15 -29 -40 -68 -53 -38
+-91 -81 -80 -91 2 -3 18 10 35 29 16 19 53 47 82 62 l52 29 -41 -42 c-43 -44
+-71 -106 -55 -122 12 -12 100 -28 124 -22 31 9 22 18 -18 19 -21 0 -51 3 -66
+7 -23 6 -27 11 -21 30 27 91 174 171 254 138 23 -9 23 -10 4 -10 -28 -1 -164
+-69 -164 -83 0 -5 3 -8 8 -6 4 2 36 17 72 34 82 40 120 49 120 31 0 -22 -76
+-103 -110 -117 -31 -13 -40 -30 -17 -30 38 0 124 85 147 144 20 52 76 22 68
+-36 -3 -18 1 -52 10 -76 21 -64 11 -148 -26 -217 -36 -66 -25 -85 13 -21 39
+67 52 143 36 213 -7 32 -13 79 -12 105 2 38 -2 49 -21 62 -12 9 -31 16 -41 16
+-10 0 -33 11 -51 25 -71 54 -172 71 -244 40z m186 -25 c23 -10 42 -21 42 -22
+0 -2 -28 -4 -62 -3 -35 0 -84 -4 -109 -8 -40 -7 -48 -5 -53 10 -5 11 -1 22 10
+30 27 19 122 16 172 -7z" />
+        <path d="M105 418 c-24 -61 -29 -128 -15 -189 8 -30 12 -73 11 -96 -3 -52 23
+-72 89 -72 25 0 82 -3 127 -7 75 -6 87 -4 140 21 56 25 113 70 113 88 0 5 -17
+-5 -37 -21 -74 -58 -101 -66 -198 -65 -218 3 -222 4 -212 65 2 18 -2 50 -9 72
+-23 64 -16 140 21 229 4 9 3 17 -3 17 -5 0 -17 -19 -27 -42z" />
+        <path d="M561 446 c-8 -9 -11 -19 -7 -23 9 -9 29 13 24 27 -2 8 -8 7 -17 -4z" />
+        <path d="M522 368 c-19 -19 -14 -30 8 -18 11 6 20 15 20 20 0 14 -14 12 -28
+-2z" />
+        <path d="M582 349 c-10 -15 -10 -19 2 -19 15 0 29 27 18 34 -5 3 -13 -4 -20
+-15z" />
+        <path d="M439 334 c-12 -14 -11 -16 5 -13 11 2 21 10 24 17 5 17 -13 15 -29
+-4z" />
+        <path d="M525 290 c-17 -18 -17 -20 -1 -20 9 0 19 7 23 15 9 25 -2 27 -22 5z" />
+      </g>
     </svg>
   )
 }
@@ -470,7 +468,7 @@ export const AVATAR_ICONS = [
   { id: 'cat', label: 'Cat', Icon: CatIcon },
   { id: 'turtle', label: 'Turtle', Icon: TurtleIcon },
   { id: 'bee', label: 'Bee', Icon: BeeIcon },
-  { id: 'octopus', label: 'Octopus', Icon: OctopusIcon },
+  { id: 'ghost', label: 'Ghost', Icon: GhostIcon },
   { id: 'butterfly', label: 'Butterfly', Icon: ButterflyIcon },
   { id: 'pufferfish', label: 'Pufferfish', Icon: PufferfishIcon },
   { id: 'flower', label: 'Flower', Icon: FlowerIcon },
