@@ -14,8 +14,10 @@ import ShareButton from '../components/ShareButton'
 import MultiPayerModal from '../components/MultiPayerModal'
 import { PrintableBillRecap } from '../components/PrintableRecap'
 import BackButton from '../components/BackButton'
-import { ArrowRightIcon } from '../components/icons'
+import { ArrowRightIcon, ChevronIcon } from '../components/icons'
 import { useCurrency } from '../context/CurrencyContext'
+import { useSwipeToDelete } from '../lib/useSwipeToDelete'
+import { memberInitial } from '../lib/memberInitial'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
@@ -38,10 +40,19 @@ export default function BillView() {
   const [noteDraft, setNoteDraft] = useState('')
   const [noteSaved, setNoteSaved] = useState(false)
   const [error, setError] = useState(null)
+  // Collapsed by default — see .bill-summary below. Everything it hides
+  // (note, paid by, category, default split, date) is still reachable in
+  // one tap, just not competing with the receipt for space on every visit.
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   const nameRef = useRef(null)
   const priceRef = useRef(null)
   const qtyRef = useRef(null)
+
+  // One shared swipe-to-delete instance for the whole item list (see
+  // useSwipeToDelete.js for why this is called once here rather than once
+  // per row) — bindSwipe is handed down to each ItemRow.
+  const { bind: bindSwipe } = useSwipeToDelete()
 
   const activeMembers = allMembers.filter((m) => m.active)
   const nameOf = (id) => allMembers.find((m) => m.id === id)?.name || 'Someone'
@@ -371,6 +382,22 @@ export default function BillView() {
     downloadCsv(filename, toCsv(header, rows))
   }
 
+  // The one-line summary shown when the details panel below is collapsed —
+  // enough to answer "who paid, what category, when, is there a note"
+  // without opening it, same reasoning as any progressive-disclosure
+  // summary line: show what's usually enough, not everything.
+  const billCategory = categories.find((c) => c.id === bill?.category_id)
+  const summaryParts = []
+  if (group && !group.is_personal) {
+    summaryParts.push(isMultiPayer ? `Split ${billPayers.length} ways` : `Paid by ${nameOf(bill?.paid_by)}`)
+  }
+  summaryParts.push(billCategory ? billCategory.name : 'Uncategorized')
+  if (bill) {
+    summaryParts.push(new Date(bill.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))
+  }
+  if (noteDraft.trim()) summaryParts.push('note added')
+  const summaryText = summaryParts.join(' · ')
+
   return (
     <div className="page receipt-page">
       <header className="page-header">
@@ -390,56 +417,111 @@ export default function BillView() {
         />
       </header>
 
-      <div className="bill-note-row">
-        <textarea
-          className="bill-note"
-          placeholder="Add a note — what this was for, who was around that week…"
-          value={noteDraft}
-          onChange={(e) => setNoteDraft(e.target.value)}
-          onBlur={saveNote}
-          rows={2}
-        />
-        {noteSaved && <span className="muted note-saved">Saved</span>}
-      </div>
+      {/* Collapsed to one summary line by default — Note/Paid by/Category/
+          default split/Date used to be five separate always-visible rows
+          above the receipt; now they're one tap away instead of five
+          things to scroll past on every visit. Same CSS-only grid-rows
+          expand already used elsewhere (Scan Settings' provider picker). */}
+      <div className={`bill-summary ${detailsOpen ? 'is-open' : ''}`}>
+        <button type="button" className="bill-summary-head" onClick={() => setDetailsOpen((o) => !o)}>
+          <span className="bill-summary-text">{summaryText}</span>
+          <ChevronIcon size={16} className="bill-summary-chev" />
+        </button>
+        <div className="xwrap">
+          <div className="xinner">
+            <div className="bill-summary-body">
+              <textarea
+                className="bill-note"
+                placeholder="Add a note — what this was for, who was around that week…"
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                onBlur={saveNote}
+                rows={2}
+              />
+              {noteSaved && <span className="muted note-saved">Saved</span>}
 
-      {/* "Paid by" only ever means something when it could be someone other
-          than you — a personal space has exactly one member, forever, so
-          every bill is trivially paid by (and split with) just them; see
-          createBill in GroupView.jsx, which already defaults paid_by to
-          the creator with no picker involved. */}
-      {group && !group.is_personal && (
-        <div className="paid-by-row">
-          <span className="muted">Paid by</span>
-          {isMultiPayer ? (
-            <button type="button" className="btn-link" onClick={() => setPayerModalOpen(true)}>
-              {billPayers.map((p) => nameOf(p.member_id)).join(', ')} (split)
-            </button>
-          ) : (
-            <select value={bill?.paid_by || ''} onChange={(e) => handlePaidBySelect(e.target.value)}>
-              {paidByOptions.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                  {m.isGuest ? ' (guest)' : ''}
-                  {!m.active ? ' (left)' : ''}
-                </option>
-              ))}
-              <option value="__multiple__">Multiple payers…</option>
-            </select>
-          )}
+              {/* "Paid by" only ever means something when it could be
+                  someone other than you — a personal space has exactly one
+                  member, forever, so every bill is trivially paid by (and
+                  split with) just them; see createBill in GroupView.jsx,
+                  which already defaults paid_by to the creator with no
+                  picker involved. */}
+              {group && !group.is_personal && (
+                <div className="detail-row">
+                  <span className="detail-row-label">Paid by</span>
+                  {isMultiPayer ? (
+                    <button type="button" className="btn-link" onClick={() => setPayerModalOpen(true)}>
+                      {billPayers.map((p) => nameOf(p.member_id)).join(', ')} (split)
+                    </button>
+                  ) : (
+                    <select value={bill?.paid_by || ''} onChange={(e) => handlePaidBySelect(e.target.value)}>
+                      {paidByOptions.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                          {m.isGuest ? ' (guest)' : ''}
+                          {!m.active ? ' (left)' : ''}
+                        </option>
+                      ))}
+                      <option value="__multiple__">Multiple payers…</option>
+                    </select>
+                  )}
+                </div>
+              )}
+
+              <div className="detail-row">
+                <span className="detail-row-label">Category</span>
+                <select value={bill?.category_id || ''} onChange={(e) => setBillCategory(e.target.value)}>
+                  <option value="">Uncategorized</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {group && !group.is_personal && (
+                <div className="detail-row">
+                  <span className="detail-row-label">Split with</span>
+                  <div className="avatar-row">
+                    {activeMembers.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        className={`avatar ${defaultBuyerIds.includes(m.id) ? 'active' : ''}`}
+                        title={m.name}
+                        onClick={() => toggleDefaultBuyer(m.id)}
+                      >
+                        {memberInitial(m.name)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {bill && (
+                <div className="detail-row">
+                  <span className="detail-row-label">Date</span>
+                  <InlineEditable
+                    className="mono item-editable"
+                    inputClassName="item-editable-input"
+                    inputType="date"
+                    value={toDateInputValue(bill.created_at)}
+                    display={new Date(bill.created_at).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                    onSave={updateBillDate}
+                    ariaLabel="Bill date"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      )}
-
-      <div className="paid-by-row">
-        <span className="muted">Category</span>
-        <select value={bill?.category_id || ''} onChange={(e) => setBillCategory(e.target.value)}>
-          <option value="">Uncategorized</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
-            </option>
-          ))}
-        </select>
       </div>
+
       {payerMismatch && (
         <p className="status-error">
           Payer amounts ({format(payerSum)}) don't match the bill total ({format(total)}) — the
@@ -451,46 +533,11 @@ export default function BillView() {
       )}
       {error && <p className="status-error">{error}</p>}
 
-      {group && !group.is_personal && (
-        <div className="default-buyers-row">
-          <span className="muted">New items split with:</span>
-          <div className="chip-row">
-            {activeMembers.map((m) => (
-              <label key={m.id} className={defaultBuyerIds.includes(m.id) ? 'buyer-chip active' : 'buyer-chip'}>
-                <input
-                  type="checkbox"
-                  checked={defaultBuyerIds.includes(m.id)}
-                  onChange={() => toggleDefaultBuyer(m.id)}
-                />
-                {m.name}
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {bill && (
-        <div className="bill-date-row">
-          <InlineEditable
-            className="mono item-editable bill-date-editable"
-            inputClassName="item-editable-input"
-            inputType="date"
-            value={toDateInputValue(bill.created_at)}
-            display={new Date(bill.created_at).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            })}
-            onSave={updateBillDate}
-            ariaLabel="Bill date"
-          />
-        </div>
-      )}
-
       <div className="receipt-tape">
         {items.map((item) => (
           <ItemRow
             key={item.id}
+            bindSwipe={bindSwipe}
             item={item}
             members={allMembers}
             categories={categories}

@@ -865,15 +865,35 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .payment-history summary { cursor: pointer; color: var(--ink-soft); }
 .payment-history .settlement-list { margin-top: var(--space-sm); }
 
+/* A CSS-only expand/collapse — a `grid-template-rows: 0fr -> 1fr` animates
+   to the content's real height exactly, no guessed max-height. The pair
+   goes on any element the caller marks `.is-open` (a `.xwrap` inside it,
+   an `.xinner` inside that to actually clip the collapsed overflow) — one
+   shared pattern rather than a bespoke one per feature; the bill summary
+   and each item row below both use it, same as Scan Settings' provider
+   picker before them. */
+.xwrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.22s ease; }
+.is-open .xwrap { grid-template-rows: 1fr; }
+.xinner { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .xwrap { transition: none; }
+}
+
 /* ---------- Receipt / bill view ---------- */
+/* Still used by ImportBills.jsx's own "Paid by"/"Split with" review-wizard
+   rows (a separate flow, its own Multiple-payer/custom-split links) —
+   BillView.jsx's own bill-level fields moved to .detail-row below, so
+   these two no longer appear there, but stay for that other consumer. */
 .paid-by-row {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   margin-bottom: var(--space-md);
 }
+.default-buyers-row { margin-bottom: var(--space-lg); }
+.default-buyers-row .muted { display: block; margin-bottom: 6px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
 
-.bill-note-row { margin-bottom: var(--space-md); }
 .bill-note {
   width: 100%;
   resize: vertical;
@@ -887,11 +907,46 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .note-saved { margin-left: 6px; }
 
-.default-buyers-row { margin-bottom: var(--space-lg); }
-.default-buyers-row .muted { display: block; margin-bottom: 6px; }
-.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
-
 .confirm-btn { display: block; width: 100%; margin-top: var(--space-lg); text-align: center; }
+
+/* ---------- Bill summary (collapsed by default) ----------
+   Note/Paid by/Category/default split/Date used to be five separate
+   always-visible rows above the receipt — now one summary line ("Paid by
+   You · Groceries · Sep 10"), tap to expand into the same fields. Same
+   CSS-only grid-rows expand as Scan Settings' provider picker (see
+   .provider-body-wrap there) and the item rows below — three places now
+   share the technique, worth a shared class pair if a fourth comes along. */
+.bill-summary { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: var(--space-md); overflow: hidden; }
+.bill-summary-head {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  background: none; border: none; padding: 12px 14px; cursor: pointer;
+  text-align: left; font-family: inherit; color: var(--ink); font-size: 13.5px;
+}
+.bill-summary-text { flex: 1; }
+.bill-summary-chev { color: var(--ink-soft); flex: none; transition: transform 0.2s ease; }
+.bill-summary.is-open .bill-summary-chev { transform: rotate(90deg); color: var(--accent); }
+.bill-summary-body {
+  padding: 0 14px 14px; border-top: 1px solid var(--border); margin-top: 2px; padding-top: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.detail-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.detail-row-label { font-size: 12.5px; color: var(--ink-soft); flex: none; }
+
+/* ---------- Compact avatar picker ----------
+   "Split with," as small initialed circles instead of full-name chips —
+   used both here (a bill's default split) and on each item row below.
+   Reuses .buyer-chip's own active-state logic (filled/accent when on,
+   outline when off), just circular instead of a pill with a name in it. */
+.avatar-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.avatar {
+  width: 26px; height: 26px; border-radius: 50%; flex: none; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600;
+  border: 1px solid var(--border); color: var(--ink-soft); background: var(--surface);
+  cursor: pointer;
+}
+.avatar.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.avatar.former { border-style: dashed; opacity: 0.7; }
 
 .receipt-tape {
   position: relative;
@@ -914,27 +969,55 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   filter: drop-shadow(0 1px 1px rgba(0,0,0,0.04));
 }
 
-.item-row + .item-row { border-top: 1px dashed var(--border); }
-.item-row { padding: 10px 0; }
+/* ---------- Item rows ----------
+   Collapsed to one line by default (dot, name, a qty badge when it's not
+   1, the total) — tap to expand into the actual editable fields plus
+   split-with/category, rather than every item permanently showing its
+   full buyer row and category picker. Each is its own bordered card
+   (was a flat dashed-divided row) since it's independently interactive
+   now, same reasoning as Scan Settings' provider rows. */
+.item-row { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; }
+.item-row:last-child { margin-bottom: 0; }
+.item-row.is-open { border-color: var(--accent); }
 
-.item-row-main {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+/* Clips .item-row-delete-action to the card's own rounded corners until
+   swiped into view — see useSwipeToDelete.js for the gesture itself.
+   .item-row-head is the sliding foreground: opaque (matches .receipt-tape's
+   own background) so it fully covers the delete strip until dragged away.
+   touch-action: pan-y leaves vertical scrolling to the browser natively
+   and tells it not to also try to handle the horizontal drag itself. */
+.item-row-head-shell { position: relative; overflow: hidden; border-radius: 8px; }
+.item-row-delete-action {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 76px;
+  background: var(--warn); color: #fff; border: none;
+  font-size: 12px; font-weight: 500; cursor: pointer;
+}
+.item-row-head {
+  position: relative; width: 100%; display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: none; padding: 10px 12px; cursor: pointer;
+  text-align: left; font-family: inherit; color: var(--ink); font-size: 13.5px;
+  touch-action: pan-y;
 }
 .item-name { font-weight: 500; }
+.item-qty-badge { font-size: 10.5px; color: var(--ink-soft); background: var(--surface-tint); border-radius: 5px; padding: 1px 5px; flex: none; }
 .item-dots {
   flex: 1;
   border-bottom: 1px dotted var(--border);
   margin-bottom: 4px;
 }
+.item-warn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex: none; }
 .item-price { font-size: 14px; flex-shrink: 0; }
+.item-row-chevron { color: var(--ink-soft); flex: none; transition: transform 0.2s ease; }
+.item-row.is-open .item-row-chevron { transform: rotate(90deg); color: var(--accent); }
 
-/* The unit-price/quantity detail sits directly left of the total price
-   (both flex children after .item-dots, which soaks up the rest of the
-   row's width) — smaller and softer than the total, so it reads as a
-   secondary detail rather than competing with it. */
-.item-price-detail { font-size: 11px; color: var(--ink-soft); white-space: nowrap; flex-shrink: 0; }
+.item-row-body {
+  padding: 0 12px 12px; border-top: 1px solid var(--border); margin-top: 2px; padding-top: 10px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.item-body-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.item-body-label { font-size: 11.5px; color: var(--ink-soft); flex: none; }
+.item-body-row select { font-size: 12px; padding: 4px 6px; }
+.item-remove-btn { font-size: 12px; color: var(--warn); background: none; border: none; cursor: pointer; padding: 0; align-self: flex-start; }
 
 /* Every click-to-edit value (name, unit price, quantity, total price) gets
    the same dotted-underline treatment — deliberately the same visual
@@ -985,30 +1068,9 @@ input.item-editable-input, textarea.item-editable-input {
 .item-money-input { width: 64px; text-align: right; }
 .item-qty-input { width: 44px; text-align: right; }
 
-/* Right-aligned and small/muted on purpose — this is a fixup control for
-   the rare case you're backdating a bill or fixing an import, not
-   something that needs to compete for attention on every ordinary bill.
-   .bill-date-editable has to come after .item-editable above to win the
-   cascade on `color` — same specificity (one class each), so source order
-   decides, and .item-editable's own `color: inherit` would otherwise win
-   just by sitting later in the file. */
-.bill-date-row { display: flex; justify-content: flex-end; margin-bottom: 6px; }
-.bill-date-editable { font-size: 12px; color: var(--ink-soft); }
-
-.item-buyers {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-}
-.item-buyers-label {
-  font-size: 12px;
-  color: var(--ink-soft);
-  margin-right: 2px;
-}
-.item-category-row { margin-top: 6px; }
-.item-category-row select { font-size: 12px; padding: 3px 6px; }
+/* Still used by ImportBills.jsx's own review-wizard chips (see the
+   .paid-by-row comment above) and Group View's category filter — not by
+   item rows or the bill summary above anymore, which use .avatar instead. */
 .buyer-chip {
   display: flex;
   align-items: center;

@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import { useCurrency } from '../context/CurrencyContext'
 import { parseNumber, parseAmount } from '../lib/parseNumber'
+import { memberInitial } from '../lib/memberInitial'
 import InlineEditable from './InlineEditable'
+import { ChevronIcon } from './icons'
 
 // onUpdate(field, value) is called with one of 'name' | 'unit_price' |
 // 'quantity' | 'total_price' and the raw new value — BillView.jsx's
@@ -8,6 +11,17 @@ import InlineEditable from './InlineEditable'
 // fields reconcile for each case (see the comment there). This component
 // only validates that what was typed is well-formed at all (non-empty
 // name, a real number for the money/quantity fields) before handing it up.
+//
+// Collapsed to one read-only line by default (category dot, name, a qty
+// badge when it's not 1, the total) — tap it to expand into the actual
+// editable fields plus split-with/category, rather than every item
+// permanently showing its full buyer row and category picker whether
+// you're touching it or not. `bindSwipe` comes from BillView.jsx's own
+// single `useSwipeToDelete()` call (one per list, not one per row — see
+// that hook for why) and wires up the swipe-left-to-reveal-delete gesture
+// on the collapsed head; the same delete also stays reachable without the
+// gesture via the "Remove item" button inside the expanded body, per that
+// hook's own reasoning for never making a gesture the only way in.
 export default function ItemRow({
   item,
   members,
@@ -18,8 +32,10 @@ export default function ItemRow({
   onDelete,
   onCategoryChange,
   onUpdate,
+  bindSwipe,
 }) {
   const { format } = useCurrency()
+  const [open, setOpen] = useState(false)
   const buyerIds = new Set(item.item_shares.map((s) => s.member_id))
   // Always show current members (whether checked or not), plus anyone no
   // longer active who's still assigned to this specific item — so a former
@@ -38,6 +54,7 @@ export default function ItemRow({
   // comparison/arithmetic below goes through this rather than the raw
   // item.quantity, same convention used everywhere else in this app.
   const quantity = Number(item.quantity) || 1
+  const unassigned = !hideBuyers && buyerIds.size === 0
 
   function saveName(value) {
     const trimmed = value.trim()
@@ -64,103 +81,126 @@ export default function ItemRow({
     if (!Number.isNaN(total)) onUpdate('total_price', total)
   }
 
+  const swipe = bindSwipe(item.id, onDelete)
+
   return (
-    <div className="item-row">
-      <div className="item-row-main">
-        {effectiveCategory && (
-          <span className="category-dot" style={{ background: effectiveCategory.color }} title={effectiveCategory.name} />
-        )}
-        <InlineEditable
-          className="item-name item-editable"
-          inputClassName="item-editable-input item-name-input"
-          value={item.name}
-          display={item.name}
-          onSave={saveName}
-          ariaLabel={`Rename ${item.name}`}
-        />
-        <span className="item-dots" aria-hidden="true" />
-        <span className="item-price-detail mono">
-          {/* Unit price is only worth its own editable spot when it isn't
-              just repeating the total price to its right — at quantity 1
-              the two are always the same number, so showing it twice would
-              be redundant, not informative. The quantity itself ("x 1")
-              still shows either way — it's the only place to fix a
-              single-quantity item's amount without going through the total. */}
-          {quantity !== 1 && (
-            <>
+    <div className={`item-row ${open ? 'is-open' : ''}`}>
+      <div className="item-row-head-shell">
+        <button type="button" className="item-row-delete-action" {...swipe.deleteButton}>
+          Remove
+        </button>
+        <button type="button" className="item-row-head" onClick={() => setOpen((o) => !o)} {...swipe.row}>
+          {effectiveCategory && (
+            <span className="category-dot" style={{ background: effectiveCategory.color }} title={effectiveCategory.name} />
+          )}
+          <span className="item-name">{item.name}</span>
+          {quantity !== 1 && <span className="item-qty-badge">{quantity}&times;</span>}
+          <span className="item-dots" aria-hidden="true" />
+          {unassigned && <span className="item-warn-dot" title="No one's assigned yet" />}
+          <span className="item-price mono">{format(item.total_price)}</span>
+          <ChevronIcon size={16} className="item-row-chevron" />
+        </button>
+      </div>
+
+      <div className="xwrap">
+        <div className="xinner">
+          <div className="item-row-body">
+            <div className="item-body-row">
+              <span className="item-body-label">Item</span>
               <InlineEditable
                 className="item-editable"
+                inputClassName="item-editable-input item-name-input"
+                value={item.name}
+                display={item.name}
+                onSave={saveName}
+                ariaLabel={`Rename ${item.name}`}
+              />
+            </div>
+            {quantity !== 1 && (
+              <div className="item-body-row">
+                <span className="item-body-label">Unit price</span>
+                <InlineEditable
+                  className="item-editable mono"
+                  inputClassName="item-editable-input item-money-input"
+                  inputMode="decimal"
+                  pattern="[-+*/0-9.,() ]*"
+                  value={String(item.unit_price)}
+                  display={format(item.unit_price)}
+                  onSave={saveUnitPrice}
+                  ariaLabel={`Unit price of ${item.name}`}
+                />
+              </div>
+            )}
+            <div className="item-body-row">
+              <span className="item-body-label">Quantity</span>
+              <InlineEditable
+                className="item-editable mono"
+                inputClassName="item-editable-input item-qty-input"
+                inputMode="decimal"
+                value={String(item.quantity)}
+                display={item.quantity}
+                onSave={saveQuantity}
+                ariaLabel={`Quantity of ${item.name}`}
+              />
+            </div>
+            <div className="item-body-row">
+              <span className="item-body-label">Total price</span>
+              <InlineEditable
+                className="item-editable mono"
                 inputClassName="item-editable-input item-money-input"
                 inputMode="decimal"
                 pattern="[-+*/0-9.,() ]*"
-                value={String(item.unit_price)}
-                display={format(item.unit_price)}
-                onSave={saveUnitPrice}
-                ariaLabel={`Unit price of ${item.name}`}
-              />{' '}
-            </>
-          )}
-          x{' '}
-          <InlineEditable
-            className="item-editable"
-            inputClassName="item-editable-input item-qty-input"
-            inputMode="decimal"
-            value={String(item.quantity)}
-            display={item.quantity}
-            onSave={saveQuantity}
-            ariaLabel={`Quantity of ${item.name}`}
-          />
-        </span>
-        <InlineEditable
-          className="item-editable mono item-price"
-          inputClassName="item-editable-input item-money-input"
-          inputMode="decimal"
-          pattern="[-+*/0-9.,() ]*"
-          value={String(item.total_price)}
-          display={format(item.total_price)}
-          onSave={saveTotalPrice}
-          ariaLabel={`Total price of ${item.name}`}
-        />
-        <button className="btn-icon" onClick={onDelete} aria-label={`Remove ${item.name}`}>
-          ×
-        </button>
+                value={String(item.total_price)}
+                display={format(item.total_price)}
+                onSave={saveTotalPrice}
+                ariaLabel={`Total price of ${item.name}`}
+              />
+            </div>
+            {/* In a personal space there's only ever one member, so "split
+                with" has nothing to actually offer — insertItemWithShares
+                still assigns every new item to that one person automatically
+                (see defaultBuyerIds in BillView.jsx), this is just the
+                picker with nothing to pick. */}
+            {!hideBuyers && (
+              <div className="item-body-row">
+                <span className="item-body-label">Split with</span>
+                <div className="avatar-row">
+                  {visibleMembers.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={`avatar ${buyerIds.has(m.id) ? 'active' : ''} ${m.active ? '' : 'former'}`}
+                      title={`${m.name}${m.isGuest ? ' (guest)' : ''}${!m.active ? ' (left)' : ''}`}
+                      onClick={() => onToggleBuyer(m.id)}
+                    >
+                      {memberInitial(m.name)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {categories.length > 0 && (
+              <div className="item-body-row">
+                <span className="item-body-label">Category</span>
+                <select value={item.category_id || ''} onChange={(e) => onCategoryChange(e.target.value)}>
+                  <option value="">{billCategory ? `Same as bill (${billCategory.name})` : 'Same as bill'}</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {unassigned && (
+              <p className="item-warning">No one's assigned yet — this item won't be counted in the settle-up.</p>
+            )}
+            <button type="button" className="item-remove-btn" onClick={onDelete}>
+              Remove item
+            </button>
+          </div>
+        </div>
       </div>
-      {/* In a personal space there's only ever one member, so "split
-          with" has nothing to actually offer — insertItemWithShares still
-          assigns every new item to that one person automatically (see
-          defaultBuyerIds in BillView.jsx), this is just the picker with
-          nothing to pick. */}
-      {!hideBuyers && (
-        <div className="item-buyers">
-          <span className="item-buyers-label">Split with:</span>
-          {visibleMembers.map((m) => (
-            <label
-              key={m.id}
-              className={`buyer-chip ${buyerIds.has(m.id) ? 'active' : ''} ${m.active ? '' : 'former'}`}
-            >
-              <input type="checkbox" checked={buyerIds.has(m.id)} onChange={() => onToggleBuyer(m.id)} />
-              {m.name}
-              {m.isGuest && ' (guest)'}
-              {!m.active && ' (left)'}
-            </label>
-          ))}
-        </div>
-      )}
-      {categories.length > 0 && (
-        <div className="item-category-row">
-          <select value={item.category_id || ''} onChange={(e) => onCategoryChange(e.target.value)}>
-            <option value="">{billCategory ? `Same as bill (${billCategory.name})` : 'Same as bill'}</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      {!hideBuyers && buyerIds.size === 0 && (
-        <p className="item-warning">No one's assigned yet — this item won't be counted in the settle-up.</p>
-      )}
     </div>
   )
 }
