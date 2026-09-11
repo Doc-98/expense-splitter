@@ -12,7 +12,13 @@ create extension if not exists pgcrypto;
 create table profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- One of AVATAR_ICONS' ids (src/components/avatarIcons.jsx), e.g.
+  -- 'bomb' — this account's default avatar across every group; null means
+  -- "no icon set", falling back to the initial-circle avatar this app has
+  -- always shown. See group_members.avatar_icon below for the per-group
+  -- override on top of this.
+  default_avatar_icon text
 );
 
 create function public.handle_new_user()
@@ -91,6 +97,13 @@ create table group_members (
   claim_token uuid,
   created_by uuid references auth.users(id),
   joined_at timestamptz not null default now(),
+  -- Per-group override of the account's default_avatar_icon (profiles,
+  -- above), settable from Group Settings > General — null means "use my
+  -- account default", same fallback chain either way ends at the plain
+  -- initial-circle avatar. A guest row (no profiles row to default from)
+  -- can only ever have this set directly; there's no picker for that yet
+  -- — guests don't sign in to reach one.
+  avatar_icon text,
   constraint group_members_person_shape check (
     (user_id is not null and display_name is null)
     or (user_id is null and display_name is not null)

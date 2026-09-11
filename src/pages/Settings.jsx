@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
@@ -15,6 +15,7 @@ import AboutSection from '../components/AboutSection'
 import SettingsGroupsSection from '../components/SettingsGroupsSection'
 import SettingsUpdatesSection from '../components/SettingsUpdatesSection'
 import SettingsNav from '../components/SettingsNav'
+import AvatarPicker from '../components/AvatarPicker'
 import ConfirmSheet from '../components/ConfirmSheet'
 import BackButton from '../components/BackButton'
 import {
@@ -54,6 +55,25 @@ function ProfileSection() {
   const [nameError, setNameError] = useState(null)
   const [prefs, setPrefs] = useState(getStatsPreferences)
   const [billPrefs, setBillPrefs] = useState(getBillCreationPreferences)
+  // Self-contained fetch/save, same as everything else on this page — not
+  // lifted into AuthContext alongside displayName, since nothing besides
+  // this picker (and Group Settings' own copy of this same picker) needs
+  // to read it live; every place that actually *shows* an avatar just
+  // refetches it fresh as part of the member list (see members.js).
+  const [avatarIcon, setAvatarIcon] = useState(null)
+  const [avatarError, setAvatarError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadAvatar() {
+      const { data } = await supabase.from('profiles').select('default_avatar_icon').eq('id', user.id).single()
+      if (!cancelled) setAvatarIcon(data?.default_avatar_icon || null)
+    }
+    loadAvatar()
+    return () => {
+      cancelled = true
+    }
+  }, [user.id])
 
   async function saveDisplayName(e) {
     e.preventDefault()
@@ -81,6 +101,17 @@ function ProfileSection() {
     setBillPrefs(setBillCreationPreferences(partial))
   }
 
+  async function saveAvatarIcon(iconId) {
+    const previous = avatarIcon
+    setAvatarIcon(iconId) // optimistic — a picker tile should react the instant it's tapped
+    setAvatarError(null)
+    const { error } = await supabase.from('profiles').update({ default_avatar_icon: iconId }).eq('id', user.id)
+    if (error) {
+      setAvatarIcon(previous)
+      setAvatarError(error.message)
+    }
+  }
+
   return (
     <>
       <h2 className="settings-section-title">Your name</h2>
@@ -104,6 +135,14 @@ function ProfileSection() {
         </div>
       </form>
       {nameError && <p className="status-error">{nameError}</p>}
+
+      <h2 className="settings-section-title">Avatar</h2>
+      <p className="muted">
+        Your default icon everywhere you're a member — pick one to help tell you apart from someone with
+        the same initial. Any group can still set its own, from that group's Settings.
+      </p>
+      <AvatarPicker value={avatarIcon} onChange={saveAvatarIcon} name={displayName} />
+      {avatarError && <p className="status-error">{avatarError}</p>}
 
       <h2 className="settings-section-title">Appearance</h2>
       <div className="settings-row">

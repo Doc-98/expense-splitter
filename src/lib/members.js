@@ -19,7 +19,7 @@ import { supabase } from '../supabaseClient'
 export async function fetchAllGroupMembers(groupId) {
   const { data: memberRows, error: memberError } = await supabase
     .from('group_members')
-    .select('id, user_id, display_name, active')
+    .select('id, user_id, display_name, active, avatar_icon')
     .eq('group_id', groupId)
 
   if (memberError) throw memberError
@@ -27,14 +27,16 @@ export async function fetchAllGroupMembers(groupId) {
   const realUserIds = (memberRows || []).filter((r) => r.user_id).map((r) => r.user_id)
 
   let nameById = new Map()
+  let defaultAvatarById = new Map()
   if (realUserIds.length > 0) {
     const { data: profileRows, error: profileError } = await supabase
       .from('profiles')
-      .select('id, display_name')
+      .select('id, display_name, default_avatar_icon')
       .in('id', realUserIds)
 
     if (profileError) throw profileError
     nameById = new Map((profileRows || []).map((p) => [p.id, p.display_name]))
+    defaultAvatarById = new Map((profileRows || []).map((p) => [p.id, p.default_avatar_icon]))
   }
 
   return (memberRows || []).map((r) => ({
@@ -43,6 +45,11 @@ export async function fetchAllGroupMembers(groupId) {
     isGuest: !r.user_id,
     name: r.user_id ? nameById.get(r.user_id) || 'Someone' : r.display_name,
     active: r.active,
+    // This group's own override, falling back to the account-wide default
+    // (guests have neither a profile nor a picker to set one from, so this
+    // is always just their own row's value, usually null) — null all the
+    // way through means "no icon", the plain initial-circle avatar.
+    avatarIcon: r.avatar_icon || (r.user_id ? defaultAvatarById.get(r.user_id) : null) || null,
   }))
 }
 

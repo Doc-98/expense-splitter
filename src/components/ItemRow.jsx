@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useCurrency } from '../context/CurrencyContext'
 import { parseNumber, parseAmount } from '../lib/parseNumber'
-import { memberInitial } from '../lib/memberInitial'
+import AvatarGlyph from './AvatarGlyph'
 import InlineEditable from './InlineEditable'
 import { ChevronIcon } from './icons'
 
@@ -173,7 +173,7 @@ export default function ItemRow({
                       title={`${m.name}${m.isGuest ? ' (guest)' : ''}${!m.active ? ' (left)' : ''}`}
                       onClick={() => onToggleBuyer(m.id)}
                     >
-                      {memberInitial(m.name)}
+                      <AvatarGlyph iconId={m.avatarIcon} name={m.name} />
                     </button>
                   ))}
                 </div>

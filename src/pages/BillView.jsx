@@ -17,7 +17,7 @@ import BackButton from '../components/BackButton'
 import { ArrowRightIcon, ChevronIcon, PlusIcon } from '../components/icons'
 import { useCurrency } from '../context/CurrencyContext'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
-import { memberInitial } from '../lib/memberInitial'
+import AvatarGlyph from '../components/AvatarGlyph'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
@@ -518,7 +518,7 @@ export default function BillView() {
                         title={m.name}
                         onClick={() => toggleDefaultBuyer(m.id)}
                       >
-                        {memberInitial(m.name)}
+                        <AvatarGlyph iconId={m.avatarIcon} name={m.name} />
                       </button>
                     ))}
                   </div>

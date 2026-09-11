@@ -948,6 +948,20 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .avatar.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .avatar.former { border-style: dashed; opacity: 0.7; }
 
+/* The 16-icon grid itself — Settings > Profile (account default) and
+   Group Settings > General (per-group override) both use this, see
+   AvatarPicker.jsx. Slightly bigger than .avatar's 26px since these are
+   the actual tap targets for choosing one, not a compact inline row. */
+.avatar-picker { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.avatar-picker-option {
+  width: 34px; height: 34px; border-radius: 50%; flex: none; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+  border: 1px solid var(--border); color: var(--ink-soft); background: var(--surface);
+  cursor: pointer;
+}
+.avatar-picker-option.is-selected { background: var(--accent); border-color: var(--accent); color: #fff; }
+
 /* ---------- Simple bill view ----------
    Shown instead of .receipt-tape when a bill has exactly one item and
    hasn't been itemized in this session (see BillView.jsx's isSimpleView) —
