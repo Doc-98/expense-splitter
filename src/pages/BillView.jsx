@@ -14,8 +14,10 @@ import ShareButton from '../components/ShareButton'
 import MultiPayerModal from '../components/MultiPayerModal'
 import { PrintableBillRecap } from '../components/PrintableRecap'
 import BackButton from '../components/BackButton'
-import { ArrowRightIcon } from '../components/icons'
+import { ArrowRightIcon, ChevronIcon, PlusIcon } from '../components/icons'
 import { useCurrency } from '../context/CurrencyContext'
+import { useSwipeToDelete } from '../lib/useSwipeToDelete'
+import AvatarGlyph from '../components/AvatarGlyph'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
@@ -38,10 +40,36 @@ export default function BillView() {
   const [noteDraft, setNoteDraft] = useState('')
   const [noteSaved, setNoteSaved] = useState(false)
   const [error, setError] = useState(null)
+  // Collapsed by default — see .bill-summary below. Everything it hides
+  // (note, paid by, category, default split, date) is still reachable in
+  // one tap, just not competing with the receipt for space on every visit.
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  // No stored "mode" — a bill with exactly one item shows the simple
+  // amount-card view below instead of the itemized receipt, purely
+  // because items.length === 1 (see the "+ Add another item" ghost row
+  // further down). `itemizing` is the one bit of real UI state this
+  // needs on top of that: whether the ghost row has been tapped, so the
+  // itemized view (with its own add-item form) can be shown to add a
+  // second item *before* that second item exists yet. It's reset back to
+  // false the moment items.length leaves 1 in either direction, so a
+  // bill that itemizes and is later swipe-deleted back down to one item
+  // lands back on the plain amount-card view rather than staying stuck
+  // showing the add-item form — no special-case code for that direction,
+  // just this one guard.
+  const [itemizing, setItemizing] = useState(false)
+  useEffect(() => {
+    if (items.length !== 1) setItemizing(false)
+  }, [items.length])
+  const isSimpleView = items.length === 1 && !itemizing
 
   const nameRef = useRef(null)
   const priceRef = useRef(null)
   const qtyRef = useRef(null)
+
+  // One shared swipe-to-delete instance for the whole item list (see
+  // useSwipeToDelete.js for why this is called once here rather than once
+  // per row) — bindSwipe is handed down to each ItemRow.
+  const { bind: bindSwipe } = useSwipeToDelete()
 
   const activeMembers = allMembers.filter((m) => m.active)
   const nameOf = (id) => allMembers.find((m) => m.id === id)?.name || 'Someone'
@@ -237,6 +265,15 @@ export default function BillView() {
     loadItems()
   }
 
+  // The simple view's own amount field — same total_price back-solve as
+  // updateItemField's 'total_price' branch above (quantity stays fixed at
+  // 1, unit_price follows), just reached directly since the simple view
+  // never shows quantity/unit price at all.
+  function saveSimpleAmount(value) {
+    const amount = parseAmount(value)
+    if (!Number.isNaN(amount)) updateItemField(items[0], 'total_price', amount)
+  }
+
   // Choosing a specific person switches (or stays) on the simple
   // single-payer path — any existing multi-payer split gets cleared, since
   // bill_payers having rows is what signals "this bill uses multiple
@@ -371,6 +408,22 @@ export default function BillView() {
     downloadCsv(filename, toCsv(header, rows))
   }
 
+  // The one-line summary shown when the details panel below is collapsed —
+  // enough to answer "who paid, what category, when, is there a note"
+  // without opening it, same reasoning as any progressive-disclosure
+  // summary line: show what's usually enough, not everything.
+  const billCategory = categories.find((c) => c.id === bill?.category_id)
+  const summaryParts = []
+  if (group && !group.is_personal) {
+    summaryParts.push(isMultiPayer ? `Split ${billPayers.length} ways` : `Paid by ${nameOf(bill?.paid_by)}`)
+  }
+  summaryParts.push(billCategory ? billCategory.name : 'Uncategorized')
+  if (bill) {
+    summaryParts.push(new Date(bill.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))
+  }
+  if (noteDraft.trim()) summaryParts.push('note added')
+  const summaryText = summaryParts.join(' · ')
+
   return (
     <div className="page receipt-page">
       <header className="page-header">
@@ -390,56 +443,111 @@ export default function BillView() {
         />
       </header>
 
-      <div className="bill-note-row">
-        <textarea
-          className="bill-note"
-          placeholder="Add a note — what this was for, who was around that week…"
-          value={noteDraft}
-          onChange={(e) => setNoteDraft(e.target.value)}
-          onBlur={saveNote}
-          rows={2}
-        />
-        {noteSaved && <span className="muted note-saved">Saved</span>}
-      </div>
+      {/* Collapsed to one summary line by default — Note/Paid by/Category/
+          default split/Date used to be five separate always-visible rows
+          above the receipt; now they're one tap away instead of five
+          things to scroll past on every visit. Same CSS-only grid-rows
+          expand already used elsewhere (Scan Settings' provider picker). */}
+      <div className={`bill-summary ${detailsOpen ? 'is-open' : ''}`}>
+        <button type="button" className="bill-summary-head" onClick={() => setDetailsOpen((o) => !o)}>
+          <span className="bill-summary-text">{summaryText}</span>
+          <ChevronIcon size={16} className="bill-summary-chev" />
+        </button>
+        <div className="xwrap">
+          <div className="xinner">
+            <div className="bill-summary-body">
+              <textarea
+                className="bill-note"
+                placeholder="Add a note — what this was for, who was around that week…"
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                onBlur={saveNote}
+                rows={2}
+              />
+              {noteSaved && <span className="muted note-saved">Saved</span>}
 
-      {/* "Paid by" only ever means something when it could be someone other
-          than you — a personal space has exactly one member, forever, so
-          every bill is trivially paid by (and split with) just them; see
-          createBill in GroupView.jsx, which already defaults paid_by to
-          the creator with no picker involved. */}
-      {group && !group.is_personal && (
-        <div className="paid-by-row">
-          <span className="muted">Paid by</span>
-          {isMultiPayer ? (
-            <button type="button" className="btn-link" onClick={() => setPayerModalOpen(true)}>
-              {billPayers.map((p) => nameOf(p.member_id)).join(', ')} (split)
-            </button>
-          ) : (
-            <select value={bill?.paid_by || ''} onChange={(e) => handlePaidBySelect(e.target.value)}>
-              {paidByOptions.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                  {m.isGuest ? ' (guest)' : ''}
-                  {!m.active ? ' (left)' : ''}
-                </option>
-              ))}
-              <option value="__multiple__">Multiple payers…</option>
-            </select>
-          )}
+              {/* "Paid by" only ever means something when it could be
+                  someone other than you — a personal space has exactly one
+                  member, forever, so every bill is trivially paid by (and
+                  split with) just them; see createBill in GroupView.jsx,
+                  which already defaults paid_by to the creator with no
+                  picker involved. */}
+              {group && !group.is_personal && (
+                <div className="detail-row">
+                  <span className="detail-row-label">Paid by</span>
+                  {isMultiPayer ? (
+                    <button type="button" className="btn-link" onClick={() => setPayerModalOpen(true)}>
+                      {billPayers.map((p) => nameOf(p.member_id)).join(', ')} (split)
+                    </button>
+                  ) : (
+                    <select value={bill?.paid_by || ''} onChange={(e) => handlePaidBySelect(e.target.value)}>
+                      {paidByOptions.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                          {m.isGuest ? ' (guest)' : ''}
+                          {!m.active ? ' (left)' : ''}
+                        </option>
+                      ))}
+                      <option value="__multiple__">Multiple payers…</option>
+                    </select>
+                  )}
+                </div>
+              )}
+
+              <div className="detail-row">
+                <span className="detail-row-label">Category</span>
+                <select value={bill?.category_id || ''} onChange={(e) => setBillCategory(e.target.value)}>
+                  <option value="">Uncategorized</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {group && !group.is_personal && (
+                <div className="detail-row">
+                  <span className="detail-row-label">Split with</span>
+                  <div className="avatar-row">
+                    {activeMembers.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        className={`avatar ${defaultBuyerIds.includes(m.id) ? 'active' : ''}`}
+                        title={m.name}
+                        onClick={() => toggleDefaultBuyer(m.id)}
+                      >
+                        <AvatarGlyph iconId={m.avatarIcon} name={m.name} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {bill && (
+                <div className="detail-row">
+                  <span className="detail-row-label">Date</span>
+                  <InlineEditable
+                    className="mono item-editable"
+                    inputClassName="item-editable-input"
+                    inputType="date"
+                    value={toDateInputValue(bill.created_at)}
+                    display={new Date(bill.created_at).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                    onSave={updateBillDate}
+                    ariaLabel="Bill date"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      )}
-
-      <div className="paid-by-row">
-        <span className="muted">Category</span>
-        <select value={bill?.category_id || ''} onChange={(e) => setBillCategory(e.target.value)}>
-          <option value="">Uncategorized</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
-            </option>
-          ))}
-        </select>
       </div>
+
       {payerMismatch && (
         <p className="status-error">
           Payer amounts ({format(payerSum)}) don't match the bill total ({format(total)}) — the
@@ -451,123 +559,116 @@ export default function BillView() {
       )}
       {error && <p className="status-error">{error}</p>}
 
-      {group && !group.is_personal && (
-        <div className="default-buyers-row">
-          <span className="muted">New items split with:</span>
-          <div className="chip-row">
-            {activeMembers.map((m) => (
-              <label key={m.id} className={defaultBuyerIds.includes(m.id) ? 'buyer-chip active' : 'buyer-chip'}>
-                <input
-                  type="checkbox"
-                  checked={defaultBuyerIds.includes(m.id)}
-                  onChange={() => toggleDefaultBuyer(m.id)}
-                />
-                {m.name}
-              </label>
-            ))}
+      {isSimpleView ? (
+        // No stored mode — this is purely items.length === 1 && !itemizing
+        // (see that state above). The item itself still exists underneath,
+        // same row a 2+-item bill would show; its name just stays hidden
+        // here since there's nothing to disambiguate it from yet.
+        <>
+          <div className="amount-card">
+            <span className="amount-card-label">Amount</span>
+            <InlineEditable
+              className="amount-card-value mono"
+              inputClassName="amount-card-value-input mono"
+              inputMode="decimal"
+              pattern="[-+*/0-9.,() ]*"
+              value={String(items[0].total_price)}
+              display={format(items[0].total_price)}
+              onSave={saveSimpleAmount}
+              ariaLabel="Bill amount"
+            />
           </div>
-        </div>
-      )}
+          <button type="button" className="ghost-row" onClick={() => setItemizing(true)}>
+            <PlusIcon size={16} />
+            Add another item
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="receipt-tape">
+            {items.map((item) => (
+              <ItemRow
+                key={item.id}
+                bindSwipe={bindSwipe}
+                item={item}
+                members={allMembers}
+                categories={categories}
+                billCategoryId={bill?.category_id}
+                hideBuyers={!group || group.is_personal}
+                onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
+                onDelete={() => deleteItem(item.id)}
+                onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}
+                onUpdate={(field, value) => updateItemField(item, field, value)}
+              />
+            ))}
+            {items.length === 0 && <p className="empty-state">No items yet — scan a receipt or add one below.</p>}
+            <div className="receipt-total-row">
+              <span>Total</span>
+              <span className="mono">{format(total)}</span>
+            </div>
+          </div>
 
-      {bill && (
-        <div className="bill-date-row">
-          <InlineEditable
-            className="mono item-editable bill-date-editable"
-            inputClassName="item-editable-input"
-            inputType="date"
-            value={toDateInputValue(bill.created_at)}
-            display={new Date(bill.created_at).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            })}
-            onSave={updateBillDate}
-            ariaLabel="Bill date"
-          />
-        </div>
-      )}
+          <form onSubmit={addItem} className="add-item-form">
+            <input
+              ref={nameRef}
+              placeholder="Item"
+              value={newItem.name}
+              onChange={(e) => setNewItem((v) => ({ ...v, name: e.target.value }))}
+              onKeyDown={handleNameKeyDown}
+            />
+            <input
+              ref={priceRef}
+              placeholder="Price"
+              inputMode="decimal"
+              // Deliberately permissive — a real character allowlist, not an
+              // attempt at validating a well-formed number/expression (that's
+              // parseAmount's job downstream, which already fails gracefully
+              // on garbage). This exists to get iOS to add a minus key to its
+              // decimal pad (any pattern containing "-" does that), and now
+              // also to admit everything parseAmount accepts — digits, either
+              // decimal separator, and a small arithmetic expression like
+              // "2,30-1,25" — without the browser's own pattern validation
+              // silently blocking the submit before it ever reaches that
+              // parsing. A stricter pattern here would just be two different
+              // definitions of "valid" to keep in sync for no real benefit.
+              pattern="[-+*/0-9.,() ]*"
+              value={newItem.price}
+              onChange={(e) => setNewItem((v) => ({ ...v, price: e.target.value }))}
+            />
+            <input
+              ref={qtyRef}
+              placeholder="Qty"
+              inputMode="decimal"
+              value={newItem.quantity}
+              onChange={(e) => setNewItem((v) => ({ ...v, quantity: e.target.value }))}
+              onKeyDown={handleQtyKeyDown}
+            />
+            {/* Same fading arrow-submit button Create group/Add bill/New
+                category use, not the plain "Add" text button this used to be
+                — reusing that pattern here even though it's a flex sibling
+                rather than living inside a single input the way it does
+                there (this form has three fields, so the input-with-submit
+                approach doesn't have one input to anchor to). Gated the same
+                way addItem() itself is: a name is required, price/quantity
+                fall back gracefully if left blank. */}
+            <button type="submit" className="row-submit-btn" disabled={!newItem.name.trim()} aria-label="Add item">
+              <ArrowRightIcon size={16} />
+            </button>
+          </form>
 
-      <div className="receipt-tape">
-        {items.map((item) => (
-          <ItemRow
-            key={item.id}
-            item={item}
-            members={allMembers}
+          <ScanReceiptButton
+            scanning={scanning}
+            setScanning={setScanning}
+            onScanned={handleScanned}
+            onError={setScanError}
             categories={categories}
-            billCategoryId={bill?.category_id}
-            hideBuyers={!group || group.is_personal}
-            onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
-            onDelete={() => deleteItem(item.id)}
-            onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}
-            onUpdate={(field, value) => updateItemField(item, field, value)}
           />
-        ))}
-        {items.length === 0 && <p className="empty-state">No items yet — scan a receipt or add one below.</p>}
-        <div className="receipt-total-row">
-          <span>Total</span>
-          <span className="mono">{format(total)}</span>
-        </div>
-      </div>
-
-      <form onSubmit={addItem} className="add-item-form">
-        <input
-          ref={nameRef}
-          placeholder="Item"
-          value={newItem.name}
-          onChange={(e) => setNewItem((v) => ({ ...v, name: e.target.value }))}
-          onKeyDown={handleNameKeyDown}
-        />
-        <input
-          ref={priceRef}
-          placeholder="Price"
-          inputMode="decimal"
-          // Deliberately permissive — a real character allowlist, not an
-          // attempt at validating a well-formed number/expression (that's
-          // parseAmount's job downstream, which already fails gracefully
-          // on garbage). This exists to get iOS to add a minus key to its
-          // decimal pad (any pattern containing "-" does that), and now
-          // also to admit everything parseAmount accepts — digits, either
-          // decimal separator, and a small arithmetic expression like
-          // "2,30-1,25" — without the browser's own pattern validation
-          // silently blocking the submit before it ever reaches that
-          // parsing. A stricter pattern here would just be two different
-          // definitions of "valid" to keep in sync for no real benefit.
-          pattern="[-+*/0-9.,() ]*"
-          value={newItem.price}
-          onChange={(e) => setNewItem((v) => ({ ...v, price: e.target.value }))}
-        />
-        <input
-          ref={qtyRef}
-          placeholder="Qty"
-          inputMode="decimal"
-          value={newItem.quantity}
-          onChange={(e) => setNewItem((v) => ({ ...v, quantity: e.target.value }))}
-          onKeyDown={handleQtyKeyDown}
-        />
-        {/* Same fading arrow-submit button Create group/Add bill/New
-            category use, not the plain "Add" text button this used to be
-            — reusing that pattern here even though it's a flex sibling
-            rather than living inside a single input the way it does
-            there (this form has three fields, so the input-with-submit
-            approach doesn't have one input to anchor to). Gated the same
-            way addItem() itself is: a name is required, price/quantity
-            fall back gracefully if left blank. */}
-        <button type="submit" className="row-submit-btn" disabled={!newItem.name.trim()} aria-label="Add item">
-          <ArrowRightIcon size={16} />
-        </button>
-      </form>
-
-      <ScanReceiptButton
-        scanning={scanning}
-        setScanning={setScanning}
-        onScanned={handleScanned}
-        onError={setScanError}
-        categories={categories}
-      />
-      <button type="button" className="btn-link sample-link" onClick={trySampleReceipt}>
-        Try sample items instead (no API key needed)
-      </button>
-      {scanError && <p className="status-error">{scanError}</p>}
+          <button type="button" className="btn-link sample-link" onClick={trySampleReceipt}>
+            Try sample items instead (no API key needed)
+          </button>
+          {scanError && <p className="status-error">{scanError}</p>}
+        </>
+      )}
 
       <PrintableBillRecap bill={{ ...bill, payers: billPayers }} items={items} members={allMembers} />
 

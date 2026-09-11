@@ -20,23 +20,17 @@ function Glyph({ Icon }) {
   return <Icon size={14} className="guide-glyph" />
 }
 
-// A small, inert mockup of the item-split chip row (see "Choosing who
-// splits each item") — real .buyer-chip markup, not a screenshot, so it
-// always matches the actual control pixel-for-pixel and needs no upkeep
-// of its own. Not a real form: the checkboxes are just there for the
-// checked-look, nothing here is clickable.
-function ChipDemo() {
+// A small, inert mockup of an item's "Split with" avatar row (see
+// "Choosing who splits each item") — real .avatar/.avatar-row markup, not
+// a screenshot, so it always matches the actual control pixel-for-pixel
+// and needs no upkeep of its own. Not a real control: nothing here is
+// clickable.
+function AvatarDemo() {
   return (
-    <div className="chip-row guide-demo" aria-hidden="true">
-      <span className="buyer-chip active">
-        <input type="checkbox" checked readOnly /> Alex
-      </span>
-      <span className="buyer-chip active">
-        <input type="checkbox" checked readOnly /> Sam
-      </span>
-      <span className="buyer-chip">
-        <input type="checkbox" readOnly /> Jo
-      </span>
+    <div className="avatar-row guide-demo" aria-hidden="true">
+      <span className="avatar active">A</span>
+      <span className="avatar active">S</span>
+      <span className="avatar">J</span>
     </div>
   )
 }
@@ -256,21 +250,21 @@ const GROUPS = [
               or scanning a receipt photo (see <strong>Scanning a receipt</strong> below).
             </p>
             <p>
-              Made a typo, or a scan misread a price? Tap an item's name, price, or quantity to
-              edit it right there — a faint dotted underline marks what's tappable. Enter or
-              tapping away saves; Escape backs out; clearing a box completely and confirming it
-              always reverts to what it said before, never blank or zero.
+              Each item sits on the receipt as one line — name and total, nothing else — until you
+              tap it open. Expanded, its name, unit price, quantity, and total are all tap-to-edit,
+              same dotted-underline convention as everywhere else in the app: Enter or tapping away
+              saves, Escape backs out, and clearing a box completely and confirming it always
+              reverts to what it said before rather than saving blank or zero.
             </p>
             <p>
-              <strong>The Price field also does quick math</strong> — type{' '}
-              <code>2,30-1,25</code> and it saves as <code>1,05</code>. Handy for splitting a
-              shared line total or subtracting a discount by hand without reaching for a
-              calculator first.
+              <strong>The price fields also do quick math</strong> — type <code>2,30-1,25</code>{' '}
+              and it saves as <code>1,05</code>. Handy for splitting a shared line total or
+              subtracting a discount by hand without reaching for a calculator first.
             </p>
             <p>
-              Next to the total, a smaller "$1.29 x 2" shows the unit price and quantity behind it
-              — tap either to change it, and the total follows. Editing the total itself works the
-              other way around: quantity stays put and the unit price adjusts to match.
+              To remove an item, either expand it and tap <strong>Remove item</strong>, or swipe it
+              left to reveal the same thing without opening it at all — whichever's faster in the
+              moment, both do exactly the same thing.
             </p>
           </>
         ),
@@ -278,17 +272,18 @@ const GROUPS = [
       {
         id: 'splitting-items',
         title: 'Choosing who splits each item',
-        keywords: 'split with chip include exclude default new items',
+        keywords: 'split with avatar chip include exclude default new items',
         body: (
           <>
             <p>
-              Every item has a row of name chips underneath it — tap one to include or exclude
-              that person from that specific item's split:
+              Expand an item and its <strong>Split with</strong> row shows everyone as a small
+              initialed circle — tap one to include or exclude that person from that specific
+              item's split:
             </p>
-            <ChipDemo />
+            <AvatarDemo />
             <p>
               New items default to splitting with everyone currently in the group, unless you've
-              changed the <strong>"New items split with"</strong> row near the top of the bill —
+              changed <strong>Split with</strong> under the bill's own summary line near the top —
               handy when only some of the group actually did that particular shop.
             </p>
           </>
@@ -297,18 +292,23 @@ const GROUPS = [
       {
         id: 'paid-by-and-date',
         title: "Paid by & the bill's date",
-        keywords: 'paid by front money date backdate postdate calendar picker',
+        keywords: 'paid by front money date backdate postdate calendar picker summary details',
         body: (
           <>
+            <p>
+              A bill's details — note, paid by, category, default split, and date — collapse into
+              one line under the title ("Paid by You · Groceries · Sep 10") rather than sitting
+              open on every visit; tap it to expand all five.
+            </p>
             <p>
               <strong>Paid by</strong> controls who fronted the money — usually one person, but
               see <strong>Multiple payers</strong> below if more than one person chipped in.
             </p>
             <p>
-              A bill's date — small type just above the item list — is tap-to-edit too, opening
-              your device's own date picker. Most bills happen the same day they're added and
-              never need this; it's there for adding one a few days late without it landing in the
-              wrong week's report, or fixing up a bill by hand after an import missed it.
+              <strong>Date</strong> is tap-to-edit too, opening your device's own date picker. Most
+              bills happen the same day they're added and never need this; it's there for adding
+              one a few days late without it landing in the wrong week's report, or fixing up a
+              bill by hand after an import missed it.
             </p>
           </>
         ),

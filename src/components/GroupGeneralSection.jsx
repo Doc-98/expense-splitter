@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { useAuth } from '../context/AuthContext'
 import { ArrowRightIcon } from './icons'
+import AvatarPicker from './AvatarPicker'
 
 // Lifted as-is from what used to be GroupSettings.jsx's own top section —
 // self-contained (own fetch, own save) same as every other Group Settings
@@ -14,9 +16,19 @@ import { ArrowRightIcon } from './icons'
 // there's nothing to keep in sync here beyond this one field.
 export default function GroupGeneralSection() {
   const { groupId } = useParams()
+  const { user, displayName } = useAuth()
   const [name, setName] = useState('')
   const [nameDraft, setNameDraft] = useState('')
   const [error, setError] = useState(null)
+  // This group's own override of your avatar (see AvatarPicker.jsx) — null
+  // means "use my account default", set from Settings > Profile instead.
+  // Needs the *row id* (not just the icon) since that's what the update
+  // below targets — group_members.id, resolved from the group+account pair
+  // rather than trusted from anywhere else, same reasoning loadGroup has
+  // for reading the group's name fresh itself.
+  const [memberId, setMemberId] = useState(null)
+  const [avatarIcon, setAvatarIcon] = useState(null)
+  const [avatarError, setAvatarError] = useState(null)
 
   const loadGroup = useCallback(async () => {
     const { data } = await supabase.from('groups').select('name').eq('id', groupId).single()
@@ -24,9 +36,21 @@ export default function GroupGeneralSection() {
     setNameDraft(data?.name || '')
   }, [groupId])
 
+  const loadMember = useCallback(async () => {
+    const { data } = await supabase
+      .from('group_members')
+      .select('id, avatar_icon')
+      .eq('group_id', groupId)
+      .eq('user_id', user.id)
+      .single()
+    setMemberId(data?.id || null)
+    setAvatarIcon(data?.avatar_icon || null)
+  }, [groupId, user.id])
+
   useEffect(() => {
     loadGroup()
-  }, [loadGroup])
+    loadMember()
+  }, [loadGroup, loadMember])
 
   async function saveName(e) {
     e.preventDefault()
@@ -42,6 +66,21 @@ export default function GroupGeneralSection() {
       // something whitespace-different from it), and `name` now matches
       // it, so the submit button's disabled-until-changed guard below
       // fades it right back out on its own.
+    }
+  }
+
+  async function saveAvatarIcon(iconId) {
+    if (!memberId) return
+    const previous = avatarIcon
+    setAvatarIcon(iconId) // optimistic — a picker tile should react the instant it's tapped
+    setAvatarError(null)
+    const { error: updateError } = await supabase
+      .from('group_members')
+      .update({ avatar_icon: iconId })
+      .eq('id', memberId)
+    if (updateError) {
+      setAvatarIcon(previous)
+      setAvatarError(updateError.message)
     }
   }
 
@@ -62,6 +101,14 @@ export default function GroupGeneralSection() {
         </div>
       </form>
       {error && <p className="status-error">{error}</p>}
+
+      <h2 className="settings-section-title">Your avatar in this group</h2>
+      <p className="muted">
+        Overrides your account default (Settings &gt; Profile) just for this group — handy if someone
+        here shares your initial.
+      </p>
+      <AvatarPicker value={avatarIcon} onChange={saveAvatarIcon} name={displayName} />
+      {avatarError && <p className="status-error">{avatarError}</p>}
     </>
   )
 }
