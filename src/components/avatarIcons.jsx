@@ -94,7 +94,7 @@ export function DuckIcon({ size = 20, ...props }) {
       {/* Sits inside the head loop (traced above), toward its front/bill
           side rather than at the very top of the curl — that's what
           the first attempt got wrong, landing right on the crown. */}
-      <circle cx="12.9" cy="6.6" r="0.8" fill="currentColor" />
+      <circle cx="13.4" cy="7.2" r="0.8" fill="currentColor" />
       <path
         d="M17.4 10.5c1.35-.08 2.63-.68 3.45-1.8L21.75 7.5h-3.75"
         stroke="currentColor"
@@ -347,29 +347,15 @@ export function LemonIcon({ size = 20, ...props }) {
 }
 
 export function FireIcon({ size = 20, ...props }) {
-  // A single smooth, asymmetric loop (bigger bulge on the bottom-right, a
-  // waist near the top-right, a plainer curve on the left) rather than the
-  // first pass's inward "carve" meant to suggest an inner flame — that
-  // tight S-curve nearly crossed itself and read as a gap in the outline
-  // instead of shading. One un-pinched loop is unambiguous at this size.
+  // Back to the very first version — preferred over the two later
+  // reworks (a single un-pinched loop, then that plus an inner curl).
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <path
-        d="M12 2.7C9 6 6 9 6 13.4c0 4.5 3.3 7.6 7.2 7.3c3.3-.3 5.8-3 5.8-6.4c0-2.1-1-3.7-2.2-5c-1.5-2.9-3.5-5.2-4.8-6.6z"
+        d="M12 2.8c1.6 2.4.9 4.3-.4 6c-1.6 2.1-3 3.6-3 5.7a3.4 3.4 0 006.8 0c0-1-.4-1.7-.8-2.4c.9.5 1.7 1.6 1.7 3.1a5.2 5.2 0 01-10.4 0c0-3.7 2.5-5.4 4.1-7.7c1-1.4 1.6-2.8 2-4.7z"
         stroke="currentColor"
-        strokeWidth="1.7"
+        strokeWidth="1.8"
         strokeLinejoin="round"
-      />
-      {/* A plain closed teardrop reads as a water drop just as easily as a
-          flame — this inner curl is what actually says "fire": a small
-          flame-within-the-flame, same idea as a two-tone flame icon but
-          drawn as one open stroke instead of a second filled shape, since
-          this set stays outline-only throughout. */}
-      <path
-        d="M12.3 10.2c1.5 1.7 1.8 3.4.7 4.9c-.6.9-1.3 1.6-1.3 2.6c0 1.3 1 2.2 2.1 2.3"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
       />
     </svg>
   )
