@@ -1224,26 +1224,39 @@ input.item-editable-input, textarea.item-editable-input {
 .add-item-form input:first-child { flex: 2; }
 .add-item-form input { flex: 1; min-width: 0; }
 
-/* "Add bill" with the quick-Amount field on (see billCreationPreferences.js)
-   — title gets its own full-width row same as the title-only form always
-   had, then a second row pairs the (optional) amount with the same
-   circular arrow-submit button .row-submit-btn already uses in the
-   add-item form above, rather than the .input-submit-btn embedded-in-one-
-   input style the title-only form uses below — two fields, no single
-   input to anchor an absolutely-positioned button inside. */
-.add-bill-quick {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: var(--space-lg);
-}
-.add-bill-quick input { width: 100%; }
-.add-bill-quick-row {
+/* "Add bill" (GroupView.jsx) — title, Amount, and the submit arrow all on
+   one row (used to be a choice between two separate form layouts, gated
+   on a Settings toggle that's gone now — one form, always, is simpler).
+   The Amount field's own width is a flat quarter of the row regardless of
+   viewport, so it doesn't reflow the title field as it fades in; see
+   .add-bill-amount-input below for that fade. */
+.add-bill-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: var(--space-lg);
 }
-.add-bill-quick-row input { flex: 1; min-width: 0; }
+.add-bill-row input:first-child { flex: 1; min-width: 0; }
+/* Same disabled -> opacity/scale fade .row-submit-btn/.input-submit-btn
+   already use, just on a text input instead of a button — genuinely
+   `disabled` until the title field holds something (see GroupView.jsx),
+   which doubles as "not usable yet" and "not shown yet" so there's only
+   one condition to keep in sync. flex: 0 0 25% (not a plain width) keeps
+   it pinned to a quarter of the row's own width even though the row also
+   has to make space for the title field and the arrow button next to it. */
+.add-bill-amount-input {
+  flex: 0 0 25%;
+  min-width: 0;
+  text-align: right;
+  opacity: 0;
+  transform: scale(0.96);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.add-bill-amount-input:not(:disabled) { opacity: 1; transform: scale(1); }
+.add-bill-amount-input:disabled { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .add-bill-amount-input { transition: none; }
+}
 
 .scan-row { display: flex; flex-direction: column; margin-top: var(--space-sm); }
 .scan-buttons { display: flex; gap: 8px; }

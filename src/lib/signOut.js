@@ -4,6 +4,7 @@ import { groupViewCache } from './groupViewCache'
 import { groupStatsCache } from './groupStatsCache'
 import { accountStatsCache } from './accountStatsCache'
 import { groupsListCache } from './groupsListCache'
+import { avatarIconCache } from './avatarIconCache'
 
 // Shared by the Settings page's Sign Out confirm — pulled out of
 // AppHeader.jsx (which used to hold the whole account dropdown, sign-out
@@ -23,5 +24,6 @@ export async function signOutAndClearCaches() {
   groupViewCache.clear()
   groupStatsCache.clear()
   accountStatsCache.clear()
+  avatarIconCache.clear()
   await supabase.auth.signOut()
 }

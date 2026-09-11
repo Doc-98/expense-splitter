@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useCurrency, CURRENCIES } from '../context/CurrencyContext'
 import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
-import { getBillCreationPreferences, setBillCreationPreferences } from '../lib/billCreationPreferences'
+import { avatarIconCache, ACCOUNT_AVATAR_ICON_CACHE_KEY } from '../lib/avatarIconCache'
 import { signOutAndClearCaches } from '../lib/signOut'
 import { GRANULARITIES, granularityLabel } from '../components/TimeRangeSelector'
 import BudgetsSection from '../components/BudgetsSection'
@@ -54,20 +54,27 @@ function ProfileSection() {
   const [nameDraft, setNameDraft] = useState(displayName)
   const [nameError, setNameError] = useState(null)
   const [prefs, setPrefs] = useState(getStatsPreferences)
-  const [billPrefs, setBillPrefs] = useState(getBillCreationPreferences)
   // Self-contained fetch/save, same as everything else on this page — not
   // lifted into AuthContext alongside displayName, since nothing besides
   // this picker (and Group Settings' own copy of this same picker) needs
   // to read it live; every place that actually *shows* an avatar just
   // refetches it fresh as part of the member list (see members.js).
-  const [avatarIcon, setAvatarIcon] = useState(null)
+  // Seeded from the cache (see avatarIconCache.js) rather than a bare
+  // null, so a repeat visit paints the real icon immediately instead of
+  // flashing the "no icon" tile lit up for the instant before the fetch
+  // below resolves. undefined (never cached — a fresh browser) still
+  // falls back to null, same as before.
+  const [avatarIcon, setAvatarIcon] = useState(() => avatarIconCache.get(ACCOUNT_AVATAR_ICON_CACHE_KEY) ?? null)
   const [avatarError, setAvatarError] = useState(null)
 
   useEffect(() => {
     let cancelled = false
     async function loadAvatar() {
       const { data } = await supabase.from('profiles').select('default_avatar_icon').eq('id', user.id).single()
-      if (!cancelled) setAvatarIcon(data?.default_avatar_icon || null)
+      if (cancelled) return
+      const icon = data?.default_avatar_icon || null
+      setAvatarIcon(icon)
+      avatarIconCache.set(ACCOUNT_AVATAR_ICON_CACHE_KEY, icon)
     }
     loadAvatar()
     return () => {
@@ -97,17 +104,15 @@ function ProfileSection() {
     setPrefs(setStatsPreferences(partial))
   }
 
-  function updateBillPref(partial) {
-    setBillPrefs(setBillCreationPreferences(partial))
-  }
-
   async function saveAvatarIcon(iconId) {
     const previous = avatarIcon
     setAvatarIcon(iconId) // optimistic — a picker tile should react the instant it's tapped
+    avatarIconCache.set(ACCOUNT_AVATAR_ICON_CACHE_KEY, iconId)
     setAvatarError(null)
     const { error } = await supabase.from('profiles').update({ default_avatar_icon: iconId }).eq('id', user.id)
     if (error) {
       setAvatarIcon(previous)
+      avatarIconCache.set(ACCOUNT_AVATAR_ICON_CACHE_KEY, previous)
       setAvatarError(error.message)
     }
   }
@@ -188,37 +193,6 @@ function ProfileSection() {
           <option value="top">Top</option>
           <option value="bottom">Bottom</option>
         </select>
-      </div>
-
-      <h2 className="settings-section-title">Adding bills</h2>
-      <p className="muted">
-        Show an optional Amount field on "Add bill" — filling it in creates the bill with a single item
-        already in place, so a one-off expense doesn't need itemizing. Set separately for groups and your
-        personal space, since they tend to differ.
-      </p>
-      <div className="settings-row">
-        <span>Quick amount in groups</span>
-        <label className="switch">
-          <input
-            type="checkbox"
-            checked={billPrefs.quickAmountInGroups}
-            onChange={(e) => updateBillPref({ quickAmountInGroups: e.target.checked })}
-            aria-label="Quick amount in groups"
-          />
-          <span className="switch-slider" />
-        </label>
-      </div>
-      <div className="settings-row">
-        <span>Quick amount in personal space</span>
-        <label className="switch">
-          <input
-            type="checkbox"
-            checked={billPrefs.quickAmountInPersonal}
-            onChange={(e) => updateBillPref({ quickAmountInPersonal: e.target.checked })}
-            aria-label="Quick amount in personal space"
-          />
-          <span className="switch-slider" />
-        </label>
       </div>
     </>
   )
