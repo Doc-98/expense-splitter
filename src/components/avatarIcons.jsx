@@ -91,6 +91,10 @@ export function DuckIcon({ size = 20, ...props }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      {/* Sits inside the head loop (traced above), toward its front/bill
+          side rather than at the very top of the curl — that's what
+          the first attempt got wrong, landing right on the crown. */}
+      <circle cx="12.9" cy="6.6" r="0.8" fill="currentColor" />
       <path
         d="M17.4 10.5c1.35-.08 2.63-.68 3.45-1.8L21.75 7.5h-3.75"
         stroke="currentColor"
@@ -233,28 +237,53 @@ export function ButterflyIcon({ size = 20, ...props }) {
 }
 
 export function PufferfishIcon({ size = 20, ...props }) {
-  // Bigger body, shorter spikes than the first pass — that one had the
-  // spikes doing most of the work and the body reading as an afterthought,
-  // the opposite of "puffed up".
+  // Traced from a reference PNG — a round, spiky body, a big ring eye, a
+  // smiling mouth, a few small chevron "spot" marks scattered on the body,
+  // and a two-lobe fin. The first pass at this packed 12 spikes in so
+  // tight (base width ~ the gap between them) that they merged into a
+  // solid gear/sun shape and buried the fin underneath — this one uses
+  // fewer, narrower spikes with real gaps between them, offset so a clear
+  // gap falls at the fin's attachment point instead of a spike sitting
+  // right on top of it.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <circle cx="11" cy="12.6" r="5.5" stroke="currentColor" strokeWidth="1.9" />
+      <circle cx="10.5" cy="13" r="6" stroke="currentColor" strokeWidth="1.7" />
       {[0, 36, 72, 108, 144, 180, 216, 252, 288, 324].map((deg) => (
-        <line
+        <path
           key={deg}
-          x1="11"
-          y1="7.1"
-          x2="11"
-          y2="5.6"
+          d="M9.5 7L10.5 4.5L11.5 7"
           stroke="currentColor"
-          strokeWidth="1.5"
+          strokeWidth="1.2"
           strokeLinecap="round"
-          transform={`rotate(${deg} 11 12.6)`}
+          strokeLinejoin="round"
+          transform={`rotate(${deg} 10.5 13)`}
         />
       ))}
-      <circle cx="9.1" cy="10.8" r="0.9" fill="currentColor" />
-      <path d="M8.5 14.9c.9.8 2.1.9 3-.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      <path d="M16.5 11.6l3.8-2.4l-.5 4.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <circle cx="7.5" cy="10.5" r="1.4" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M8.1 15.8c.8.8 1.9.9 2.7.1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      {[
+        [9.7, 8.3],
+        [13.5, 8],
+        [14.5, 11.5],
+        [8.3, 16.5],
+        [12.6, 17],
+      ].map(([x, y]) => (
+        <path
+          key={`${x}-${y}`}
+          d={`M${x - 0.55} ${y + 0.45}L${x} ${y - 0.45}L${x + 0.55} ${y + 0.45}`}
+          stroke="currentColor"
+          strokeWidth="1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
+      <path
+        d="M16.5 10.8L21 13L16.5 15.2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
