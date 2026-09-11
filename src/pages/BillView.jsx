@@ -14,7 +14,7 @@ import ShareButton from '../components/ShareButton'
 import MultiPayerModal from '../components/MultiPayerModal'
 import { PrintableBillRecap } from '../components/PrintableRecap'
 import BackButton from '../components/BackButton'
-import { ArrowRightIcon, ChevronIcon } from '../components/icons'
+import { ArrowRightIcon, ChevronIcon, PlusIcon } from '../components/icons'
 import { useCurrency } from '../context/CurrencyContext'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
 import { memberInitial } from '../lib/memberInitial'
@@ -44,6 +44,23 @@ export default function BillView() {
   // (note, paid by, category, default split, date) is still reachable in
   // one tap, just not competing with the receipt for space on every visit.
   const [detailsOpen, setDetailsOpen] = useState(false)
+  // No stored "mode" — a bill with exactly one item shows the simple
+  // amount-card view below instead of the itemized receipt, purely
+  // because items.length === 1 (see the "+ Add another item" ghost row
+  // further down). `itemizing` is the one bit of real UI state this
+  // needs on top of that: whether the ghost row has been tapped, so the
+  // itemized view (with its own add-item form) can be shown to add a
+  // second item *before* that second item exists yet. It's reset back to
+  // false the moment items.length leaves 1 in either direction, so a
+  // bill that itemizes and is later swipe-deleted back down to one item
+  // lands back on the plain amount-card view rather than staying stuck
+  // showing the add-item form — no special-case code for that direction,
+  // just this one guard.
+  const [itemizing, setItemizing] = useState(false)
+  useEffect(() => {
+    if (items.length !== 1) setItemizing(false)
+  }, [items.length])
+  const isSimpleView = items.length === 1 && !itemizing
 
   const nameRef = useRef(null)
   const priceRef = useRef(null)
@@ -246,6 +263,15 @@ export default function BillView() {
     const { error: updateError } = await supabase.from('items').update(patch).eq('id', item.id)
     if (updateError) setError(updateError.message)
     loadItems()
+  }
+
+  // The simple view's own amount field — same total_price back-solve as
+  // updateItemField's 'total_price' branch above (quantity stays fixed at
+  // 1, unit_price follows), just reached directly since the simple view
+  // never shows quantity/unit price at all.
+  function saveSimpleAmount(value) {
+    const amount = parseAmount(value)
+    if (!Number.isNaN(amount)) updateItemField(items[0], 'total_price', amount)
   }
 
   // Choosing a specific person switches (or stays) on the simple
@@ -533,88 +559,116 @@ export default function BillView() {
       )}
       {error && <p className="status-error">{error}</p>}
 
-      <div className="receipt-tape">
-        {items.map((item) => (
-          <ItemRow
-            key={item.id}
-            bindSwipe={bindSwipe}
-            item={item}
-            members={allMembers}
+      {isSimpleView ? (
+        // No stored mode — this is purely items.length === 1 && !itemizing
+        // (see that state above). The item itself still exists underneath,
+        // same row a 2+-item bill would show; its name just stays hidden
+        // here since there's nothing to disambiguate it from yet.
+        <>
+          <div className="amount-card">
+            <span className="amount-card-label">Amount</span>
+            <InlineEditable
+              className="amount-card-value mono"
+              inputClassName="amount-card-value-input mono"
+              inputMode="decimal"
+              pattern="[-+*/0-9.,() ]*"
+              value={String(items[0].total_price)}
+              display={format(items[0].total_price)}
+              onSave={saveSimpleAmount}
+              ariaLabel="Bill amount"
+            />
+          </div>
+          <button type="button" className="ghost-row" onClick={() => setItemizing(true)}>
+            <PlusIcon size={16} />
+            Add another item
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="receipt-tape">
+            {items.map((item) => (
+              <ItemRow
+                key={item.id}
+                bindSwipe={bindSwipe}
+                item={item}
+                members={allMembers}
+                categories={categories}
+                billCategoryId={bill?.category_id}
+                hideBuyers={!group || group.is_personal}
+                onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
+                onDelete={() => deleteItem(item.id)}
+                onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}
+                onUpdate={(field, value) => updateItemField(item, field, value)}
+              />
+            ))}
+            {items.length === 0 && <p className="empty-state">No items yet — scan a receipt or add one below.</p>}
+            <div className="receipt-total-row">
+              <span>Total</span>
+              <span className="mono">{format(total)}</span>
+            </div>
+          </div>
+
+          <form onSubmit={addItem} className="add-item-form">
+            <input
+              ref={nameRef}
+              placeholder="Item"
+              value={newItem.name}
+              onChange={(e) => setNewItem((v) => ({ ...v, name: e.target.value }))}
+              onKeyDown={handleNameKeyDown}
+            />
+            <input
+              ref={priceRef}
+              placeholder="Price"
+              inputMode="decimal"
+              // Deliberately permissive — a real character allowlist, not an
+              // attempt at validating a well-formed number/expression (that's
+              // parseAmount's job downstream, which already fails gracefully
+              // on garbage). This exists to get iOS to add a minus key to its
+              // decimal pad (any pattern containing "-" does that), and now
+              // also to admit everything parseAmount accepts — digits, either
+              // decimal separator, and a small arithmetic expression like
+              // "2,30-1,25" — without the browser's own pattern validation
+              // silently blocking the submit before it ever reaches that
+              // parsing. A stricter pattern here would just be two different
+              // definitions of "valid" to keep in sync for no real benefit.
+              pattern="[-+*/0-9.,() ]*"
+              value={newItem.price}
+              onChange={(e) => setNewItem((v) => ({ ...v, price: e.target.value }))}
+            />
+            <input
+              ref={qtyRef}
+              placeholder="Qty"
+              inputMode="decimal"
+              value={newItem.quantity}
+              onChange={(e) => setNewItem((v) => ({ ...v, quantity: e.target.value }))}
+              onKeyDown={handleQtyKeyDown}
+            />
+            {/* Same fading arrow-submit button Create group/Add bill/New
+                category use, not the plain "Add" text button this used to be
+                — reusing that pattern here even though it's a flex sibling
+                rather than living inside a single input the way it does
+                there (this form has three fields, so the input-with-submit
+                approach doesn't have one input to anchor to). Gated the same
+                way addItem() itself is: a name is required, price/quantity
+                fall back gracefully if left blank. */}
+            <button type="submit" className="row-submit-btn" disabled={!newItem.name.trim()} aria-label="Add item">
+              <ArrowRightIcon size={16} />
+            </button>
+          </form>
+
+          <ScanReceiptButton
+            scanning={scanning}
+            setScanning={setScanning}
+            onScanned={handleScanned}
+            onError={setScanError}
             categories={categories}
-            billCategoryId={bill?.category_id}
-            hideBuyers={!group || group.is_personal}
-            onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
-            onDelete={() => deleteItem(item.id)}
-            onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}
-            onUpdate={(field, value) => updateItemField(item, field, value)}
           />
-        ))}
-        {items.length === 0 && <p className="empty-state">No items yet — scan a receipt or add one below.</p>}
-        <div className="receipt-total-row">
-          <span>Total</span>
-          <span className="mono">{format(total)}</span>
-        </div>
-      </div>
-
-      <form onSubmit={addItem} className="add-item-form">
-        <input
-          ref={nameRef}
-          placeholder="Item"
-          value={newItem.name}
-          onChange={(e) => setNewItem((v) => ({ ...v, name: e.target.value }))}
-          onKeyDown={handleNameKeyDown}
-        />
-        <input
-          ref={priceRef}
-          placeholder="Price"
-          inputMode="decimal"
-          // Deliberately permissive — a real character allowlist, not an
-          // attempt at validating a well-formed number/expression (that's
-          // parseAmount's job downstream, which already fails gracefully
-          // on garbage). This exists to get iOS to add a minus key to its
-          // decimal pad (any pattern containing "-" does that), and now
-          // also to admit everything parseAmount accepts — digits, either
-          // decimal separator, and a small arithmetic expression like
-          // "2,30-1,25" — without the browser's own pattern validation
-          // silently blocking the submit before it ever reaches that
-          // parsing. A stricter pattern here would just be two different
-          // definitions of "valid" to keep in sync for no real benefit.
-          pattern="[-+*/0-9.,() ]*"
-          value={newItem.price}
-          onChange={(e) => setNewItem((v) => ({ ...v, price: e.target.value }))}
-        />
-        <input
-          ref={qtyRef}
-          placeholder="Qty"
-          inputMode="decimal"
-          value={newItem.quantity}
-          onChange={(e) => setNewItem((v) => ({ ...v, quantity: e.target.value }))}
-          onKeyDown={handleQtyKeyDown}
-        />
-        {/* Same fading arrow-submit button Create group/Add bill/New
-            category use, not the plain "Add" text button this used to be
-            — reusing that pattern here even though it's a flex sibling
-            rather than living inside a single input the way it does
-            there (this form has three fields, so the input-with-submit
-            approach doesn't have one input to anchor to). Gated the same
-            way addItem() itself is: a name is required, price/quantity
-            fall back gracefully if left blank. */}
-        <button type="submit" className="row-submit-btn" disabled={!newItem.name.trim()} aria-label="Add item">
-          <ArrowRightIcon size={16} />
-        </button>
-      </form>
-
-      <ScanReceiptButton
-        scanning={scanning}
-        setScanning={setScanning}
-        onScanned={handleScanned}
-        onError={setScanError}
-        categories={categories}
-      />
-      <button type="button" className="btn-link sample-link" onClick={trySampleReceipt}>
-        Try sample items instead (no API key needed)
-      </button>
-      {scanError && <p className="status-error">{scanError}</p>}
+          <button type="button" className="btn-link sample-link" onClick={trySampleReceipt}>
+            Try sample items instead (no API key needed)
+          </button>
+          {scanError && <p className="status-error">{scanError}</p>}
+        </>
+      )}
 
       <PrintableBillRecap bill={{ ...bill, payers: billPayers }} items={items} members={allMembers} />
 

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useCurrency, CURRENCIES } from '../context/CurrencyContext'
 import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
+import { getBillCreationPreferences, setBillCreationPreferences } from '../lib/billCreationPreferences'
 import { signOutAndClearCaches } from '../lib/signOut'
 import { GRANULARITIES, granularityLabel } from '../components/TimeRangeSelector'
 import BudgetsSection from '../components/BudgetsSection'
@@ -52,6 +53,7 @@ function ProfileSection() {
   const [nameDraft, setNameDraft] = useState(displayName)
   const [nameError, setNameError] = useState(null)
   const [prefs, setPrefs] = useState(getStatsPreferences)
+  const [billPrefs, setBillPrefs] = useState(getBillCreationPreferences)
 
   async function saveDisplayName(e) {
     e.preventDefault()
@@ -73,6 +75,10 @@ function ProfileSection() {
 
   function updatePref(partial) {
     setPrefs(setStatsPreferences(partial))
+  }
+
+  function updateBillPref(partial) {
+    setBillPrefs(setBillCreationPreferences(partial))
   }
 
   return (
@@ -143,6 +149,37 @@ function ProfileSection() {
           <option value="top">Top</option>
           <option value="bottom">Bottom</option>
         </select>
+      </div>
+
+      <h2 className="settings-section-title">Adding bills</h2>
+      <p className="muted">
+        Show an optional Amount field on "Add bill" — filling it in creates the bill with a single item
+        already in place, so a one-off expense doesn't need itemizing. Set separately for groups and your
+        personal space, since they tend to differ.
+      </p>
+      <div className="settings-row">
+        <span>Quick amount in groups</span>
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={billPrefs.quickAmountInGroups}
+            onChange={(e) => updateBillPref({ quickAmountInGroups: e.target.checked })}
+            aria-label="Quick amount in groups"
+          />
+          <span className="switch-slider" />
+        </label>
+      </div>
+      <div className="settings-row">
+        <span>Quick amount in personal space</span>
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={billPrefs.quickAmountInPersonal}
+            onChange={(e) => updateBillPref({ quickAmountInPersonal: e.target.checked })}
+            aria-label="Quick amount in personal space"
+          />
+          <span className="switch-slider" />
+        </label>
       </div>
     </>
   )

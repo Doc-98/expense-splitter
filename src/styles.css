@@ -948,6 +948,56 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .avatar.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .avatar.former { border-style: dashed; opacity: 0.7; }
 
+/* ---------- Simple bill view ----------
+   Shown instead of .receipt-tape when a bill has exactly one item and
+   hasn't been itemized in this session (see BillView.jsx's isSimpleView) —
+   no stored mode, purely items.length === 1. The item's own name stays
+   hidden here; there's nothing yet to disambiguate it from. */
+.amount-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px var(--space-md);
+  margin-bottom: 12px;
+  text-align: center;
+}
+.amount-card-label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; }
+.amount-card-value { font-size: 34px; font-weight: 500; border-bottom: 1px dotted var(--ink-soft); }
+.amount-card-value:hover { border-bottom-color: var(--ink); }
+input.amount-card-value-input {
+  font-size: 34px;
+  font-weight: 500;
+  text-align: center;
+  width: 100%;
+  color: inherit;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+/* The one way from the simple view into itemizing — tapping it reveals
+   the existing add-item form (and the item list, showing this bill's one
+   item alongside whatever gets added) rather than being a second, bespoke
+   entry point of its own. A dashed "not filled in yet" treatment, matching
+   how empty/add-new rows read elsewhere in the app. */
+.ghost-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 28px;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.ghost-row:hover { border-color: var(--accent); color: var(--accent-dark); }
+
 .receipt-tape {
   position: relative;
   background: var(--surface);
@@ -1109,6 +1159,27 @@ input.item-editable-input, textarea.item-editable-input {
 }
 .add-item-form input:first-child { flex: 2; }
 .add-item-form input { flex: 1; min-width: 0; }
+
+/* "Add bill" with the quick-Amount field on (see billCreationPreferences.js)
+   — title gets its own full-width row same as the title-only form always
+   had, then a second row pairs the (optional) amount with the same
+   circular arrow-submit button .row-submit-btn already uses in the
+   add-item form above, rather than the .input-submit-btn embedded-in-one-
+   input style the title-only form uses below — two fields, no single
+   input to anchor an absolutely-positioned button inside. */
+.add-bill-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: var(--space-lg);
+}
+.add-bill-quick input { width: 100%; }
+.add-bill-quick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.add-bill-quick-row input { flex: 1; min-width: 0; }
 
 .scan-row { display: flex; flex-direction: column; margin-top: var(--space-sm); }
 .scan-buttons { display: flex; gap: 8px; }
