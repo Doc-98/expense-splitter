@@ -13,29 +13,83 @@
 // matters far more here than anatomical accuracy.
 
 export function BombIcon({ size = 20, ...props }) {
+  // Traced 1:1 from the user's own redraw (made on iPad with Apple Pencil
+  // in Linearity Curve) — path data unchanged, just stroke="#000000" ->
+  // "currentColor" and camelCase attribute names for JSX.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <circle cx="10.3" cy="14.8" r="6" stroke="currentColor" strokeWidth="1.8" />
       <path
-        d="M13.7 10.2c.6-1.1 1.6-1.9 2.8-2.3c-.4 1-.3 2 .3 2.8c1-.4 2.1-.2 2.9.5"
+        d="M9.4375 8.34375C6.12379 8.34375 3.4375 11.03 3.4375 14.3438C3.4375 17.6575 6.12379 20.3438 9.4375 20.3438C12.7512 20.3437 15.4375 17.6575 15.4375 14.3438C15.4375 11.03 12.7512 8.34375 9.4375 8.34375Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="butt"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M12.85 9.75C12.9206 9.62053 12.9968 9.49523 13.0781 9.37423"
         stroke="currentColor"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {[0, 45, 90, 135].map((deg) => (
-        <line
-          key={deg}
-          x1="19.7"
-          y1="4.1"
-          x2="19.7"
-          y2="7.5"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          transform={`rotate(${deg} 19.7 5.8)`}
-        />
-      ))}
+      <path d="M18.85 3.65L18.85 7.05" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="miter" />
+      <path
+        d="M20.0521 4.14792L17.6479 6.55208"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="miter"
+      />
+      <path d="M20.55 5.35L17.15 5.35" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="miter" />
+      <path
+        d="M20.0521 6.55208L17.6479 4.14792"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M13.5461 9.30407C13.3968 9.00551 13.6207 7.8267 13.884 7.65119"
+        stroke="currentColor"
+        strokeWidth="1.15385"
+        strokeLinecap="round"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M14.0505 7.54014C14.3139 7.01345 15.7091 8.29541 15.9015 8.39156"
+        stroke="currentColor"
+        strokeWidth="1.15385"
+        strokeLinecap="round"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M16.1421 8.4656C16.6588 7.94889 16.5717 7.27762 16.1791 6.68871"
+        stroke="currentColor"
+        strokeWidth="1.15385"
+        strokeLinecap="round"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M16.031 6.48511C15.5564 5.77322 17.9032 6.15685 18.067 6.13343"
+        stroke="currentColor"
+        strokeWidth="1.15385"
+        strokeLinecap="round"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M9.66955 18.1596C10.4691 18.1802 11.2406 17.897 11.5982 17.6071C12.2233 17.1003 12.7236 16.6159 13.0752 15.6492"
+        stroke="currentColor"
+        strokeWidth="1.08597"
+        strokeLinecap="round"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M13.4548 14.3032C13.4519 14.2974 13.4548 14.2857 13.4461 14.2857"
+        stroke="currentColor"
+        strokeWidth="1.08597"
+        strokeLinecap="round"
+        strokeLinejoin="miter"
+      />
     </svg>
   )
 }
@@ -73,30 +127,27 @@ export function ShrimpIcon({ size = 20, ...props }) {
 }
 
 export function DuckIcon({ size = 20, ...props }) {
-  // Traced and scaled (×0.75, from a 32px reference down to this set's
-  // 24px viewBox) straight from a reference stroke icon — its curled
-  // head-into-body outline plus its small wing flourish. Two fixes on top
-  // of the first trace: the path's start and end point (the chin, at the
-  // base of the neck) were two separate points close together rather than
-  // exactly coincident, leaving a visible gap — a trailing Z closes it
-  // properly. And the added eye landed up near the crown of the head
-  // rather than anywhere face-like, reading as a stray mark — removed
-  // rather than repositioned, since the reference itself never marks one.
+  // Traced 1:1 from the user's own redraw (made on iPad with Apple Pencil
+  // in Linearity Curve) — path data unchanged, just stroke="#000000" ->
+  // "currentColor" and camelCase attribute names for JSX.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <path
-        d="M11.03 12c-1.2-.83-2.03-2.18-2.03-3.75c0-2.63 2.33-4.8 5.03-4.5c1.95.23 3.6 1.8 3.9 3.83c.3 2.03-.75 3.75-2.33 4.65c1.95.6 3.38 2.55 3.08 4.8c-.23 2.33-2.33 3.98-4.65 3.98L9 21c-2.48 0-4.5-1.5-5.25-4.5v-6l.6.45C5.93 12.15 7.8 12.75 9.75 12.75Z"
+        d="M10.28 11.6339C9.08 10.8039 8.25 9.4539 8.25 7.8839C8.25 5.2539 10.58 3.0839 13.28 3.3839C15.23 3.6139 16.88 5.1839 17.18 7.2139C17.48 9.2439 16.43 10.9639 14.85 11.8639C16.8 12.4639 18.23 14.4139 17.93 16.6639C17.7 18.9939 15.6 20.6439 13.28 20.6439L8.25 20.6339C5.77 20.6339 3.75 19.1339 3 16.1339L3 10.1339L3.6 10.5839C5.18 11.7839 7.05 12.3839 9 12.3839L10.28 11.6339Z"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {/* Sits inside the head loop (traced above), toward its front/bill
-          side rather than at the very top of the curl — that's what
-          the first attempt got wrong, landing right on the crown. */}
-      <circle cx="13.4" cy="7.2" r="0.8" fill="currentColor" />
       <path
-        d="M17.4 10.5c1.35-.08 2.63-.68 3.45-1.8L21.75 7.5h-3.75"
+        d="M16.65 10.1339C18 10.0539 19.28 9.4539 20.1 8.3339L21 7.1339L17.25 7.1339"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14.7012 7.3004C14.6589 7.3004 14.6612 7.30499 14.7012 7.28498"
         stroke="currentColor"
         strokeWidth="1.4"
         strokeLinecap="round"
