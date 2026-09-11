@@ -1098,6 +1098,9 @@ project, built as time and interest allow:
   from today's display-only currency picker
 - A scheduled/background job for subscriptions, instead of the current
   open-the-app trigger
+- More avatar icons added to the picker over time, beyond today's 16
+- Let people upload their own SVG and turn it into an avatar icon, instead
+  of picking only from the built-in set
 
 ## What's intentionally left simple (v1)
 
