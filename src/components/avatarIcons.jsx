@@ -55,32 +55,19 @@ export function SnowflakeIcon({ size = 20, ...props }) {
 }
 
 export function ShrimpIcon({ size = 20, ...props }) {
-  // Traced from a reference that happened to already use this exact 24px
-  // viewBox: a closed body outline (not just a curved spine line, which
-  // is what every previous attempt here had been), a tail fan, a few
-  // shell-segment lines, small leg ticks near the head, and an eye.
+  // Traced 1:1 from the user's reference SVG — the path/line data below is
+  // copied byte-for-byte from it (only stroke="#000000" -> "currentColor"
+  // and the wrapping <g>'s shared attributes moved onto each element), not
+  // redrawn or simplified. It already used this exact 24px viewBox.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <path
-        d="M15.5 18.5C16 15.3 14.3 12.5 10 11.1C8 10.4 7 9 7 7.3C7 7 9 7 10 7C13 7 16.3 7.3 17.8 8C19.3 8.7 20.2 9.7 20.5 11C20.8 12.3 20.7 13.7 20.1 14.8C19.4 16.3 18.3 17.3 16.9 17.9C16.5 18.1 16 18.3 15.5 18.5Z"
+        d="M15.4091492,18.6986036 L15.5,18.5 C14.6355086,16.4828534 12.4348726,15.3912818 10.3058074,15.9235481 L10,16 C10,17.3807119 11.1192881,18.5 12.5,18.5 C11.1745166,18.5 10.0899613,19.5315359 10.0053177,20.8356243 L10,21 L10.3058074,21.0764519 C12.3639038,21.5909759 14.488879,20.5881138 15.4091492,18.6986036 L15.4091492,18.6986036 Z M15.5,18.5 L16.0876894,15.2677081 C16.3179456,14.0012994 15.5065195,12.7792266 14.25,12.5 C12.7524581,12.1672129 11.2843177,11.7137271 9.85996697,11.1439868 L9.5,11 C7.99008611,10.3960344 7,8.93364462 7,7.3074176 L7,7 L7,7 C5.8954305,7 5,6.1045695 5,5 L5,4 L5,4 L5,5 C5,6.1045695 5.8954305,7 7,7 L10,7 L5,7 C3.8954305,7 3,6.1045695 3,5 L3,3 L3,3 L3,5 C3,6.1045695 3.8954305,7 5,7 L10,7 L10,7 L13.0377855,7 C14.6611857,7 16.2665182,7.34067476 17.75,8 L18.1161292,8.1627241 C19.3050993,8.69115526 20.1844343,9.73773708 20.5,11 C20.822649,12.290596 20.6729809,13.6540381 20.0780456,14.8439089 L20,15 C19.3543116,16.2913768 18.2717937,17.3120884 16.9447292,17.8808303 L15.5,18.5 L15.5,18.5 Z M20.6503318,12.7744367 L20.539997,12.9515358 C19.7452448,14.1659903 18.3449036,14.8965565 16.8438806,14.8027425 L16.1253897,14.7573974 M20.0306873,9.86186454 L18.2226934,11.468717 L18.0277613,11.6323951 C17.033486,12.4205412 15.7520231,12.7531999 14.4999327,12.5481943 M16.8048928,7.6285803 L13.9923496,10.1887731 L13.8143356,10.3419788 C12.6651871,11.2777778 11.1129282,11.5562543 9.70980266,11.0776843 L9.88380266,11.1319241"
         stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M15.5 18.5L19.3 19.6M15.5 18.5L17.8 21.4M15.5 18.5L14.2 21.2"
-        stroke="currentColor"
-        strokeWidth="1.4"
+        strokeWidth="1.5"
         strokeLinecap="round"
       />
-      <path
-        d="M18.5 9.3c-1.3.9-2.8 1.3-4.3 1.1M17 12c-1.2.9-2.6 1.3-4 1.2M14.8 14.7c-1 .7-2.1 1-3.3 1"
-        stroke="currentColor"
-        strokeWidth="1.1"
-        strokeLinecap="round"
-      />
-      <path d="M9.5 8l-1.7-1.3M12 7.3l-.8-2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <circle cx="9.8" cy="9.2" r="0.8" fill="currentColor" />
+      <line x1="11" y1="9" x2="11.1" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   )
 }
@@ -88,21 +75,22 @@ export function ShrimpIcon({ size = 20, ...props }) {
 export function DuckIcon({ size = 20, ...props }) {
   // Traced and scaled (×0.75, from a 32px reference down to this set's
   // 24px viewBox) straight from a reference stroke icon — its curled
-  // head-into-body outline plus its small wing flourish — rather than
-  // redesigned from scratch. The previous "rubber duck, no neck" pass read
-  // fine as its own drawing, but had drifted too far from what was
-  // actually asked for; this keeps the reference's own gesture and just
-  // adds an eye, which it didn't otherwise mark.
+  // head-into-body outline plus its small wing flourish. Two fixes on top
+  // of the first trace: the path's start and end point (the chin, at the
+  // base of the neck) were two separate points close together rather than
+  // exactly coincident, leaving a visible gap — a trailing Z closes it
+  // properly. And the added eye landed up near the crown of the head
+  // rather than anywhere face-like, reading as a stray mark — removed
+  // rather than repositioned, since the reference itself never marks one.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <path
-        d="M11.03 12c-1.2-.83-2.03-2.18-2.03-3.75c0-2.63 2.33-4.8 5.03-4.5c1.95.23 3.6 1.8 3.9 3.83c.3 2.03-.75 3.75-2.33 4.65c1.95.6 3.38 2.55 3.08 4.8c-.23 2.33-2.33 3.98-4.65 3.98L9 21c-2.48 0-4.5-1.5-5.25-4.5v-6l.6.45C5.93 12.15 7.8 12.75 9.75 12.75"
+        d="M11.03 12c-1.2-.83-2.03-2.18-2.03-3.75c0-2.63 2.33-4.8 5.03-4.5c1.95.23 3.6 1.8 3.9 3.83c.3 2.03-.75 3.75-2.33 4.65c1.95.6 3.38 2.55 3.08 4.8c-.23 2.33-2.33 3.98-4.65 3.98L9 21c-2.48 0-4.5-1.5-5.25-4.5v-6l.6.45C5.93 12.15 7.8 12.75 9.75 12.75Z"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="13.2" cy="4.4" r="0.8" fill="currentColor" />
       <path
         d="M17.4 10.5c1.35-.08 2.63-.68 3.45-1.8L21.75 7.5h-3.75"
         stroke="currentColor"
