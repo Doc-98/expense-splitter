@@ -55,53 +55,61 @@ export function SnowflakeIcon({ size = 20, ...props }) {
 }
 
 export function ShrimpIcon({ size = 20, ...props }) {
-  // A tighter spiral (close to 3/4 of a loop, tail curling back up
-  // toward the head) — the previous redraw's single quarter-arc bulge
-  // read as a plain hook or question mark, not a curled body. This is
-  // the one silhouette cue that actually says "shrimp".
+  // Traced from a reference that happened to already use this exact 24px
+  // viewBox: a closed body outline (not just a curved spine line, which
+  // is what every previous attempt here had been), a tail fan, a few
+  // shell-segment lines, small leg ticks near the head, and an eye.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <path
-        d="M12 4C16 4.5 19.5 7 19 11C18.6 14.5 15.5 17.5 11 18C8.5 18.3 6.5 17 6 15"
+        d="M15.5 18.5C16 15.3 14.3 12.5 10 11.1C8 10.4 7 9 7 7.3C7 7 9 7 10 7C13 7 16.3 7.3 17.8 8C19.3 8.7 20.2 9.7 20.5 11C20.8 12.3 20.7 13.7 20.1 14.8C19.4 16.3 18.3 17.3 16.9 17.9C16.5 18.1 16 18.3 15.5 18.5Z"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M15.5 18.5L19.3 19.6M15.5 18.5L17.8 21.4M15.5 18.5L14.2 21.2"
+        stroke="currentColor"
+        strokeWidth="1.4"
         strokeLinecap="round"
       />
       <path
-        d="M6 15L2 13.6M6 15L3 16.7M6 15L4.6 18"
+        d="M18.5 9.3c-1.3.9-2.8 1.3-4.3 1.1M17 12c-1.2.9-2.6 1.3-4 1.2M14.8 14.7c-1 .7-2.1 1-3.3 1"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="1.1"
         strokeLinecap="round"
       />
-      <path
-        d="M17.3 8.3l-2.3.4M18.6 11.8l-2.3.2M17.6 15l-2.1.9M14 17.4l-1.9 1.2"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
-      <circle cx="12" cy="4" r="0.9" fill="currentColor" />
-      <path d="M12 4l-1.3-2.1M12 4l.3-2.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M9.5 8l-1.7-1.3M12 7.3l-.8-2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <circle cx="9.8" cy="9.2" r="0.8" fill="currentColor" />
     </svg>
   )
 }
 
 export function DuckIcon({ size = 20, ...props }) {
-  // The classic plastic bath-duck silhouette specifically — no real neck
-  // at all, just one round body-and-head blob with a flat bill poking out
-  // front. That turned out much safer to draw as one closed outline than
-  // a realistic long-necked duck (the first redraw attempt): fewer chances
-  // for the curve to read as thin or disconnected, and a rubber duck is
-  // exactly the reference point the icon set's own name suggests anyway.
+  // Traced and scaled (×0.75, from a 32px reference down to this set's
+  // 24px viewBox) straight from a reference stroke icon — its curled
+  // head-into-body outline plus its small wing flourish — rather than
+  // redesigned from scratch. The previous "rubber duck, no neck" pass read
+  // fine as its own drawing, but had drifted too far from what was
+  // actually asked for; this keeps the reference's own gesture and just
+  // adds an eye, which it didn't otherwise mark.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <path
-        d="M3.5 14C2.8 11.5 3.5 8.5 6 6.5C8 5 11 3.8 13.5 4C16 4.2 17.5 5.5 17.5 7C17.5 7.6 19 7.8 21 8.5C19 9.3 17.7 9.4 17 9.5C17.3 12 16.8 15 15 18C13 20.3 11.5 21 10 21C6.5 21 4.5 19.5 4 17.5C3.7 16.3 3.5 15 3.5 14Z"
+        d="M11.03 12c-1.2-.83-2.03-2.18-2.03-3.75c0-2.63 2.33-4.8 5.03-4.5c1.95.23 3.6 1.8 3.9 3.83c.3 2.03-.75 3.75-2.33 4.65c1.95.6 3.38 2.55 3.08 4.8c-.23 2.33-2.33 3.98-4.65 3.98L9 21c-2.48 0-4.5-1.5-5.25-4.5v-6l.6.45C5.93 12.15 7.8 12.75 9.75 12.75"
         stroke="currentColor"
-        strokeWidth="1.7"
+        strokeWidth="1.5"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="14.6" cy="6.2" r="0.85" fill="currentColor" />
-      <path d="M8.5 12.3c1.9.7 4 .6 5.8-.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <circle cx="13.2" cy="4.4" r="0.8" fill="currentColor" />
+      <path
+        d="M17.4 10.5c1.35-.08 2.63-.68 3.45-1.8L21.75 7.5h-3.75"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
@@ -150,10 +158,14 @@ export function TurtleIcon({ size = 20, ...props }) {
       <circle cx="11.3" cy="3.7" r="0.3" fill="currentColor" />
       <circle cx="12.7" cy="3.7" r="0.3" fill="currentColor" />
       <path d="M12.6 19.9l-.6 2.3l-.6-2.3z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-      <ellipse cx="4.3" cy="7.6" rx="1.9" ry="1.2" transform="rotate(-35 4.3 7.6)" stroke="currentColor" strokeWidth="1.4" />
-      <ellipse cx="19.7" cy="7.6" rx="1.9" ry="1.2" transform="rotate(35 19.7 7.6)" stroke="currentColor" strokeWidth="1.4" />
-      <ellipse cx="4.3" cy="17.4" rx="1.9" ry="1.2" transform="rotate(35 4.3 17.4)" stroke="currentColor" strokeWidth="1.4" />
-      <ellipse cx="19.7" cy="17.4" rx="1.9" ry="1.2" transform="rotate(-35 19.7 17.4)" stroke="currentColor" strokeWidth="1.4" />
+      {/* rotate(±32.5) — the actual angle from the shell's center (12,12.5)
+          to each leg, so the oval's long axis lies on the line through the
+          center instead of roughly tangent to the shell (the previous pass
+          had all four signs backwards). */}
+      <ellipse cx="4.3" cy="7.6" rx="1.9" ry="1.2" transform="rotate(32.5 4.3 7.6)" stroke="currentColor" strokeWidth="1.4" />
+      <ellipse cx="19.7" cy="7.6" rx="1.9" ry="1.2" transform="rotate(-32.5 19.7 7.6)" stroke="currentColor" strokeWidth="1.4" />
+      <ellipse cx="4.3" cy="17.4" rx="1.9" ry="1.2" transform="rotate(-32.5 4.3 17.4)" stroke="currentColor" strokeWidth="1.4" />
+      <ellipse cx="19.7" cy="17.4" rx="1.9" ry="1.2" transform="rotate(32.5 19.7 17.4)" stroke="currentColor" strokeWidth="1.4" />
       <path
         d="M12 5.3L17.5 8.8L17.5 16.2L12 19.7L6.5 16.2L6.5 8.8Z"
         stroke="currentColor"
