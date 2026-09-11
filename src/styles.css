@@ -262,9 +262,25 @@ code {
   .boot-splash-mark { animation: none; }
 }
 
+/* align-items: center, not baseline. Two compounding problems with
+   baseline: a bare SVG icon button has no real baseline of its own, so
+   the browser synthesizes one from the icon's own bottom edge — two
+   differently-sized icons (LineChartIcon vs ShareIcon, say) then always
+   land at different heights, matched-outer-footprint or not. Separately,
+   a title that wraps to two lines (a long group name — see GroupView.jsx)
+   uses its *first* line's baseline for this purpose, which sits near the
+   very top of that two-line block — so the exact same icon buttons land
+   in a noticeably different spot next to a wrapped title than next to a
+   one-line one. An earlier fix opted individual icons out of baseline one
+   at a time (align-self: center on just whichever button visibly needed
+   it) but that just drifts the fixed ones out of line with whichever
+   siblings didn't get the same treatment — see GroupView.jsx's header
+   (Share/Stats/Settings) for exactly that. Centering everything in the
+   row against its own cross-axis is the one rule that holds regardless of
+   icon size or how many lines the title wraps to. */
 .page-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-md);
   margin-bottom: var(--space-lg);
 }
@@ -391,25 +407,6 @@ code {
 /* Marks an icon-button toggle as currently "on" — so far just Settings'
    own hamburger, tinted while its expanded nav is showing. */
 .icon-btn.active-toggle { background: var(--accent-light); color: var(--accent-dark); }
-/* The Graphs link (GroupStats.jsx/AccountStats.jsx headers): LineChartIcon
-   reads as noticeably smaller than its neighbors even at the same nominal
-   size — a thin diagonal line covers a lot less of its 24x24 viewBox than
-   ShareIcon's three circles do of theirs, so the same box reads as less
-   "there." Sized up a little further here (24px -> 26px) to compensate.
-   .page-header uses align-items: baseline, and a bare SVG with no text
-   has no real baseline of its own — the browser synthesizes one from the
-   bottom edge of the icon itself, so two differently-sized icons *always*
-   end up visually offset from each other under baseline alignment (their
-   centers can line up, or their bottoms can, never both, whenever the
-   icons themselves aren't the same size) no matter how the surrounding
-   button's own padding/footprint is tuned — which is exactly why the
-   previous padding-trimming attempt here never actually fixed it. Fixed
-   at the source instead: both this button and the Share icon button next
-   to it opt out of the header's baseline alignment via align-self: center
-   (see .icon-btn-graphs/.share-button-wrap-icon below) so they're each
-   centered on the row's own cross-axis instead, independent of their
-   icons' differing sizes. */
-.icon-btn.icon-btn-graphs { align-self: center; }
 
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-soft); margin-bottom: var(--space-sm); }
 
@@ -1581,11 +1578,8 @@ input.item-editable-input, textarea.item-editable-input {
    Settings links) — no margin-top to throw it out of line with its icon
    siblings, and no gap needed since there's nothing but the trigger button
    itself most of the time (the copy-status message is positioned off to
-   the side, not inline — see .share-status-icon below). align-self: center
-   opts this out of .page-header's own align-items: baseline the same way
-   .icon-btn-graphs does, and for the same reason (see that rule) — this is
-   the other half of the pair that needs to agree on how it's aligned. */
-.share-button-wrap-icon { margin-top: 0; gap: 0; align-self: center; }
+   the side, not inline — see .share-status-icon below). */
+.share-button-wrap-icon { margin-top: 0; gap: 0; }
 .share-menu-popover {
   position: absolute;
   left: 0;

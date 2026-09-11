@@ -583,7 +583,13 @@ export default function AccountStats() {
           title="Your stats"
           getText={() => formatAccountStatsRecap(recap, format)}
         />
-        <Link to="/stats/graphs" className="icon-btn icon-btn-graphs" aria-label="See graphs" title="See graphs">
+        {/* Sized up a little from the default 20px (LineChartIcon's thin
+            diagonal line covers less of its own viewBox than ShareIcon's
+            three circles do of theirs, so the same nominal size reads as
+            less "there") — .page-header centers every icon button in the
+            row regardless of size, so this doesn't need its own alignment
+            class the way it once did. */}
+        <Link to="/stats/graphs" className="icon-btn" aria-label="See graphs" title="See graphs">
           <LineChartIcon size={26} />
         </Link>
       </header>
