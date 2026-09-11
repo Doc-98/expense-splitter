@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { ArrowRightIcon } from './icons'
 import AvatarPicker from './AvatarPicker'
+import { avatarIconCache } from '../lib/avatarIconCache'
 
 // Lifted as-is from what used to be GroupSettings.jsx's own top section —
 // self-contained (own fetch, own save) same as every other Group Settings
@@ -27,7 +28,11 @@ export default function GroupGeneralSection() {
   // rather than trusted from anywhere else, same reasoning loadGroup has
   // for reading the group's name fresh itself.
   const [memberId, setMemberId] = useState(null)
-  const [avatarIcon, setAvatarIcon] = useState(null)
+  // Seeded from the cache (see avatarIconCache.js) rather than a bare
+  // null, so re-opening this group's Settings paints the real override
+  // immediately instead of flashing the "no icon" tile lit up for the
+  // instant before loadMember() below resolves.
+  const [avatarIcon, setAvatarIcon] = useState(() => avatarIconCache.get(groupId) ?? null)
   const [avatarError, setAvatarError] = useState(null)
 
   const loadGroup = useCallback(async () => {
@@ -44,7 +49,9 @@ export default function GroupGeneralSection() {
       .eq('user_id', user.id)
       .single()
     setMemberId(data?.id || null)
-    setAvatarIcon(data?.avatar_icon || null)
+    const icon = data?.avatar_icon || null
+    setAvatarIcon(icon)
+    avatarIconCache.set(groupId, icon)
   }, [groupId, user.id])
 
   useEffect(() => {
@@ -73,6 +80,7 @@ export default function GroupGeneralSection() {
     if (!memberId) return
     const previous = avatarIcon
     setAvatarIcon(iconId) // optimistic — a picker tile should react the instant it's tapped
+    avatarIconCache.set(groupId, iconId)
     setAvatarError(null)
     const { error: updateError } = await supabase
       .from('group_members')
@@ -80,6 +88,7 @@ export default function GroupGeneralSection() {
       .eq('id', memberId)
     if (updateError) {
       setAvatarIcon(previous)
+      avatarIconCache.set(groupId, previous)
       setAvatarError(updateError.message)
     }
   }

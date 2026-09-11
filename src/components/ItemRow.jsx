@@ -4,6 +4,7 @@ import { parseNumber, parseAmount } from '../lib/parseNumber'
 import AvatarGlyph from './AvatarGlyph'
 import InlineEditable from './InlineEditable'
 import { ChevronIcon } from './icons'
+import { avatarSizeSpec } from '../lib/groupViewPreferences'
 
 // onUpdate(field, value) is called with one of 'name' | 'unit_price' |
 // 'quantity' | 'total_price' and the raw new value — BillView.jsx's
@@ -33,9 +34,11 @@ export default function ItemRow({
   onCategoryChange,
   onUpdate,
   bindSwipe,
+  avatarSize,
 }) {
   const { format } = useCurrency()
   const [open, setOpen] = useState(false)
+  const { iconPx: avatarIconPx, className: avatarSizeClass } = avatarSizeSpec(avatarSize)
   const buyerIds = new Set(item.item_shares.map((s) => s.member_id))
   // Always show current members (whether checked or not), plus anyone no
   // longer active who's still assigned to this specific item — so a former
@@ -106,7 +109,7 @@ export default function ItemRow({
         <div className="xinner">
           <div className="item-row-body">
             <div className="item-body-row">
-              <span className="item-body-label">Item</span>
+              <span className="item-body-label">Item name</span>
               <InlineEditable
                 className="item-editable"
                 inputClassName="item-editable-input item-name-input"
@@ -169,11 +172,11 @@ export default function ItemRow({
                     <button
                       key={m.id}
                       type="button"
-                      className={`avatar ${buyerIds.has(m.id) ? 'active' : ''} ${m.active ? '' : 'former'}`}
+                      className={`avatar ${avatarSizeClass} ${buyerIds.has(m.id) ? 'active' : ''} ${m.active ? '' : 'former'}`}
                       title={`${m.name}${m.isGuest ? ' (guest)' : ''}${!m.active ? ' (left)' : ''}`}
                       onClick={() => onToggleBuyer(m.id)}
                     >
-                      <AvatarGlyph iconId={m.avatarIcon} name={m.name} />
+                      <AvatarGlyph iconId={m.avatarIcon} name={m.name} size={avatarIconPx} />
                     </button>
                   ))}
                 </div>

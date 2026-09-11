@@ -23,6 +23,28 @@ const DEFAULTS = {
   // groupFilterState.js) instead of resetting them the moment the page
   // remounts.
   stickyFilters: false,
+  // The "Split with" avatar circles — BillView.jsx's own default-split row
+  // plus each item's in ItemRow.jsx. 'small' is the size these launched
+  // at (see AVATAR_SIZE_SPECS below); global rather than per-bill/per-item,
+  // same reasoning as the toggles above.
+  avatarSize: 'small',
+}
+
+export const AVATAR_SIZE_OPTIONS = ['small', 'medium', 'large']
+
+// What each size actually renders as — the icon's own px (handed straight
+// to AvatarGlyph's `size` prop) and the CSS modifier class layered onto
+// the base .avatar circle (see styles.css). One lookup table so BillView,
+// ItemRow, and the Settings size picker can't drift out of sync on what
+// "medium" or "large" means.
+const AVATAR_SIZE_SPECS = {
+  small: { iconPx: 14, className: '' },
+  medium: { iconPx: 18, className: 'avatar-md' },
+  large: { iconPx: 22, className: 'avatar-lg' },
+}
+
+export function avatarSizeSpec(size) {
+  return AVATAR_SIZE_SPECS[size] || AVATAR_SIZE_SPECS.small
 }
 
 export function getGroupViewPreferences() {

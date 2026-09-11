@@ -22,7 +22,6 @@ import { processDueRecurringBills } from '../lib/recurringBills'
 import { prefetchGroupSettings } from '../lib/prefetchGroupSettings'
 import { groupItemsByDate } from '../lib/dateGroups'
 import { getGroupViewPreferences } from '../lib/groupViewPreferences'
-import { getBillCreationPreferences } from '../lib/billCreationPreferences'
 import { parseAmount } from '../lib/parseNumber'
 import { groupFilterStateCache } from '../lib/groupFilterState'
 import { buildGroupCsvRows, toCsv, downloadCsv } from '../lib/csv'
@@ -43,11 +42,6 @@ export default function GroupView() {
   const { user } = useAuth()
   const { format } = useCurrency()
   const { showQuickStats, showLentBorrowedStatus, stickyFilters } = getGroupViewPreferences()
-  // Whether "Add bill" below also shows an Amount field — a separate
-  // preference per space (see billCreationPreferences.js for why), read
-  // once here rather than per-render since it can't change without a
-  // trip through Settings, which remounts this page either way.
-  const { quickAmountInGroups, quickAmountInPersonal } = getBillCreationPreferences()
   // Only actually consulted when stickyFilters is on (see the state
   // declarations below and the write-back effect near the other filter
   // effects) — groupFilterStateCache.js has the full reasoning for why
@@ -185,9 +179,6 @@ export default function GroupView() {
   // needs this resolved first (e.g. defaulting a new bill's payer to me).
   const myParticipantId = allMembers.find((m) => m.userId === user.id)?.id
   const isAdmin = myParticipantId && myParticipantId === group?.admin_id
-  // Which "Add bill" layout to show — personal space and groups are
-  // tracked as separate preferences (see billCreationPreferences.js).
-  const showQuickAmount = group?.is_personal ? quickAmountInPersonal : quickAmountInGroups
   // Whether the current selection happens to cover every bill in the
   // group, not just the visible page — bills holds the group's full list
   // once historyComplete (see loadBillsAndSettlement), so this is a real
@@ -606,15 +597,16 @@ export default function GroupView() {
     if (createError) {
       setError(createError.message)
     } else {
-      // An amount typed into the quick-Amount field creates the bill with
-      // one item already in place (name mirrors the bill title, so it
-      // stays hidden behind BillView's simple one-item view) — same shape
+      // An amount typed into the Amount field (only reachable once a title's
+      // been typed — see the form below) creates the bill with one item
+      // already in place (name mirrors the bill title, so it stays hidden
+      // behind BillView's simple one-item view) — same shape
       // insertItemWithShares in BillView.jsx creates by hand, just done
-      // here so the bill lands there already filled in. Leaving the field
-      // blank (or the preference off) creates the bill with no items yet,
-      // same as this app has always done — it then expects more than one
-      // item, i.e. today's ordinary itemized bill.
-      const amount = showQuickAmount ? parseAmount(newBillAmount) : null
+      // here so the bill lands there already filled in. Leaving it blank
+      // creates the bill with no items yet, same as this app has always
+      // done — it then expects more than one item, i.e. today's ordinary
+      // itemized bill.
+      const amount = parseAmount(newBillAmount)
       if (amount) {
         const { data: item } = await supabase
           .from('items')
@@ -1001,46 +993,38 @@ export default function GroupView() {
         </>
       )}
 
-      {showQuickAmount ? (
-        // Same form, one extra optional field — see billCreationPreferences.js
-        // and createBill() above. An amount typed here creates the bill
-        // with one item already in place (BillView's simple one-item
-        // view); left blank, it's the exact same zero-item bill "Add
-        // bill" has always created. Gated only on the title, same as the
-        // title-only form below — the amount never blocks submission.
-        <form onSubmit={createBill} className="add-bill-quick">
-          <input
-            value={newBillTitle}
-            onChange={(e) => setNewBillTitle(e.target.value)}
-            placeholder="New bill (e.g. Lidl - Tuesday)"
-          />
-          <div className="add-bill-quick-row">
-            <input
-              value={newBillAmount}
-              onChange={(e) => setNewBillAmount(e.target.value)}
-              placeholder="Amount (optional — leave blank to itemize)"
-              inputMode="decimal"
-              pattern="[-+*/0-9.,() ]*"
-            />
-            <button type="submit" className="row-submit-btn" disabled={!newBillTitle.trim()} aria-label="Add bill">
-              <ArrowRightIcon size={16} />
-            </button>
-          </div>
-        </form>
-      ) : (
-        <form onSubmit={createBill} className="inline-form">
-          <div className="input-with-submit">
-            <input
-              value={newBillTitle}
-              onChange={(e) => setNewBillTitle(e.target.value)}
-              placeholder="New bill (e.g. Lidl - Tuesday)"
-            />
-            <button type="submit" className="input-submit-btn" disabled={!newBillTitle.trim()} aria-label="Add bill">
-              <ArrowRightIcon size={16} />
-            </button>
-          </div>
-        </form>
-      )}
+      {/* One form, not a choice between two (that used to be a per-space
+          Settings toggle — gone now, one form is simpler). The Amount
+          field sits on the same line as the title, at a quarter of
+          the row's width, and uses the exact same disabled-until-there's-
+          a-title fade the submit arrow already does (see .row-submit-btn)
+          rather than a separate visibility mechanism — disabled doubles as
+          "not worth touching yet" and "not yet visible," so there's only
+          one thing to keep in sync, and no layout shift when it fades in
+          since its width is always reserved. An amount typed here creates
+          the bill with one item already in place (BillView's simple
+          one-item view); left blank, it's the exact same zero-item bill
+          "Add bill" has always created — see createBill() above. */}
+      <form onSubmit={createBill} className="add-bill-row">
+        <input
+          value={newBillTitle}
+          onChange={(e) => setNewBillTitle(e.target.value)}
+          placeholder="New bill (e.g. Lidl - Tuesday)"
+        />
+        <input
+          value={newBillAmount}
+          onChange={(e) => setNewBillAmount(e.target.value)}
+          placeholder="Amount"
+          inputMode="decimal"
+          pattern="[-+*/0-9.,() ]*"
+          disabled={!newBillTitle.trim()}
+          className="add-bill-amount-input"
+          aria-label="Amount (optional — leave blank to itemize)"
+        />
+        <button type="submit" className="row-submit-btn" disabled={!newBillTitle.trim()} aria-label="Add bill">
+          <ArrowRightIcon size={16} />
+        </button>
+      </form>
 
       {/* Select mode's only entry point now — the list's own top-level
           toggle (and the "Add recurring bill" link that used to sit next

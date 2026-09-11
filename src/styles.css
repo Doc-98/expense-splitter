@@ -75,6 +75,14 @@ body {
 button { font-family: inherit; font-size: inherit; }
 input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px prevents iOS zoom-on-focus */
 
+/* Themed text-selection highlight — without this, selecting/auto-selecting
+   text (e.g. InlineEditable's select() on entering edit mode, see that
+   component) falls back to the browser's own default selection color,
+   which reads as a jarring grey/light box against this app's dark theme
+   (most visible on the simple bill view's big .amount-card-value-input,
+   auto-selected the moment you tap it). */
+::selection { background: var(--accent); color: #fff; }
+
 .mono { font-family: var(--font-mono); }
 
 code {
@@ -384,15 +392,24 @@ code {
    own hamburger, tinted while its expanded nav is showing. */
 .icon-btn.active-toggle { background: var(--accent-light); color: var(--accent-dark); }
 /* The Graphs link (GroupStats.jsx/AccountStats.jsx headers): LineChartIcon
-   read as noticeably smaller than its neighbors even at the same nominal
-   20px size — a thin diagonal line covers a lot less of its 24x24 viewBox
-   than ShareIcon's three circles do of theirs, so the same box reads as
-   less "there." Sized up 20% (20px -> 24px) to compensate, with padding
-   trimmed from 6px to 4px so the button's own outer footprint stays 32x32
-   — identical to its sibling .icon-btns either side of it in the same
-   (align-items: baseline) header row, so it reads bigger without visibly
-   shifting or growing out of line with them. */
-.icon-btn.icon-btn-graphs { padding: 4px; }
+   reads as noticeably smaller than its neighbors even at the same nominal
+   size — a thin diagonal line covers a lot less of its 24x24 viewBox than
+   ShareIcon's three circles do of theirs, so the same box reads as less
+   "there." Sized up a little further here (24px -> 26px) to compensate.
+   .page-header uses align-items: baseline, and a bare SVG with no text
+   has no real baseline of its own — the browser synthesizes one from the
+   bottom edge of the icon itself, so two differently-sized icons *always*
+   end up visually offset from each other under baseline alignment (their
+   centers can line up, or their bottoms can, never both, whenever the
+   icons themselves aren't the same size) no matter how the surrounding
+   button's own padding/footprint is tuned — which is exactly why the
+   previous padding-trimming attempt here never actually fixed it. Fixed
+   at the source instead: both this button and the Share icon button next
+   to it opt out of the header's baseline alignment via align-self: center
+   (see .icon-btn-graphs/.share-button-wrap-icon below) so they're each
+   centered on the row's own cross-axis instead, independent of their
+   icons' differing sizes. */
+.icon-btn.icon-btn-graphs { align-self: center; }
 
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-soft); margin-bottom: var(--space-sm); }
 
@@ -937,7 +954,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    used both here (a bill's default split) and on each item row below.
    Reuses .buyer-chip's own active-state logic (filled/accent when on,
    outline when off), just circular instead of a pill with a name in it. */
-.avatar-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.avatar-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .avatar {
   width: 26px; height: 26px; border-radius: 50%; flex: none; padding: 0;
   display: flex; align-items: center; justify-content: center;
@@ -947,6 +964,24 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .avatar.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .avatar.former { border-style: dashed; opacity: 0.7; }
+/* The two bigger options on top of the 26px default above — see the
+   "Split-with avatar size" picker in Settings > Groups > Display
+   (avatarSizeSpec() in groupViewPreferences.js is the one place that
+   decides both this class and the icon's own px, so they can't drift). */
+.avatar.avatar-md { width: 34px; height: 34px; font-size: 14px; }
+.avatar.avatar-lg { width: 42px; height: 42px; font-size: 17px; }
+
+/* The size picker itself — three buttons, each previewing its size with a
+   real (non-interactive) .avatar circle rather than just a text label. */
+.size-picker { display: flex; gap: 8px; margin: 10px 0 4px; }
+.size-picker-option {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 16px; border-radius: 10px;
+  border: 1px solid var(--border); color: var(--ink-soft); background: var(--surface);
+  font-size: 12px; cursor: pointer;
+}
+.size-picker-option .avatar { pointer-events: none; }
+.size-picker-option.is-selected { border-color: var(--accent); color: var(--ink); background: var(--surface-tint); }
 
 /* The 16-icon grid itself — Settings > Profile (account default) and
    Group Settings > General (per-group override) both use this, see
@@ -976,7 +1011,22 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   text-align: center;
 }
 .amount-card-label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; }
-.amount-card-value { font-size: 34px; font-weight: 500; border-bottom: 1px dotted var(--ink-soft); }
+/* A <button> under the hood (InlineEditable's non-editing state) — same
+   reset .item-editable already gives its own buttons (background/border/
+   padding/margin cleared, replaced by just the dotted underline), which
+   this was missing: without it, the browser's own default button chrome
+   showed through as a flat grey box behind the amount. */
+.amount-card-value {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font-size: 34px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--ink-soft);
+}
 .amount-card-value:hover { border-bottom-color: var(--ink); }
 input.amount-card-value-input {
   font-size: 34px;
@@ -1174,26 +1224,39 @@ input.item-editable-input, textarea.item-editable-input {
 .add-item-form input:first-child { flex: 2; }
 .add-item-form input { flex: 1; min-width: 0; }
 
-/* "Add bill" with the quick-Amount field on (see billCreationPreferences.js)
-   — title gets its own full-width row same as the title-only form always
-   had, then a second row pairs the (optional) amount with the same
-   circular arrow-submit button .row-submit-btn already uses in the
-   add-item form above, rather than the .input-submit-btn embedded-in-one-
-   input style the title-only form uses below — two fields, no single
-   input to anchor an absolutely-positioned button inside. */
-.add-bill-quick {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: var(--space-lg);
-}
-.add-bill-quick input { width: 100%; }
-.add-bill-quick-row {
+/* "Add bill" (GroupView.jsx) — title, Amount, and the submit arrow all on
+   one row (used to be a choice between two separate form layouts, gated
+   on a Settings toggle that's gone now — one form, always, is simpler).
+   The Amount field's own width is a flat quarter of the row regardless of
+   viewport, so it doesn't reflow the title field as it fades in; see
+   .add-bill-amount-input below for that fade. */
+.add-bill-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: var(--space-lg);
 }
-.add-bill-quick-row input { flex: 1; min-width: 0; }
+.add-bill-row input:first-child { flex: 1; min-width: 0; }
+/* Same disabled -> opacity/scale fade .row-submit-btn/.input-submit-btn
+   already use, just on a text input instead of a button — genuinely
+   `disabled` until the title field holds something (see GroupView.jsx),
+   which doubles as "not usable yet" and "not shown yet" so there's only
+   one condition to keep in sync. flex: 0 0 25% (not a plain width) keeps
+   it pinned to a quarter of the row's own width even though the row also
+   has to make space for the title field and the arrow button next to it. */
+.add-bill-amount-input {
+  flex: 0 0 25%;
+  min-width: 0;
+  text-align: right;
+  opacity: 0;
+  transform: scale(0.96);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.add-bill-amount-input:not(:disabled) { opacity: 1; transform: scale(1); }
+.add-bill-amount-input:disabled { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .add-bill-amount-input { transition: none; }
+}
 
 .scan-row { display: flex; flex-direction: column; margin-top: var(--space-sm); }
 .scan-buttons { display: flex; gap: 8px; }
@@ -1518,8 +1581,11 @@ input.item-editable-input, textarea.item-editable-input {
    Settings links) — no margin-top to throw it out of line with its icon
    siblings, and no gap needed since there's nothing but the trigger button
    itself most of the time (the copy-status message is positioned off to
-   the side, not inline — see .share-status-icon below). */
-.share-button-wrap-icon { margin-top: 0; gap: 0; }
+   the side, not inline — see .share-status-icon below). align-self: center
+   opts this out of .page-header's own align-items: baseline the same way
+   .icon-btn-graphs does, and for the same reason (see that rule) — this is
+   the other half of the pair that needs to agree on how it's aligned. */
+.share-button-wrap-icon { margin-top: 0; gap: 0; align-self: center; }
 .share-menu-popover {
   position: absolute;
   left: 0;

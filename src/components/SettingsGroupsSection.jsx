@@ -5,8 +5,11 @@ import { useClickOutside } from '../lib/useClickOutside'
 import { snapshotAndRemoveMember } from '../lib/leaveGroup'
 import { fetchSettingsGroupsRows } from '../lib/prefetchSettings'
 import { settingsGroupsCache, SETTINGS_GROUPS_CACHE_KEY } from '../lib/settingsGroupsCache'
-import { getGroupViewPreferences, setGroupViewPreferences } from '../lib/groupViewPreferences'
+import { getGroupViewPreferences, setGroupViewPreferences, AVATAR_SIZE_OPTIONS, avatarSizeSpec } from '../lib/groupViewPreferences'
+import AvatarGlyph from './AvatarGlyph'
 import ConfirmSheet from './ConfirmSheet'
+
+const AVATAR_SIZE_LABELS = { small: 'Small', medium: 'Medium', large: 'Large' }
 
 // The "⋮" per-row menu — same shape as BillActionsMenu.jsx's, just with
 // one item so far (see the .row-menu-* rules in styles.css, a copy of
@@ -195,6 +198,33 @@ export default function SettingsGroupsSection() {
         When on, a group page's search box and filters stay exactly as you left them after you
         open a bill and come back — right now they reset the moment you leave. Off (the default)
         keeps today's behavior. Either way, reloading the page itself still clears them.
+      </p>
+
+      <div className="settings-row">
+        <span>Split-with avatar size</span>
+      </div>
+      <div className="size-picker">
+        {AVATAR_SIZE_OPTIONS.map((size) => {
+          const { iconPx, className } = avatarSizeSpec(size)
+          return (
+            <button
+              key={size}
+              type="button"
+              className={`size-picker-option ${prefs.avatarSize === size ? 'is-selected' : ''}`}
+              onClick={() => updatePref({ avatarSize: size })}
+              aria-pressed={prefs.avatarSize === size}
+            >
+              <span className={`avatar ${className}`} aria-hidden="true">
+                <AvatarGlyph iconId="bomb" name="Preview" size={iconPx} />
+              </span>
+              {AVATAR_SIZE_LABELS[size]}
+            </button>
+          )
+        })}
+      </div>
+      <p className="muted">
+        Applies to the "Split with" circles on a bill and each of its items — the picker used to
+        choose who's in on an expense.
       </p>
 
       {pendingLeave && (
