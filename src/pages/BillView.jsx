@@ -188,16 +188,26 @@ export default function BillView() {
     return inserted
   }
 
+  // Price alone goes through parseAmount, not plain parseNumber — this is
+  // the one field someone might type a quick "2,30-1,25" into by hand
+  // (splitting a shared line total, subtracting a discount) — see
+  // parseNumber.js for why that's a distinct, opt-in function rather than
+  // something every numeric field on this page just gets for free. Used
+  // both to gate the submit button (no price typed yet -> no arrow, same
+  // "nothing to confirm" reasoning as the name check) and inside addItem
+  // itself, so a row can't be added price-less by submitting the form
+  // directly (Enter in the name field) either.
+  function parsedNewItemPrice() {
+    if (!newItem.price.trim()) return NaN
+    return parseAmount(newItem.price)
+  }
+  const newItemPriceValid = !Number.isNaN(parsedNewItemPrice())
+
   async function addItem(e) {
     e.preventDefault()
-    if (!newItem.name.trim()) return
+    if (!newItem.name.trim() || !newItemPriceValid) return
     const quantity = parseNumber(newItem.quantity) || 1
-    // Price alone goes through parseAmount, not plain parseNumber — this
-    // is the one field someone might type a quick "2,30-1,25" into by
-    // hand (splitting a shared line total, subtracting a discount) — see
-    // parseNumber.js for why that's a distinct, opt-in function rather
-    // than something every numeric field on this page just gets for free.
-    const unitPrice = parseAmount(newItem.price) || 0
+    const unitPrice = parsedNewItemPrice()
 
     await insertItemWithShares(newItem.name.trim(), unitPrice, quantity, defaultBuyerIds)
 
@@ -654,9 +664,16 @@ export default function BillView() {
                 rather than living inside a single input the way it does
                 there (this form has three fields, so the input-with-submit
                 approach doesn't have one input to anchor to). Gated the same
-                way addItem() itself is: a name is required, price/quantity
-                fall back gracefully if left blank. */}
-            <button type="submit" className="row-submit-btn" disabled={!newItem.name.trim()} aria-label="Add item">
+                way addItem() itself is: a name AND a real price are both
+                required — quantity alone still falls back to 1 if left
+                blank, but a price-less item was never a case worth letting
+                through silently (see newItemPriceValid above). */}
+            <button
+              type="submit"
+              className="row-submit-btn"
+              disabled={!newItem.name.trim() || !newItemPriceValid}
+              aria-label="Add item"
+            >
               <ArrowRightIcon size={16} />
             </button>
           </form>

@@ -109,7 +109,7 @@ export default function ItemRow({
         <div className="xinner">
           <div className="item-row-body">
             <div className="item-body-row">
-              <span className="item-body-label">Item</span>
+              <span className="item-body-label">Item name</span>
               <InlineEditable
                 className="item-editable"
                 inputClassName="item-editable-input item-name-input"
