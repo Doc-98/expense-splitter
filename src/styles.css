@@ -75,6 +75,14 @@ body {
 button { font-family: inherit; font-size: inherit; }
 input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px prevents iOS zoom-on-focus */
 
+/* Themed text-selection highlight — without this, selecting/auto-selecting
+   text (e.g. InlineEditable's select() on entering edit mode, see that
+   component) falls back to the browser's own default selection color,
+   which reads as a jarring grey/light box against this app's dark theme
+   (most visible on the simple bill view's big .amount-card-value-input,
+   auto-selected the moment you tap it). */
+::selection { background: var(--accent); color: #fff; }
+
 .mono { font-family: var(--font-mono); }
 
 code {
@@ -937,7 +945,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    used both here (a bill's default split) and on each item row below.
    Reuses .buyer-chip's own active-state logic (filled/accent when on,
    outline when off), just circular instead of a pill with a name in it. */
-.avatar-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.avatar-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .avatar {
   width: 26px; height: 26px; border-radius: 50%; flex: none; padding: 0;
   display: flex; align-items: center; justify-content: center;
@@ -947,6 +955,24 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .avatar.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .avatar.former { border-style: dashed; opacity: 0.7; }
+/* The two bigger options on top of the 26px default above — see the
+   "Split-with avatar size" picker in Settings > Groups > Display
+   (avatarSizeSpec() in groupViewPreferences.js is the one place that
+   decides both this class and the icon's own px, so they can't drift). */
+.avatar.avatar-md { width: 34px; height: 34px; font-size: 14px; }
+.avatar.avatar-lg { width: 42px; height: 42px; font-size: 17px; }
+
+/* The size picker itself — three buttons, each previewing its size with a
+   real (non-interactive) .avatar circle rather than just a text label. */
+.size-picker { display: flex; gap: 8px; margin: 10px 0 4px; }
+.size-picker-option {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 16px; border-radius: 10px;
+  border: 1px solid var(--border); color: var(--ink-soft); background: var(--surface);
+  font-size: 12px; cursor: pointer;
+}
+.size-picker-option .avatar { pointer-events: none; }
+.size-picker-option.is-selected { border-color: var(--accent); color: var(--ink); background: var(--surface-tint); }
 
 /* The 16-icon grid itself — Settings > Profile (account default) and
    Group Settings > General (per-group override) both use this, see
@@ -976,7 +1002,22 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   text-align: center;
 }
 .amount-card-label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; }
-.amount-card-value { font-size: 34px; font-weight: 500; border-bottom: 1px dotted var(--ink-soft); }
+/* A <button> under the hood (InlineEditable's non-editing state) — same
+   reset .item-editable already gives its own buttons (background/border/
+   padding/margin cleared, replaced by just the dotted underline), which
+   this was missing: without it, the browser's own default button chrome
+   showed through as a flat grey box behind the amount. */
+.amount-card-value {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font-size: 34px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--ink-soft);
+}
 .amount-card-value:hover { border-bottom-color: var(--ink); }
 input.amount-card-value-input {
   font-size: 34px;

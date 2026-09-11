@@ -18,6 +18,7 @@ import { ArrowRightIcon, ChevronIcon, PlusIcon } from '../components/icons'
 import { useCurrency } from '../context/CurrencyContext'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
 import AvatarGlyph from '../components/AvatarGlyph'
+import { getGroupViewPreferences, avatarSizeSpec } from '../lib/groupViewPreferences'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
@@ -73,6 +74,9 @@ export default function BillView() {
 
   const activeMembers = allMembers.filter((m) => m.active)
   const nameOf = (id) => allMembers.find((m) => m.id === id)?.name || 'Someone'
+
+  const { avatarSize } = getGroupViewPreferences()
+  const { iconPx: avatarIconPx, className: avatarSizeClass } = avatarSizeSpec(avatarSize)
 
   // Who a brand-new item defaults to being split with: the bill's own
   // "default split" setting if one's been chosen, otherwise everyone
@@ -514,11 +518,11 @@ export default function BillView() {
                       <button
                         key={m.id}
                         type="button"
-                        className={`avatar ${defaultBuyerIds.includes(m.id) ? 'active' : ''}`}
+                        className={`avatar ${avatarSizeClass} ${defaultBuyerIds.includes(m.id) ? 'active' : ''}`}
                         title={m.name}
                         onClick={() => toggleDefaultBuyer(m.id)}
                       >
-                        <AvatarGlyph iconId={m.avatarIcon} name={m.name} />
+                        <AvatarGlyph iconId={m.avatarIcon} name={m.name} size={avatarIconPx} />
                       </button>
                     ))}
                   </div>
@@ -595,6 +599,7 @@ export default function BillView() {
                 categories={categories}
                 billCategoryId={bill?.category_id}
                 hideBuyers={!group || group.is_personal}
+                avatarSize={avatarSize}
                 onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
                 onDelete={() => deleteItem(item.id)}
                 onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}

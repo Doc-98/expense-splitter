@@ -1,16 +1,17 @@
 import { afterEach, describe, it, expect } from 'vitest'
-import { getGroupViewPreferences, setGroupViewPreferences } from './groupViewPreferences'
+import { getGroupViewPreferences, setGroupViewPreferences, avatarSizeSpec } from './groupViewPreferences'
 
 afterEach(() => {
   localStorage.clear()
 })
 
 describe('getGroupViewPreferences', () => {
-  it('defaults both display preferences to visible, and sticky filters off', () => {
+  it('defaults both display preferences to visible, sticky filters off, and small avatars', () => {
     expect(getGroupViewPreferences()).toEqual({
       showQuickStats: true,
       showLentBorrowedStatus: true,
       stickyFilters: false,
+      avatarSize: 'small',
     })
   })
 
@@ -20,6 +21,7 @@ describe('getGroupViewPreferences', () => {
       showQuickStats: false,
       showLentBorrowedStatus: true,
       stickyFilters: false,
+      avatarSize: 'small',
     })
   })
 
@@ -36,6 +38,30 @@ describe('getGroupViewPreferences', () => {
       showQuickStats: true,
       showLentBorrowedStatus: true,
       stickyFilters: true,
+      avatarSize: 'small',
     })
+  })
+
+  it('persists the avatar size independently of the others', () => {
+    setGroupViewPreferences({ avatarSize: 'large' })
+    expect(getGroupViewPreferences()).toEqual({
+      showQuickStats: true,
+      showLentBorrowedStatus: true,
+      stickyFilters: false,
+      avatarSize: 'large',
+    })
+  })
+})
+
+describe('avatarSizeSpec', () => {
+  it('grows the icon px and adds a size class for medium and large', () => {
+    expect(avatarSizeSpec('small')).toEqual({ iconPx: 14, className: '' })
+    expect(avatarSizeSpec('medium')).toEqual({ iconPx: 18, className: 'avatar-md' })
+    expect(avatarSizeSpec('large')).toEqual({ iconPx: 22, className: 'avatar-lg' })
+  })
+
+  it('falls back to small for an unrecognized size', () => {
+    expect(avatarSizeSpec('huge')).toEqual({ iconPx: 14, className: '' })
+    expect(avatarSizeSpec(undefined)).toEqual({ iconPx: 14, className: '' })
   })
 })
