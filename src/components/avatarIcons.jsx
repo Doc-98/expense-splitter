@@ -55,55 +55,53 @@ export function SnowflakeIcon({ size = 20, ...props }) {
 }
 
 export function ShrimpIcon({ size = 20, ...props }) {
+  // A tighter spiral (close to 3/4 of a loop, tail curling back up
+  // toward the head) — the previous redraw's single quarter-arc bulge
+  // read as a plain hook or question mark, not a curled body. This is
+  // the one silhouette cue that actually says "shrimp".
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <path
-        d="M17.8 5.7c3.4 1.9 4.1 7.2 1 10.6c-2.8 3.1-7.4 3.9-10.9 1.8"
+        d="M12 4C16 4.5 19.5 7 19 11C18.6 14.5 15.5 17.5 11 18C8.5 18.3 6.5 17 6 15"
         stroke="currentColor"
         strokeWidth="1.8"
         strokeLinecap="round"
       />
-      <circle cx="17.8" cy="5.7" r="1" fill="currentColor" />
-      <path d="M17.8 5.7l1.9-2.2M17.8 5.7l2.7-.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       <path
-        d="M18.3 8.9l1.7.7M16.3 12.7l1.9.9M12.9 16.1l1.5 1.4"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
-      <path
-        d="M7.9 18.1c-1 .8-2.3 1.1-3.5.9M7.9 18.1c-.1-1.3-.7-2.4-1.7-3.1M7.9 18.1c-1.1.4-2.3.2-3.2-.4"
+        d="M6 15L2 13.6M6 15L3 16.7M6 15L4.6 18"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
       />
+      <path
+        d="M17.3 8.3l-2.3.4M18.6 11.8l-2.3.2M17.6 15l-2.1.9M14 17.4l-1.9 1.2"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="4" r="0.9" fill="currentColor" />
+      <path d="M12 4l-1.3-2.1M12 4l.3-2.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   )
 }
 
 export function DuckIcon({ size = 20, ...props }) {
-  // Front-on chick/duckling face, same recipe as CatIcon just below (one
-  // head silhouette plus a couple of features) rather than a body+head
-  // pair — two unfilled overlapping circles read as a figure-eight, not
-  // a duck, at avatar size, so this stays a single closed silhouette.
+  // The classic plastic bath-duck silhouette specifically — no real neck
+  // at all, just one round body-and-head blob with a flat bill poking out
+  // front. That turned out much safer to draw as one closed outline than
+  // a realistic long-necked duck (the first redraw attempt): fewer chances
+  // for the curve to read as thin or disconnected, and a rubber duck is
+  // exactly the reference point the icon set's own name suggests anyway.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <circle cx="12" cy="13" r="6.5" stroke="currentColor" strokeWidth="1.8" />
       <path
-        d="M8.3 14.2c0 1.3 1.6 2.2 3.7 2.2s3.7-.9 3.7-2.2c0-.9-1.6-1.4-3.7-1.4s-3.7.5-3.7 1.4z"
+        d="M3.5 14C2.8 11.5 3.5 8.5 6 6.5C8 5 11 3.8 13.5 4C16 4.2 17.5 5.5 17.5 7C17.5 7.6 19 7.8 21 8.5C19 9.3 17.7 9.4 17 9.5C17.3 12 16.8 15 15 18C13 20.3 11.5 21 10 21C6.5 21 4.5 19.5 4 17.5C3.7 16.3 3.5 15 3.5 14Z"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="1.7"
         strokeLinejoin="round"
       />
-      <path d="M8.3 14.2h7.4" stroke="currentColor" strokeWidth="1.3" />
-      <circle cx="9.7" cy="11.2" r="0.85" fill="currentColor" />
-      <circle cx="14.3" cy="11.2" r="0.85" fill="currentColor" />
-      <path
-        d="M10.7 6.6c-.4-1.3.2-2.4 1.2-2.9M13.3 6.6c.4-1.3-.2-2.4-1.2-2.9"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
+      <circle cx="14.6" cy="6.2" r="0.85" fill="currentColor" />
+      <path d="M8.5 12.3c1.9.7 4 .6 5.8-.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   )
 }
@@ -141,23 +139,32 @@ export function CatIcon({ size = 20, ...props }) {
 }
 
 export function TurtleIcon({ size = 20, ...props }) {
-  // Top-down view — shell as a rounded oval with a simple segmented
-  // pattern, head poking out the top, tail out the bottom, four legs
-  // poking out the sides. Reads clearer at avatar size than trying to
-  // draw a turtle from the side.
+  // Top-down view, redrawn from two traced references that both use the
+  // same honeycomb shell pattern (an outer hexagon, a smaller hexagon
+  // inside it, and a spoke from each inner vertex out to the matching
+  // outer one) — much more "turtle shell" than the first pass's plain
+  // oval with three divider lines.
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <circle cx="12" cy="6.1" r="1.8" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M12.7 19.3l-.7 2l-.7-2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-      <ellipse cx="5.3" cy="8.9" rx="1.9" ry="1.2" transform="rotate(-35 5.3 8.9)" stroke="currentColor" strokeWidth="1.4" />
-      <ellipse cx="18.7" cy="8.9" rx="1.9" ry="1.2" transform="rotate(35 18.7 8.9)" stroke="currentColor" strokeWidth="1.4" />
-      <ellipse cx="5.3" cy="16.7" rx="1.9" ry="1.2" transform="rotate(35 5.3 16.7)" stroke="currentColor" strokeWidth="1.4" />
-      <ellipse cx="18.7" cy="16.7" rx="1.9" ry="1.2" transform="rotate(-35 18.7 16.7)" stroke="currentColor" strokeWidth="1.4" />
-      <ellipse cx="12" cy="12.7" rx="5.8" ry="7" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="12" cy="4" r="1.7" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="11.3" cy="3.7" r="0.3" fill="currentColor" />
+      <circle cx="12.7" cy="3.7" r="0.3" fill="currentColor" />
+      <path d="M12.6 19.9l-.6 2.3l-.6-2.3z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+      <ellipse cx="4.3" cy="7.6" rx="1.9" ry="1.2" transform="rotate(-35 4.3 7.6)" stroke="currentColor" strokeWidth="1.4" />
+      <ellipse cx="19.7" cy="7.6" rx="1.9" ry="1.2" transform="rotate(35 19.7 7.6)" stroke="currentColor" strokeWidth="1.4" />
+      <ellipse cx="4.3" cy="17.4" rx="1.9" ry="1.2" transform="rotate(35 4.3 17.4)" stroke="currentColor" strokeWidth="1.4" />
+      <ellipse cx="19.7" cy="17.4" rx="1.9" ry="1.2" transform="rotate(-35 19.7 17.4)" stroke="currentColor" strokeWidth="1.4" />
       <path
-        d="M12 7.2v11.2M8.2 9.9c1.2.6 2.5.9 3.8.9s2.6-.3 3.8-.9M8.2 15.9c1.2-.6 2.5-.9 3.8-.9s2.6.3 3.8.9"
+        d="M12 5.3L17.5 8.8L17.5 16.2L12 19.7L6.5 16.2L6.5 8.8Z"
         stroke="currentColor"
-        strokeWidth="1.2"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 9.5L14.2 10.9L14.2 14.1L12 15.5L9.8 14.1L9.8 10.9Z M12 9.5L12 5.3 M14.2 10.9L17.5 8.8 M14.2 14.1L17.5 16.2 M12 15.5L12 19.7 M9.8 14.1L6.5 16.2 M9.8 10.9L6.5 8.8"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinejoin="round"
         strokeLinecap="round"
       />
     </svg>
