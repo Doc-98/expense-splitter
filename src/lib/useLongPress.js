@@ -63,6 +63,20 @@ export function useLongPress({ delay = 500, moveTolerance = 10, vibrate = true }
           firedRef.current = false
         }
       },
+      // This app's PWA is still, underneath, a web page — every element
+      // this binds to so far is a real <a> (a bill row's Link), and a
+      // press-and-hold on a link is *also* what the OS itself listens
+      // for: its own "Open in new tab / Copy Link / Share" callout,
+      // fighting this gesture for the same press. Android fires a real,
+      // cancelable `contextmenu` DOM event once a touch crosses roughly
+      // this same hold duration, regardless of whether this hook's own
+      // timer already won the race — suppressed here so it never shows
+      // for an element this is bound to. iOS Safari doesn't route its
+      // equivalent callout through `contextmenu` at all; that half needs
+      // a CSS `-webkit-touch-callout: none` on the element itself (see
+      // wherever `bind()` is actually used — e.g. GroupView.jsx's bill
+      // rows), which this hook has no element of its own to attach.
+      onContextMenu: (e) => e.preventDefault(),
     }),
     [clear, delay, moveTolerance, vibrate]
   )

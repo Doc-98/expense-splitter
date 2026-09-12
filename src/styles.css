@@ -667,8 +667,27 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    ~320px, since .card-list-item-note's max-width caps but doesn't zero
    out its contribution), which is what was still pushing .bill-list-item,
    and with it the whole page, wider than the viewport even after the
-   inner fix. min-width: 0 here closes that off at this level too. */
-.bill-list-item .card-list-item { flex: 1; min-width: 0; }
+   inner fix. min-width: 0 used to live directly on .card-list-item, back
+   when it was itself the direct flex child here — now it's one level
+   deeper (see .bill-row-shell below, wrapping it for the swipe-to-delete
+   gesture), so the shell is what actually needs flex: 1/min-width: 0
+   today; .card-list-item just fills that shell at width: 100%. */
+.bill-row-shell { position: relative; overflow: hidden; flex: 1; min-width: 0; border-radius: var(--radius); }
+.bill-list-item .card-list-item {
+  width: 100%;
+  /* This row is a real <a> with two gestures bound to it — press-and-
+     hold (enters select mode, see useLongPress.js/enterSelectModeWith)
+     and swipe-to-delete (see bindBillRow/useSwipeToDelete.js), both in
+     GroupView.jsx. Without this, iOS Safari's own long-press-on-a-link
+     callout ("Open in New Tab" / "Share" / "Copy") pops up and fights
+     both gestures for the same press. -webkit-user-select stops a stray
+     text-selection magnifier from doing the same. (Android's equivalent
+     is a real, preventable `contextmenu` event — see useLongPress.js's
+     own onContextMenu for that half.) */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
 
 /* Reuses the same "receipt tape" search bar treatment as the in-app
    guide's own search (.guide-search-input) — same torn-edge look, same

@@ -397,6 +397,52 @@ export default function GroupView() {
   // mode alongside the existing "⋮ → Select" entry point — see
   // enterSelectModeWith below, and useLongPress.js for the gesture itself.
   const bindLongPress = useLongPress()
+  // Swipe-left-to-reveal-delete, same gesture/hook as ItemRow's item list
+  // and GroupGuestsSection's guest list — see useSwipeToDelete.js.
+  const { bind: bindSwipe } = useSwipeToDelete()
+
+  // A bill row needs *both* gestures on the same element — long-press
+  // (enters select mode) and swipe (reveals delete) — and each hook
+  // returns its own onPointerDown/Move/Up/Cancel, so spreading both
+  // objects onto one element would just have the second one silently
+  // clobber the first's same-named handlers instead of both ever running.
+  // Combined here by calling both hooks' versions of each shared handler.
+  // They don't fight over the gesture itself: a real drag crosses
+  // useSwipeToDelete's own 8px threshold before useLongPress's 10px
+  // move-tolerance cancels its timer, and each hook swallows the
+  // trailing click strictly on its *own* flag (wasDragRef for swipe,
+  // firedRef for long-press) — a genuine swipe never sets firedRef, and
+  // a genuine long-press (held still, no drag) never sets wasDragRef —
+  // so whichever one actually fired is the only one that intercepts the
+  // click, and open-then-tap-to-close (swipe's isOpen check) still works
+  // exactly as it does on any other swipeable row.
+  function bindBillRow(bill) {
+    const press = bindLongPress(() => enterSelectModeWith(bill.id))
+    const swipe = bindSwipe(bill.id, () => deleteBill(bill))
+    return {
+      row: {
+        ...press,
+        ...swipe.row,
+        onPointerDown: (e) => {
+          press.onPointerDown(e)
+          swipe.row.onPointerDown(e)
+        },
+        onPointerMove: (e) => {
+          press.onPointerMove(e)
+          swipe.row.onPointerMove(e)
+        },
+        onPointerUp: (e) => {
+          press.onPointerUp(e)
+          swipe.row.onPointerUp(e)
+        },
+        onPointerCancel: (e) => {
+          press.onPointerCancel(e)
+          swipe.row.onPointerCancel(e)
+        },
+      },
+      deleteButton: swipe.deleteButton,
+    }
+  }
 
   // A fresh filter (or a changed price range) should start back on page 1
   // of its own results, not strand you on whatever page you happened to be
@@ -1144,25 +1190,40 @@ export default function GroupView() {
                             </span>
                           </label>
                         ) : (
-                          <>
-                            <Link
-                              to={`/groups/${groupId}/bills/${bill.id}`}
-                              className="card-list-item"
-                              {...bindLongPress(() => enterSelectModeWith(bill.id))}
-                            >
-                              {billLabel}
-                              <span className="bill-row-right">
-                                {billAmount}
-                                <span className="chevron">→</span>
-                              </span>
-                            </Link>
-                            <BillActionsMenu
-                              billTitle={bill.title}
-                              onSelect={() => enterSelectModeWith(bill.id)}
-                              onShare={() => shareBills([bill.id])}
-                              onDelete={() => deleteBill(bill)}
-                            />
-                          </>
+                          (() => {
+                            const billBind = bindBillRow(bill)
+                            return (
+                              <>
+                                {/* .bill-menu-wrap (BillActionsMenu) stays outside this
+                                    shell — its popover needs to escape this row's own
+                                    bounds, which it can't do from inside a container
+                                    that clips overflow to slide the row (see the same
+                                    reasoning on GroupGuestsSection's guest rows). */}
+                                <div className="bill-row-shell">
+                                  <button type="button" className="item-row-delete-action" {...billBind.deleteButton}>
+                                    Remove
+                                  </button>
+                                  <Link
+                                    to={`/groups/${groupId}/bills/${bill.id}`}
+                                    className="card-list-item"
+                                    {...billBind.row}
+                                  >
+                                    {billLabel}
+                                    <span className="bill-row-right">
+                                      {billAmount}
+                                      <span className="chevron">→</span>
+                                    </span>
+                                  </Link>
+                                </div>
+                                <BillActionsMenu
+                                  billTitle={bill.title}
+                                  onSelect={() => enterSelectModeWith(bill.id)}
+                                  onShare={() => shareBills([bill.id])}
+                                  onDelete={() => deleteBill(bill)}
+                                />
+                              </>
+                            )
+                          })()
                         )}
                       </li>
                     )
