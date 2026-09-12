@@ -166,6 +166,10 @@ code {
 }
 .dropdown-item:first-of-type { border-top: none; }
 .dropdown-item-warn { color: var(--warn); }
+/* GroupGuestsSection's "Get claim link…" while its token is still being
+   fetched (see ensureClaimToken) — muted and inert rather than hidden, so
+   the menu's layout doesn't jump the instant it opens. */
+.dropdown-item:disabled { color: var(--ink-soft); cursor: default; }
 
 .page-loading {
   display: flex;
@@ -1476,6 +1480,50 @@ input.item-editable-input, textarea.item-editable-input {
 .member-list-actions { display: flex; gap: 10px; }
 .guest-rename-form { display: flex; gap: 8px; align-items: center; flex: 1; }
 .guest-rename-form input { flex: 1; }
+/* Active guest rows (GroupGuestsSection.jsx) — swipe-to-delete, same red
+   strip/width as .item-row-delete-action (reused verbatim). This list
+   isn't expandable the way an item row is, so there's no equivalent of
+   .item-row-head being a <button> — but it does have something ItemRow
+   never had to deal with: a "⋮" menu whose popover needs to escape this
+   row's own bounds. That can't live inside the swipe shell — overflow:
+   hidden, needed to clip the sliding name/delete-strip pair — or the
+   popover would get clipped right along with them. So .guest-row-shell
+   only wraps the part that actually slides (the delete strip + name);
+   .guest-row-outer is the real card (background/border/radius) and the
+   actual flex row, with the menu as a fixed sibling next to the shell,
+   immune to its clipping and never itself sliding. The editing (rename)
+   state bypasses both entirely, same as ItemRow's own expanded body only
+   ever showing on the non-swiping state — needs its own border/padding
+   here since .member-list-item no longer styles these rows (only the
+   *other* lists that don't swipe: Members, Categories, archived guests
+   below). */
+.guest-row-outer {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding-right: 6px;
+}
+.guest-row-shell { position: relative; overflow: hidden; flex: 1; min-width: 0; border-radius: 10px 0 0 10px; }
+.guest-row-name {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface);
+  padding: 10px 14px;
+  font-size: 14px;
+  touch-action: pan-y;
+}
+.guest-row > .guest-rename-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
 
 /* CategorizeBills.jsx's review rows — a bill title can run considerably
    longer than a member/category name (the only other things this list
