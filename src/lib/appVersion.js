@@ -16,9 +16,8 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
-  'Redesigned Group Settings with a side rail, loading instantly from cache while it refreshes in the background',
-  'Scan a receipt: choose between taking a photo or picking a file (PDF, TXT, HTML also supported)',
-  'Price fields now accept simple math expressions (e.g. "2,30-1,25"), and iPhone shows a minus key on the numeric keypad',
-  'New "Sticky Filters" setting to keep bill filters active as you move between pages',
-  'Revamped How to Use guide — easier navigation and shorter, more visual sections',
+  'Swipe left to delete a bill or a guest, right next to the press-and-hold-to-select gesture',
+  'Bill rows are cleaner: the decorative arrow is gone, the ⋮ menu now sits inside the row itself',
+  'Fixed "Get claim link" sometimes silently failing to share or copy',
+  'Avatar picker is now a compact "Choose your avatar" button that expands in place, in both Settings > Profile and each group\'s own Settings',
 ]
