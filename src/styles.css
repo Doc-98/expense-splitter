@@ -166,6 +166,10 @@ code {
 }
 .dropdown-item:first-of-type { border-top: none; }
 .dropdown-item-warn { color: var(--warn); }
+/* GroupGuestsSection's "Get claim link…" while its token is still being
+   fetched (see ensureClaimToken) — muted and inert rather than hidden, so
+   the menu's layout doesn't jump the instant it opens. */
+.dropdown-item:disabled { color: var(--ink-soft); cursor: default; }
 
 .page-loading {
   display: flex;
@@ -262,9 +266,25 @@ code {
   .boot-splash-mark { animation: none; }
 }
 
+/* align-items: center, not baseline. Two compounding problems with
+   baseline: a bare SVG icon button has no real baseline of its own, so
+   the browser synthesizes one from the icon's own bottom edge — two
+   differently-sized icons (LineChartIcon vs ShareIcon, say) then always
+   land at different heights, matched-outer-footprint or not. Separately,
+   a title that wraps to two lines (a long group name — see GroupView.jsx)
+   uses its *first* line's baseline for this purpose, which sits near the
+   very top of that two-line block — so the exact same icon buttons land
+   in a noticeably different spot next to a wrapped title than next to a
+   one-line one. An earlier fix opted individual icons out of baseline one
+   at a time (align-self: center on just whichever button visibly needed
+   it) but that just drifts the fixed ones out of line with whichever
+   siblings didn't get the same treatment — see GroupView.jsx's header
+   (Share/Stats/Settings) for exactly that. Centering everything in the
+   row against its own cross-axis is the one rule that holds regardless of
+   icon size or how many lines the title wraps to. */
 .page-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-md);
   margin-bottom: var(--space-lg);
 }
@@ -391,25 +411,6 @@ code {
 /* Marks an icon-button toggle as currently "on" — so far just Settings'
    own hamburger, tinted while its expanded nav is showing. */
 .icon-btn.active-toggle { background: var(--accent-light); color: var(--accent-dark); }
-/* The Graphs link (GroupStats.jsx/AccountStats.jsx headers): LineChartIcon
-   reads as noticeably smaller than its neighbors even at the same nominal
-   size — a thin diagonal line covers a lot less of its 24x24 viewBox than
-   ShareIcon's three circles do of theirs, so the same box reads as less
-   "there." Sized up a little further here (24px -> 26px) to compensate.
-   .page-header uses align-items: baseline, and a bare SVG with no text
-   has no real baseline of its own — the browser synthesizes one from the
-   bottom edge of the icon itself, so two differently-sized icons *always*
-   end up visually offset from each other under baseline alignment (their
-   centers can line up, or their bottoms can, never both, whenever the
-   icons themselves aren't the same size) no matter how the surrounding
-   button's own padding/footprint is tuned — which is exactly why the
-   previous padding-trimming attempt here never actually fixed it. Fixed
-   at the source instead: both this button and the Share icon button next
-   to it opt out of the header's baseline alignment via align-self: center
-   (see .icon-btn-graphs/.share-button-wrap-icon below) so they're each
-   centered on the row's own cross-axis instead, independent of their
-   icons' differing sizes. */
-.icon-btn.icon-btn-graphs { align-self: center; }
 
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-soft); margin-bottom: var(--space-sm); }
 
@@ -666,8 +667,60 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    ~320px, since .card-list-item-note's max-width caps but doesn't zero
    out its contribution), which is what was still pushing .bill-list-item,
    and with it the whole page, wider than the viewport even after the
-   inner fix. min-width: 0 here closes that off at this level too. */
-.bill-list-item .card-list-item { flex: 1; min-width: 0; }
+   inner fix. min-width: 0 used to live directly on .card-list-item, back
+   when it was itself the direct flex child here — today the outer
+   bordered rectangle is .bill-row-outer (below), with .bill-row-shell as
+   the flex: 1/min-width: 0 child that actually needs the fix, and
+   .card-list-item just fills that shell at width: 100%. */
+.bill-list-item .card-list-item {
+  width: 100%;
+  /* This row is a real <a> with two gestures bound to it — press-and-
+     hold (enters select mode, see useLongPress.js/enterSelectModeWith)
+     and swipe-to-delete (see bindBillRow/useSwipeToDelete.js), both in
+     GroupView.jsx. Without this, iOS Safari's own long-press-on-a-link
+     callout ("Open in New Tab" / "Share" / "Copy") pops up and fights
+     both gestures for the same press. -webkit-user-select stops a stray
+     text-selection magnifier from doing the same. (Android's equivalent
+     is a real, preventable `contextmenu` event — see useLongPress.js's
+     own onContextMenu for that half.) */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* The whole row as one bordered rectangle, ⋮ menu included — replaces a
+   chevron that didn't do anything with the same .bill-menu-wrap every
+   other row action already used, now living inside the card instead of
+   floating to the right of it. Only the swipe shell clips (it has to,
+   to hide the reveal strip off-screen until dragged into view); the
+   outer rectangle itself doesn't, so the menu's popover — a fixed
+   sibling of the shell, not nested inside it — is never at risk of
+   being clipped along with the sliding content next to it (same
+   reasoning as GroupGuestsSection's .guest-row-outer). */
+.bill-row-outer {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding-right: 6px;
+}
+.bill-row-outer:hover { border-color: var(--accent); }
+.bill-row-outer:active { border-color: var(--accent); background: var(--accent-light); }
+.list-row-focused .bill-row-outer { border-color: var(--accent); background: var(--accent-light); }
+.bill-row-shell { position: relative; overflow: hidden; flex: 1; min-width: 0; border-radius: var(--radius) 0 0 var(--radius); }
+/* .card-list-item's own border/radius would just double up on
+   .bill-row-outer's identical treatment one level up, so those are
+   turned back off — but NOT its background: this Link is the sliding
+   foreground inside the shell, and its background is what visually
+   covers .item-row-delete-action (same shell, positioned absolute
+   underneath) until swiped away — see .item-row-head's own identical
+   comment in the item list. Dropping the background here too would
+   leave the delete strip showing through at rest instead of hidden.
+   Scoped to .bill-row-shell specifically (not .bill-list-item
+   generally) so the select-mode checkbox row — .card-list-item
+   .bill-select-row, never inside a shell — keeps its own border
+   exactly as it already did. */
+.bill-row-shell .card-list-item { border: none; border-radius: 0; }
 
 /* Reuses the same "receipt tape" search bar treatment as the in-app
    guide's own search (.guide-search-input) — same torn-edge look, same
@@ -757,7 +810,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .bill-select-row { flex-direction: row; gap: 12px; font-size: inherit; margin-bottom: 0; cursor: pointer; }
 .bill-select-row input[type='checkbox'] { flex-shrink: 0; width: 18px; height: 18px; }
 
-.bill-menu-wrap { position: relative; }
+.bill-menu-wrap { position: relative; display: flex; align-items: center; }
 .bill-menu-btn {
   background: none;
   border: none;
@@ -996,6 +1049,49 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   cursor: pointer;
 }
 .avatar-picker-option.is-selected { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Settings > Profile's collapsed "Choose your avatar" row (Group
+   Settings > General's per-group picker still shows the grid outright —
+   only one row's own default, not something every group needs the same
+   affordance for yet). The trigger's own circle is styled exactly like
+   .avatar-picker-option.is-selected at the same 34px/19px proportions —
+   it's always showing "the current pick," so it always reads as
+   selected, never as the neutral unselected tile. Expands the grid in
+   place via .xwrap/.xinner (the same generic collapse pair Scan
+   Settings' provider list and every item row already use) rather than a
+   bottom sheet — that's reserved for confirming something destructive
+   elsewhere in this app, and reusing it here for a plain "pick one"
+   choice would blur that meaning. */
+.avatar-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 2px;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-family: inherit;
+}
+.avatar-picker-trigger:hover { color: var(--ink); }
+.avatar-picker-current {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.avatar-picker-trigger-chevron { flex: none; transition: transform 0.2s ease; }
+.is-open .avatar-picker-trigger-chevron { transform: rotate(90deg); color: var(--accent); }
+.avatar-picker-panel-inner { padding: 10px 0 4px; }
 
 /* ---------- Simple bill view ----------
    Shown instead of .receipt-tape when a bill has exactly one item and
@@ -1479,6 +1575,50 @@ input.item-editable-input, textarea.item-editable-input {
 .member-list-actions { display: flex; gap: 10px; }
 .guest-rename-form { display: flex; gap: 8px; align-items: center; flex: 1; }
 .guest-rename-form input { flex: 1; }
+/* Active guest rows (GroupGuestsSection.jsx) — swipe-to-delete, same red
+   strip/width as .item-row-delete-action (reused verbatim). This list
+   isn't expandable the way an item row is, so there's no equivalent of
+   .item-row-head being a <button> — but it does have something ItemRow
+   never had to deal with: a "⋮" menu whose popover needs to escape this
+   row's own bounds. That can't live inside the swipe shell — overflow:
+   hidden, needed to clip the sliding name/delete-strip pair — or the
+   popover would get clipped right along with them. So .guest-row-shell
+   only wraps the part that actually slides (the delete strip + name);
+   .guest-row-outer is the real card (background/border/radius) and the
+   actual flex row, with the menu as a fixed sibling next to the shell,
+   immune to its clipping and never itself sliding. The editing (rename)
+   state bypasses both entirely, same as ItemRow's own expanded body only
+   ever showing on the non-swiping state — needs its own border/padding
+   here since .member-list-item no longer styles these rows (only the
+   *other* lists that don't swipe: Members, Categories, archived guests
+   below). */
+.guest-row-outer {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding-right: 6px;
+}
+.guest-row-shell { position: relative; overflow: hidden; flex: 1; min-width: 0; border-radius: 10px 0 0 10px; }
+.guest-row-name {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface);
+  padding: 10px 14px;
+  font-size: 14px;
+  touch-action: pan-y;
+}
+.guest-row > .guest-rename-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
 
 /* CategorizeBills.jsx's review rows — a bill title can run considerably
    longer than a member/category name (the only other things this list
@@ -1581,11 +1721,8 @@ input.item-editable-input, textarea.item-editable-input {
    Settings links) — no margin-top to throw it out of line with its icon
    siblings, and no gap needed since there's nothing but the trigger button
    itself most of the time (the copy-status message is positioned off to
-   the side, not inline — see .share-status-icon below). align-self: center
-   opts this out of .page-header's own align-items: baseline the same way
-   .icon-btn-graphs does, and for the same reason (see that rule) — this is
-   the other half of the pair that needs to agree on how it's aligned. */
-.share-button-wrap-icon { margin-top: 0; gap: 0; align-self: center; }
+   the side, not inline — see .share-status-icon below). */
+.share-button-wrap-icon { margin-top: 0; gap: 0; }
 .share-menu-popover {
   position: absolute;
   left: 0;
