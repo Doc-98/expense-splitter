@@ -1193,12 +1193,17 @@ export default function GroupView() {
                           (() => {
                             const billBind = bindBillRow(bill)
                             return (
-                              <>
-                                {/* .bill-menu-wrap (BillActionsMenu) stays outside this
-                                    shell — its popover needs to escape this row's own
-                                    bounds, which it can't do from inside a container
-                                    that clips overflow to slide the row (see the same
-                                    reasoning on GroupGuestsSection's guest rows). */}
+                              // One bordered rectangle for the whole row, same
+                              // shape as GroupGuestsSection's .guest-row-outer —
+                              // the ⋮ menu sits inside it, at the far right,
+                              // replacing what used to be a decorative chevron
+                              // that didn't actually do anything. It's a fixed
+                              // sibling of the swipe shell rather than nested
+                              // inside the sliding Link: its popover needs to
+                              // escape this row's own bounds, which it can't do
+                              // from inside a container that clips overflow to
+                              // slide the row.
+                              <div className="bill-row-outer">
                                 <div className="bill-row-shell">
                                   <button type="button" className="item-row-delete-action" {...billBind.deleteButton}>
                                     Remove
@@ -1209,10 +1214,7 @@ export default function GroupView() {
                                     {...billBind.row}
                                   >
                                     {billLabel}
-                                    <span className="bill-row-right">
-                                      {billAmount}
-                                      <span className="chevron">→</span>
-                                    </span>
+                                    <span className="bill-row-right">{billAmount}</span>
                                   </Link>
                                 </div>
                                 <BillActionsMenu
@@ -1221,7 +1223,7 @@ export default function GroupView() {
                                   onShare={() => shareBills([bill.id])}
                                   onDelete={() => deleteBill(bill)}
                                 />
-                              </>
+                              </div>
                             )
                           })()
                         )}

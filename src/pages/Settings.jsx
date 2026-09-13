@@ -5,7 +5,9 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useCurrency, CURRENCIES } from '../context/CurrencyContext'
 import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
+import { getGroupViewPreferences, setGroupViewPreferences, AVATAR_SIZE_OPTIONS, avatarSizeSpec } from '../lib/groupViewPreferences'
 import { avatarIconCache, ACCOUNT_AVATAR_ICON_CACHE_KEY } from '../lib/avatarIconCache'
+import AvatarGlyph from '../components/AvatarGlyph'
 import { signOutAndClearCaches } from '../lib/signOut'
 import { GRANULARITIES, granularityLabel } from '../components/TimeRangeSelector'
 import BudgetsSection from '../components/BudgetsSection'
@@ -29,6 +31,8 @@ import {
   AboutIcon,
   ArrowRightIcon,
 } from '../components/icons'
+
+const AVATAR_SIZE_LABELS = { small: 'Small', medium: 'Medium', large: 'Large' }
 
 const SECTIONS = [
   { id: 'profile', label: 'Profile', Icon: ProfileIcon },
@@ -66,6 +70,13 @@ function ProfileSection() {
   // falls back to null, same as before.
   const [avatarIcon, setAvatarIcon] = useState(() => avatarIconCache.get(ACCOUNT_AVATAR_ICON_CACHE_KEY) ?? null)
   const [avatarError, setAvatarError] = useState(null)
+  // "Split-with avatar size" lives right below the icon picker itself —
+  // both are "how your avatar looks," even though this one preference is
+  // actually stored alongside the *other* per-device group-view display
+  // toggles (see groupViewPreferences.js) which stay on the Groups tab.
+  // Nothing wrong with two sections each keeping their own local snapshot
+  // of that one shared blob — they're never mounted at the same time.
+  const [groupPrefs, setGroupPrefs] = useState(getGroupViewPreferences)
 
   useEffect(() => {
     let cancelled = false
@@ -102,6 +113,10 @@ function ProfileSection() {
 
   function updatePref(partial) {
     setPrefs(setStatsPreferences(partial))
+  }
+
+  function updateGroupPref(partial) {
+    setGroupPrefs(setGroupViewPreferences(partial))
   }
 
   async function saveAvatarIcon(iconId) {
@@ -148,6 +163,33 @@ function ProfileSection() {
       </p>
       <AvatarPicker value={avatarIcon} onChange={saveAvatarIcon} name={displayName} />
       {avatarError && <p className="status-error">{avatarError}</p>}
+
+      <div className="settings-row">
+        <span>Split-with avatar size</span>
+      </div>
+      <div className="size-picker">
+        {AVATAR_SIZE_OPTIONS.map((size) => {
+          const { iconPx, className } = avatarSizeSpec(size)
+          return (
+            <button
+              key={size}
+              type="button"
+              className={`size-picker-option ${groupPrefs.avatarSize === size ? 'is-selected' : ''}`}
+              onClick={() => updateGroupPref({ avatarSize: size })}
+              aria-pressed={groupPrefs.avatarSize === size}
+            >
+              <span className={`avatar ${className}`} aria-hidden="true">
+                <AvatarGlyph iconId="bomb" name="Preview" size={iconPx} />
+              </span>
+              {AVATAR_SIZE_LABELS[size]}
+            </button>
+          )
+        })}
+      </div>
+      <p className="muted">
+        Applies to the "Split with" circles on a bill and each of its items — the picker used to
+        choose who's in on an expense.
+      </p>
 
       <h2 className="settings-section-title">Appearance</h2>
       <div className="settings-row">
