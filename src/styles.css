@@ -1050,6 +1050,49 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .avatar-picker-option.is-selected { background: var(--accent); border-color: var(--accent); color: #fff; }
 
+/* Settings > Profile's collapsed "Choose your avatar" row (Group
+   Settings > General's per-group picker still shows the grid outright —
+   only one row's own default, not something every group needs the same
+   affordance for yet). The trigger's own circle is styled exactly like
+   .avatar-picker-option.is-selected at the same 34px/19px proportions —
+   it's always showing "the current pick," so it always reads as
+   selected, never as the neutral unselected tile. Expands the grid in
+   place via .xwrap/.xinner (the same generic collapse pair Scan
+   Settings' provider list and every item row already use) rather than a
+   bottom sheet — that's reserved for confirming something destructive
+   elsewhere in this app, and reusing it here for a plain "pick one"
+   choice would blur that meaning. */
+.avatar-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 2px;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-family: inherit;
+}
+.avatar-picker-trigger:hover { color: var(--ink); }
+.avatar-picker-current {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.avatar-picker-trigger-chevron { flex: none; transition: transform 0.2s ease; }
+.is-open .avatar-picker-trigger-chevron { transform: rotate(90deg); color: var(--accent); }
+.avatar-picker-panel-inner { padding: 10px 0 4px; }
+
 /* ---------- Simple bill view ----------
    Shown instead of .receipt-tape when a bill has exactly one item and
    hasn't been itemized in this session (see BillView.jsx's isSimpleView) —

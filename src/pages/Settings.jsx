@@ -30,6 +30,7 @@ import {
   UpdatesIcon,
   AboutIcon,
   ArrowRightIcon,
+  ChevronIcon,
 } from '../components/icons'
 
 const AVATAR_SIZE_LABELS = { small: 'Small', medium: 'Medium', large: 'Large' }
@@ -70,6 +71,15 @@ function ProfileSection() {
   // falls back to null, same as before.
   const [avatarIcon, setAvatarIcon] = useState(() => avatarIconCache.get(ACCOUNT_AVATAR_ICON_CACHE_KEY) ?? null)
   const [avatarError, setAvatarError] = useState(null)
+  // The 16-tile grid stays collapsed behind one row until opened — it's
+  // change-this-rarely settings, not something worth always rendering in
+  // full, and it's also what keeps this section from turning into "one
+  // giant list of avatars" as more icons get added later. Expands in
+  // place (below), same move Scan Settings' provider list already uses,
+  // rather than a bottom sheet — that's reserved for confirming a
+  // destructive/leave-y action elsewhere in this app, and reusing it here
+  // for a plain "pick one" choice would blur that meaning.
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   // "Split-with avatar size" lives right below the icon picker itself —
   // both are "how your avatar looks," even though this one preference is
   // actually stored alongside the *other* per-device group-view display
@@ -132,6 +142,14 @@ function ProfileSection() {
     }
   }
 
+  // A brief pause before collapsing back — long enough to actually see
+  // the tile you just tapped light up (AvatarPicker's own is-selected
+  // state), same delay the design mockup this shipped from used.
+  function pickAvatarIcon(iconId) {
+    saveAvatarIcon(iconId)
+    setTimeout(() => setAvatarPickerOpen(false), 220)
+  }
+
   return (
     <>
       <h2 className="settings-section-title">Your name</h2>
@@ -161,7 +179,33 @@ function ProfileSection() {
         Your default icon everywhere you're a member — pick one to help tell you apart from someone with
         the same initial. Any group can still set its own, from that group's Settings.
       </p>
-      <AvatarPicker value={avatarIcon} onChange={saveAvatarIcon} name={displayName} />
+      <div className={avatarPickerOpen ? 'is-open' : ''}>
+        <div className="settings-row">
+          <span>Choose your avatar</span>
+          <button
+            type="button"
+            className="avatar-picker-trigger"
+            onClick={() => setAvatarPickerOpen((o) => !o)}
+            aria-expanded={avatarPickerOpen}
+            aria-controls="avatar-picker-panel"
+          >
+            <span className="avatar-picker-current" aria-hidden="true">
+              <AvatarGlyph iconId={avatarIcon} name={displayName} size={19} />
+            </span>
+            <ChevronIcon size={16} className="avatar-picker-trigger-chevron" />
+          </button>
+        </div>
+        {/* .xwrap/.xinner — the same generic grid-rows collapse pair Scan
+            Settings' provider list and every item row already use (see
+            styles.css), not a bespoke one just for this. */}
+        <div className="xwrap" id="avatar-picker-panel">
+          <div className="xinner">
+            <div className="avatar-picker-panel-inner">
+              <AvatarPicker value={avatarIcon} onChange={pickAvatarIcon} name={displayName} />
+            </div>
+          </div>
+        </div>
+      </div>
       {avatarError && <p className="status-error">{avatarError}</p>}
 
       <div className="settings-row">
