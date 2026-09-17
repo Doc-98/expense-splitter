@@ -323,9 +323,7 @@ code {
    parent <h1>'s styling the way a plain text node would. display: block +
    width: 100% + text-align: left makes it wrap and lay out exactly like
    the plain text node it replaces (a bare <button> is inline-block and
-   shrinks to fit its own content otherwise), and the dotted underline
-   .item-editable adds is this app's one consistent "this is editable"
-   signal, same as every other click-to-edit value on this same page. */
+   shrinks to fit its own content otherwise). */
 .bill-title-editable {
   display: block;
   width: 100%;
@@ -334,6 +332,17 @@ code {
   font-size: 22px;
   font-weight: 600;
 }
+/* The one deliberate exception to .item-editable's own dotted-underline
+   "this is editable" signal (every other InlineEditable in the app keeps
+   it) — a page's own title, set in the display serif at 22px, reads as
+   busy/decorated with a dotted rule sitting right under it; still exactly
+   as clickable/editable as before, just without the visual cue. Needs the
+   two classes combined as one selector (not just repeating
+   .bill-title-editable on its own) to out-specificity .item-editable's
+   own border-bottom below, which otherwise wins on source order alone —
+   this rule and .item-editable's own would each be a single class
+   selector, and .item-editable's comes later in this file. */
+.item-editable.bill-title-editable { border-bottom: none; }
 input.bill-title-editable-input {
   display: block;
   width: 100%;
