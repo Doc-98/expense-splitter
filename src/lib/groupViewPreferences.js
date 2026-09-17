@@ -28,6 +28,12 @@ const DEFAULTS = {
   // at (see AVATAR_SIZE_SPECS below); global rather than per-bill/per-item,
   // same reasoning as the toggles above.
   avatarSize: 'small',
+  // GroupView.jsx's own "You owe X" / "X owes You" balance lines, right
+  // under the group title — true colors the whole line red/green (You
+  // owe/You're owed), false leaves the line in the ordinary text color
+  // and colors only the amount. Same "global style preference, not a
+  // per-group judgment call" reasoning as every other toggle here.
+  colorWholeBalanceLine: true,
 }
 
 export const AVATAR_SIZE_OPTIONS = ['small', 'medium', 'large']

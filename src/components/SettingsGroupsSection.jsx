@@ -196,6 +196,23 @@ export default function SettingsGroupsSection() {
         open a bill and come back — right now they reset the moment you leave. Off (the default)
         keeps today's behavior. Either way, reloading the page itself still clears them.
       </p>
+      <div className="settings-row">
+        <span>Color the whole balance line</span>
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={prefs.colorWholeBalanceLine}
+            onChange={(e) => updatePref({ colorWholeBalanceLine: e.target.checked })}
+            aria-label="Color the whole balance line red or green, not just the amount"
+          />
+          <span className="switch-slider" />
+        </label>
+      </div>
+      <p className="muted">
+        Applies to the "You owe…" / "…owes You" lines under a group's title. On (the default)
+        colors the whole line; off leaves the line in the ordinary text color and colors only the
+        amount.
+      </p>
 
       {pendingLeave && (
         <ConfirmSheet

@@ -356,6 +356,23 @@ export default function BillView() {
     setBill((b) => ({ ...b, created_at: next }))
   }
 
+  // The header title, click-to-edit like everything else InlineEditable
+  // covers on this page (the date just above, the simple-view amount
+  // below) — the *other* way to rename a bill, GroupView.jsx's own ⋮ menu,
+  // is a full replace-the-row form instead since it's picking one bill out
+  // of a list rather than already looking straight at it. Trimming (and
+  // the empty-stays-unrenamed guard) happens here rather than in
+  // InlineEditable itself, same division of labor as ItemRow's saveName —
+  // InlineEditable only ever guarantees a *non-empty* draft made it this
+  // far, not a validly trimmed one.
+  async function updateBillTitle(value) {
+    const trimmed = value.trim()
+    if (!trimmed || trimmed === bill.title) return
+    const { error: updateError } = await supabase.from('bills').update({ title: trimmed }).eq('id', billId)
+    if (updateError) return setError(updateError.message)
+    setBill((b) => ({ ...b, title: trimmed }))
+  }
+
   async function setBillCategory(categoryId) {
     await supabase
       .from('bills')
@@ -442,7 +459,16 @@ export default function BillView() {
     <div className="page receipt-page">
       <header className="page-header">
         <BackButton to={`/groups/${groupId}`} />
-        <h1>{bill?.title}</h1>
+        <h1>
+          <InlineEditable
+            className="item-editable bill-title-editable"
+            inputClassName="item-editable-input bill-title-editable-input"
+            value={bill?.title ?? ''}
+            display={bill?.title}
+            onSave={updateBillTitle}
+            ariaLabel={bill?.title ? `Rename ${bill.title}` : 'Bill title'}
+          />
+        </h1>
         {/* Icon mode, same position/pattern as Group View/Group Stats/Your
             Stats' own header Share button — was a centered text button
             further down the page, next to the scan section, which put it

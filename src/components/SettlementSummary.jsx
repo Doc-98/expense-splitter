@@ -54,6 +54,14 @@ function RecordPaymentForm({ members, onRecordPayment }) {
   )
 }
 
+// `transactions` no longer has anything of its own to render here — the
+// full "who owes whom" list moved to its own Settle Up page (SettleUp.jsx),
+// reached from GroupView.jsx's own balance summary right under the title,
+// which made the identical list that used to open this component
+// redundant. Still taken as a prop and still gates the early return below:
+// Record a payment/Payment history waiting on settlement to have loaded at
+// least once, same as before, is worth keeping even with nothing left here
+// that reads its contents.
 export default function SettlementSummary({ transactions, members, payments, onRecordPayment, onDeletePayment }) {
   const { format } = useCurrency()
   const nameOf = (id) => members?.find((m) => m.id === id)?.name || 'Someone'
@@ -83,31 +91,11 @@ export default function SettlementSummary({ transactions, members, payments, onR
 
   return (
     <div className="settlement">
-      <h2 className="section-divider">Settle up</h2>
-      {transactions.length === 0 ? (
-        <p className="empty-state">Everyone's even — nothing to settle.</p>
-      ) : (
-        <ul className="settlement-list">
-          {transactions.map((t, i) => (
-            <li key={i}>
-              <span className="debtor">{nameOf(t.from)}</span>
-              <span className="settlement-verb">owes</span>
-              <span className="creditor">{nameOf(t.to)}</span>
-              <span className="settlement-action">
-                <span className="mono amount">{format(t.amount)}</span>
-                <button
-                  type="button"
-                  className="btn-secondary mark-paid-btn"
-                  onClick={() => onRecordPayment(t.from, t.to, t.amount)}
-                >
-                  Mark paid
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
+      {/* The first divider in this section now, since the old "Settle up"
+          heading that used to carry it is gone (see this file's own
+          top comment) — .section-divider's top border/spacing does the
+          same job of separating this from the bill list above regardless
+          of which heading it's on. */}
       <h3 className="payment-form-title section-divider">Record a payment</h3>
       <RecordPaymentForm members={members || []} onRecordPayment={onRecordPayment} />
 
