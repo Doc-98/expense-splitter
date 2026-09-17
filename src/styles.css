@@ -120,7 +120,17 @@ code {
 .balance-summary { display: flex; flex-direction: column; gap: 4px; margin: 0 0 var(--space-md); font-size: 15px; }
 .balance-line { margin: 0; }
 .balance-line strong { font-weight: 600; }
-.balance-settle-btn { margin-bottom: var(--space-lg); }
+
+/* The three buttons right under the balance summary — Settle up, Record a
+   payment, History (all three now their own page: SettleUp.jsx,
+   RecordPayment.jsx, History.jsx). flex-wrap so a narrow phone stacks them
+   rather than squeezing three buttons onto one line. */
+.settle-actions { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-bottom: var(--space-lg); }
+/* Pairs an icon with a button's own text label, vertically centered —
+   SettleIcon/ReceiptIcon next to "Settle up"/"History" here; a plain
+   .btn-primary/.btn-secondary on its own is just `display: inline-block`,
+   which doesn't align an icon child against its text at all. */
+.btn-with-icon { display: inline-flex; align-items: center; gap: 7px; }
 
 .app-header {
   display: flex;
@@ -1085,10 +1095,15 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .avatar.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .avatar.former { border-style: dashed; opacity: 0.7; }
+/* RecordPayment.jsx's own avatar-picker layout — a person already picked
+   on the *other* side (Who paid vs. Paid to) dims and stops accepting taps
+   here, the same "can't pick the same person twice" rule the dropdown
+   layout already gets for free from each <option disabled>. */
+.avatar:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
 /* The two bigger options on top of the 26px default above — see the
-   "Split-with avatar size" picker in Settings > Groups > Display
-   (avatarSizeSpec() in groupViewPreferences.js is the one place that
-   decides both this class and the icon's own px, so they can't drift). */
+   "Split-with avatar size" picker in Settings > Profile (avatarSizeSpec()
+   in groupViewPreferences.js is the one place that decides both this
+   class and the icon's own px, so they can't drift). */
 .avatar.avatar-md { width: 34px; height: 34px; font-size: 14px; }
 .avatar.avatar-lg { width: 42px; height: 42px; font-size: 17px; }
 

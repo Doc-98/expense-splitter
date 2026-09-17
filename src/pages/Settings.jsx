@@ -2,19 +2,17 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
-import { useTheme } from '../context/ThemeContext'
 import { useCurrency, CURRENCIES } from '../context/CurrencyContext'
-import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
 import { getGroupViewPreferences, setGroupViewPreferences, AVATAR_SIZE_OPTIONS, avatarSizeSpec } from '../lib/groupViewPreferences'
 import { avatarIconCache, ACCOUNT_AVATAR_ICON_CACHE_KEY } from '../lib/avatarIconCache'
 import AvatarGlyph from '../components/AvatarGlyph'
 import { signOutAndClearCaches } from '../lib/signOut'
-import { GRANULARITIES, granularityLabel } from '../components/TimeRangeSelector'
 import BudgetsSection from '../components/BudgetsSection'
 import ScanSettingsSection from '../components/ScanSettingsSection'
 import GuideSection from '../components/GuideSection'
 import AboutSection from '../components/AboutSection'
 import SettingsGroupsSection from '../components/SettingsGroupsSection'
+import SettingsLayoutSection from '../components/SettingsLayoutSection'
 import SettingsUpdatesSection from '../components/SettingsUpdatesSection'
 import SettingsNav from '../components/SettingsNav'
 import AvatarPicker from '../components/AvatarPicker'
@@ -24,6 +22,7 @@ import {
   MenuIcon,
   ProfileIcon,
   GroupsNavIcon,
+  LayoutIcon,
   BudgetIcon,
   ScanIcon,
   GuideIcon,
@@ -38,6 +37,7 @@ const AVATAR_SIZE_LABELS = { small: 'Small', medium: 'Medium', large: 'Large' }
 const SECTIONS = [
   { id: 'profile', label: 'Profile', Icon: ProfileIcon },
   { id: 'groups', label: 'Groups', Icon: GroupsNavIcon },
+  { id: 'layout', label: 'Layout', Icon: LayoutIcon },
   { id: 'budgets', label: 'Budgets', Icon: BudgetIcon },
   { id: 'scan', label: 'Scan', Icon: ScanIcon },
   { id: 'guide', label: 'How to Use', Icon: GuideIcon },
@@ -45,20 +45,16 @@ const SECTIONS = [
   { id: 'about', label: 'About', Icon: AboutIcon },
 ]
 
-// Your name, dark mode, currency, and the two per-device stats preferences
-// that used to also be settable from inline controls on Your Stats itself
-// (statsPreferences.js — the default period and where Budgets sits on that
-// page). Those inline controls (a "Set ___ as default" link, and a link in
-// Your Stats' own Budgets section toggling its position) are gone now —
-// this is the only place either preference is set from.
+// Your name, avatar, and currency — dark mode and the per-device stats
+// preferences (default period, Budgets position) that used to live here
+// moved to Settings > Layout alongside every other "how things are laid
+// out" preference (see SettingsLayoutSection.jsx).
 function ProfileSection() {
   const { user, displayName, setDisplayName } = useAuth()
-  const { theme, toggleTheme } = useTheme()
   const { code, setCurrency } = useCurrency()
 
   const [nameDraft, setNameDraft] = useState(displayName)
   const [nameError, setNameError] = useState(null)
-  const [prefs, setPrefs] = useState(getStatsPreferences)
   // Self-contained fetch/save, same as everything else on this page — not
   // lifted into AuthContext alongside displayName, since nothing besides
   // this picker (and Group Settings' own copy of this same picker) needs
@@ -119,10 +115,6 @@ function ProfileSection() {
     // it, so the submit button's disabled-until-changed guard below (see
     // Groups.jsx/GroupView.jsx's own input-with-submit) fades it right back
     // out on its own, no separate "Saved!" state needed.
-  }
-
-  function updatePref(partial) {
-    setPrefs(setStatsPreferences(partial))
   }
 
   function updateGroupPref(partial) {
@@ -235,15 +227,6 @@ function ProfileSection() {
         choose who's in on an expense.
       </p>
 
-      <h2 className="settings-section-title">Appearance</h2>
-      <div className="settings-row">
-        <span>Dark mode</span>
-        <label className="switch">
-          <input type="checkbox" checked={theme === 'dark'} onChange={toggleTheme} aria-label="Dark mode" />
-          <span className="switch-slider" />
-        </label>
-      </div>
-
       <h2 className="settings-section-title">Currency</h2>
       <div className="settings-row">
         <span>Amounts shown as</span>
@@ -255,31 +238,6 @@ function ProfileSection() {
           ))}
         </select>
       </div>
-
-      <h2 className="settings-section-title">Stats</h2>
-      <div className="settings-row">
-        <span>Default period</span>
-        <select
-          value={prefs.defaultGranularity}
-          onChange={(e) => updatePref({ defaultGranularity: e.target.value })}
-        >
-          {GRANULARITIES.map((g) => (
-            <option key={g} value={g}>
-              {granularityLabel(g)}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="settings-row">
-        <span>Budgets position on Your Stats</span>
-        <select
-          value={prefs.thresholdsPosition}
-          onChange={(e) => updatePref({ thresholdsPosition: e.target.value })}
-        >
-          <option value="top">Top</option>
-          <option value="bottom">Bottom</option>
-        </select>
-      </div>
     </>
   )
 }
@@ -287,6 +245,7 @@ function ProfileSection() {
 const CONTENT = {
   profile: ProfileSection,
   groups: SettingsGroupsSection,
+  layout: SettingsLayoutSection,
   budgets: BudgetsSection,
   scan: ScanSettingsSection,
   guide: GuideSection,

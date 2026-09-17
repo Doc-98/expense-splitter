@@ -4,12 +4,14 @@ import { useLayoutEffect, useRef } from 'react'
 // bottom of the viewport while there's more page to scroll, docking in
 // flow once you reach the real bottom (see the comment below). Pass
 // `floating={false}` for a page's *second* paginated list on the same
-// page (e.g. SettlementSummary's payment history) — two independent
-// sticky elements at the same `bottom` offset have no way to know about
-// each other, so if both ever ended up "stuck" at once they'd render on
-// top of each other. A secondary, already-tucked-away list like payment
-// history doesn't really need to float anyway; a plain inline pager
-// avoids the collision entirely instead of trying to prevent it.
+// page (no current caller needs this — History.jsx, the last one that
+// would have, is a whole page of its own now, not a secondary list
+// sharing space with something else) — two independent sticky elements at
+// the same `bottom` offset have no way to know about each other, so if
+// both ever ended up "stuck" at once they'd render on top of each other.
+// A secondary, already-tucked-away list doesn't really need to float
+// anyway; a plain inline pager avoids the collision entirely instead of
+// trying to prevent it.
 export default function Pagination({ page, setPage, totalItems, pageSize, floating = true }) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
   // Set right before a Prev/Next click if the page was scrolled to its

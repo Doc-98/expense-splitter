@@ -31,10 +31,23 @@ const DEFAULTS = {
   // GroupView.jsx's own "You owe X" / "X owes You" balance lines, right
   // under the group title — true colors the whole line red/green (You
   // owe/You're owed), false leaves the line in the ordinary text color
-  // and colors only the amount. Same "global style preference, not a
-  // per-group judgment call" reasoning as every other toggle here.
-  colorWholeBalanceLine: true,
+  // and colors only the amount. Renamed from colorWholeBalanceLine (the
+  // name itself, not just the Settings label, since this is recent enough
+  // that nobody's really depending on the old key surviving) when this
+  // preference moved into Settings > Layout — "color the whole line" read
+  // oddly as a toggle label; "highlight" reads more naturally either way
+  // it's phrased.
+  highlightFullBalanceLine: true,
+  // RecordPayment.jsx's own "Who paid"/"Paid to" fields — 'dropdowns'
+  // (today's plain <select> pickers) or 'avatars' (tap one of each
+  // member's own avatar circle, same component BillView's "Split with"
+  // row already uses). Both layouts do the exact same thing; this is
+  // purely "which one do you personally find faster," same reasoning as
+  // every other toggle here.
+  paymentFormLayout: 'dropdowns',
 }
+
+export const PAYMENT_FORM_LAYOUT_OPTIONS = ['dropdowns', 'avatars']
 
 export const AVATAR_SIZE_OPTIONS = ['small', 'medium', 'large']
 

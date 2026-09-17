@@ -12,6 +12,8 @@ import ResetPassword from './pages/ResetPassword'
 import Groups from './pages/Groups'
 import GroupView from './pages/GroupView'
 import SettleUp from './pages/SettleUp'
+import History from './pages/History'
+import RecordPayment from './pages/RecordPayment'
 import BillView from './pages/BillView'
 import JoinGroup from './pages/JoinGroup'
 import ClaimGuest from './pages/ClaimGuest'
@@ -125,6 +127,8 @@ function Shell() {
         <Route path="/" element={<RequireAuth><Groups /></RequireAuth>} />
         <Route path="/groups/:groupId" element={<RequireAuth><GroupView /></RequireAuth>} />
         <Route path="/groups/:groupId/settle-up" element={<RequireAuth><SettleUp /></RequireAuth>} />
+        <Route path="/groups/:groupId/history" element={<RequireAuth><History /></RequireAuth>} />
+        <Route path="/groups/:groupId/record-payment" element={<RequireAuth><RecordPayment /></RequireAuth>} />
         <Route path="/groups/:groupId/settings" element={<RequireAuth><GroupSettings /></RequireAuth>} />
         <Route path="/groups/:groupId/stats" element={<RequireAuth><GroupStats /></RequireAuth>} />
         <Route
