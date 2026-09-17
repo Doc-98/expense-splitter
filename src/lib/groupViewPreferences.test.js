@@ -6,12 +6,13 @@ afterEach(() => {
 })
 
 describe('getGroupViewPreferences', () => {
-  it('defaults both display preferences to visible, sticky filters off, and small avatars', () => {
+  it('defaults both display preferences to visible, sticky filters off, small avatars, and whole-line balance coloring', () => {
     expect(getGroupViewPreferences()).toEqual({
       showQuickStats: true,
       showLentBorrowedStatus: true,
       stickyFilters: false,
       avatarSize: 'small',
+      colorWholeBalanceLine: true,
     })
   })
 
@@ -22,6 +23,7 @@ describe('getGroupViewPreferences', () => {
       showLentBorrowedStatus: true,
       stickyFilters: false,
       avatarSize: 'small',
+      colorWholeBalanceLine: true,
     })
   })
 
@@ -39,6 +41,7 @@ describe('getGroupViewPreferences', () => {
       showLentBorrowedStatus: true,
       stickyFilters: true,
       avatarSize: 'small',
+      colorWholeBalanceLine: true,
     })
   })
 
@@ -49,6 +52,18 @@ describe('getGroupViewPreferences', () => {
       showLentBorrowedStatus: true,
       stickyFilters: false,
       avatarSize: 'large',
+      colorWholeBalanceLine: true,
+    })
+  })
+
+  it('persists the balance-line coloring toggle independently of the others', () => {
+    setGroupViewPreferences({ colorWholeBalanceLine: false })
+    expect(getGroupViewPreferences()).toEqual({
+      showQuickStats: true,
+      showLentBorrowedStatus: true,
+      stickyFilters: false,
+      avatarSize: 'small',
+      colorWholeBalanceLine: false,
     })
   })
 })

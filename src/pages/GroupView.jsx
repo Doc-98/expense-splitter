@@ -42,7 +42,7 @@ export default function GroupView() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { format } = useCurrency()
-  const { showQuickStats, showLentBorrowedStatus, stickyFilters } = getGroupViewPreferences()
+  const { showQuickStats, showLentBorrowedStatus, stickyFilters, colorWholeBalanceLine } = getGroupViewPreferences()
   // Only actually consulted when stickyFilters is on (see the state
   // declarations below and the write-back effect near the other filter
   // effects) — groupFilterStateCache.js has the full reasoning for why
@@ -124,8 +124,9 @@ export default function GroupView() {
   // Collapsed by default — a search bar plus a filters panel is a lot of
   // screen real estate for something you might not touch for a while if
   // you're just adding bills and settling up, not digging through old
-  // ones. The search icon that opens it lives in .group-actions; the
-  // section itself carries its own ↑ to retract (see the search section's
+  // ones. The search icon that opens it lives in the header row (see the
+  // header's own JSX below); the section itself also carries its own ↑
+  // to retract (see the search section's
   // JSX below), and "/" opens it too (see the keydown effect below),
   // matching whichever way it was closed.
   const [searchOpen, setSearchOpen] = useState(cachedFilters?.searchOpen ?? false)
@@ -188,6 +189,21 @@ export default function GroupView() {
   // needs this resolved first (e.g. defaulting a new bill's payer to me).
   const myParticipantId = allMembers.find((m) => m.userId === user.id)?.id
   const isAdmin = myParticipantId && myParticipantId === group?.admin_id
+  // Used only by the balance summary below (settlement's own from/to are
+  // member ids, same as everywhere else this app resolves a name from
+  // one) — SettlementSummary.jsx/SettleUp.jsx each keep their own copy
+  // rather than sharing this one, same as every other small per-file
+  // nameOf in this codebase.
+  const nameOf = (id) => allMembers.find((m) => m.id === id)?.name || 'Someone'
+  // The debts that actually involve you, out of the group's full
+  // simplified list — everything else now lives one tap away on the
+  // Settle Up page (see the "Settle up" button below), not here. Personal
+  // space is always trivially "no one else to owe," same reasoning
+  // SettlementSummary itself is hidden there for.
+  const myBalanceLines =
+    group && !group.is_personal && settlement
+      ? settlement.filter((t) => t.from === myParticipantId || t.to === myParticipantId)
+      : []
   // Whether the current selection happens to cover every bill in the
   // group, not just the visible page — bills holds the group's full list
   // once historyComplete (see loadBillsAndSettlement), so this is a real
@@ -898,22 +914,51 @@ export default function GroupView() {
 
   return (
     <div className="page">
+      {/* Back arrow + action icons only — no title sharing this row
+          anymore (see .page-title below, its own full-width row). Back
+          stays the one fixed-width item on the left; .header-spacer is
+          the single explicit flex: 1 element that claims the rest of the
+          row, so every icon after it sits flush against the right edge at
+          the row's normal gap — the same "give the element that must grow
+          its own explicit flex-grow, don't count on an unstretched child
+          to do it" fix behind the .bill-list-item regression fixed
+          earlier this round: there is always exactly one child here whose
+          job is to grow, and it's declared, not implied. */}
       <header className="page-header">
         <BackButton to="/" label="Groups" />
-        <h1>{group?.name}</h1>
-        {/* Share/Stats/Settings, grouped together as icon-only controls —
-            Share here is the group-level action (settle-up recap text/PDF
-            for a real group, the personal-space recap above for one's own
-            space — see personalRecap's own comment for why that one's
-            built differently), merged with the CSV export that used to sit
-            in its own button further down the page (ShareButton's
-            onExportCsv). Gated only on settlement itself having loaded —
-            same for both group types now: formatSettlementRecap already
-            handles an empty settlement ("Everyone's even") gracefully, and
-            formatPersonalSpaceRecap does the same for zero bills ("No
-            bills yet") — onExportCsv is the one part still separately
-            gated on bills actually existing, since there's nothing
-            sensible to export otherwise. */}
+        <span className="header-spacer" aria-hidden="true" />
+        {/* Search moved in from the old .group-actions row below the
+            header (now gone) — same toggle, same styling as every other
+            icon here instead of its own .bill-search-toggle look. Stays
+            in the row (rather than disappearing once open, like it used
+            to) and just switches to active-toggle instead, both so the
+            row's own width/spacing never shifts when it opens or closes,
+            and so "something's filtered" (searchQuery/filtersActive) is
+            still visible at a glance even while collapsed, same signal
+            .bill-search-toggle-active used to give it. */}
+        {bills && bills.length > 0 && (
+          <button
+            type="button"
+            className={`icon-btn ${searchOpen || searchQuery || filtersActive ? 'active-toggle' : ''}`}
+            onClick={() => setSearchOpen((o) => !o)}
+            aria-label="Search bills"
+            title="Search bills"
+          >
+            <SearchIcon />
+          </button>
+        )}
+        {/* Share/Stats/Settings — Share here is the group-level action
+            (settle-up recap text/PDF for a real group, the personal-space
+            recap above for one's own space — see personalRecap's own
+            comment for why that one's built differently), merged with the
+            CSV export that used to sit in its own button further down the
+            page (ShareButton's onExportCsv). Gated only on settlement
+            itself having loaded — same for both group types now:
+            formatSettlementRecap already handles an empty settlement
+            ("Everyone's even") gracefully, and formatPersonalSpaceRecap
+            does the same for zero bills ("No bills yet") — onExportCsv is
+            the one part still separately gated on bills actually
+            existing, since there's nothing sensible to export otherwise. */}
         {settlement && (
           <ShareButton
             icon
@@ -947,26 +992,6 @@ export default function GroupView() {
       </header>
 
       {error && <p className="status-error">{error}</p>}
-
-      <div className="group-actions">
-        {/* Hidden once the search section itself is open — its own ↑
-            (below) is what closes it again, so there's never two controls
-            on screen at once for the same thing. Icon-only — this only
-            ever opens the search box, it doesn't itself "apply" anything
-            (filtering already happens live as you type), so it never
-            needed a verb as a label to begin with. */}
-        {bills && bills.length > 0 && !searchOpen && (
-          <button
-            type="button"
-            className={`btn-secondary bill-search-toggle ${searchQuery || filtersActive ? 'bill-search-toggle-active' : ''}`}
-            onClick={() => setSearchOpen(true)}
-            aria-label="Search bills"
-            title="Search bills"
-          >
-            <SearchIcon size={16} />
-          </button>
-        )}
-      </div>
 
       {bills && bills.length > 0 && searchOpen && (
         <>
@@ -1065,6 +1090,60 @@ export default function GroupView() {
             </div>
           )}
         </>
+      )}
+
+      {/* The title, alone on its own row now — no icons sharing it (see
+          the header above), so a long group name wraps cleanly instead of
+          fighting Share/Stats/Settings for space. */}
+      <h1 className="page-title">{group?.name}</h1>
+
+      {/* The balance summary — everything a "how much did you spend"
+          question needs at a glance, unlike the full settlement below
+          (via the Settle Up button) which lists every debt in the group,
+          not just yours. Gated on settlement rather than myBalanceLines
+          itself, same as the button right after it: an empty group with
+          no settlement computed yet shouldn't flash "you're all settled
+          up" before it actually knows that. */}
+      {!group?.is_personal && settlement && (
+        <div className="balance-summary">
+          {myBalanceLines.length === 0 ? (
+            <p className="muted">You're all settled up in this group.</p>
+          ) : (
+            myBalanceLines.map((t, i) => {
+              const iOwe = t.from === myParticipantId
+              // Settings > Groups' own "Color the whole balance line"
+              // toggle — on (the default) colors the whole <p>, which the
+              // amount span below then just inherits; off leaves the line
+              // in the ordinary text color and puts the same class on the
+              // amount alone instead. Either way it's the same two utility
+              // classes the rest of the app already colors a balance with
+              // (.balance-positive/.balance-negative on a bill row's own
+              // "You lent"/"You borrowed") — nothing new invented here.
+              const colorClass = iOwe ? 'balance-negative' : 'balance-positive'
+              const otherName = iOwe ? nameOf(t.to) : nameOf(t.from)
+              return (
+                <p key={i} className={`balance-line ${colorWholeBalanceLine ? colorClass : ''}`}>
+                  {iOwe ? (
+                    <>
+                      You owe <strong>{otherName}</strong>{' '}
+                      <span className={`mono ${colorWholeBalanceLine ? '' : colorClass}`}>{format(t.amount)}</span>
+                    </>
+                  ) : (
+                    <>
+                      <strong>{otherName}</strong> owes You{' '}
+                      <span className={`mono ${colorWholeBalanceLine ? '' : colorClass}`}>{format(t.amount)}</span>
+                    </>
+                  )}
+                </p>
+              )
+            })
+          )}
+        </div>
+      )}
+      {!group?.is_personal && settlement && (
+        <Link to={`/groups/${groupId}/settle-up`} className="btn-secondary balance-settle-btn">
+          Settle up
+        </Link>
       )}
 
       {/* One form, not a choice between two (that used to be a per-space

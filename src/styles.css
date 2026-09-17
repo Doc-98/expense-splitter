@@ -108,6 +108,20 @@ code {
   margin: 0 0 var(--space-lg);
 }
 
+/* GroupView.jsx's own balance summary, right under the title — "You owe
+   X" / "X owes You" for just the debts that involve you, deliberately
+   lighter than the full settlement list the Settle Up button below it
+   opens: plain stacked lines, not a bordered card, so it doesn't compete
+   with the title above or the Add-bill form right after it. Block
+   children of a plain (non-flex) container — nothing here needs an
+   explicit width rule to fill the row, because nothing here is a flex
+   item to begin with, same reasoning .bill-list-item's own fix relies on
+   two sections up in this file. */
+.balance-summary { display: flex; flex-direction: column; gap: 4px; margin: 0 0 var(--space-md); font-size: 15px; }
+.balance-line { margin: 0; }
+.balance-line strong { font-weight: 600; }
+.balance-settle-btn { margin-bottom: var(--space-lg); }
+
 .app-header {
   display: flex;
   align-items: center;
@@ -677,12 +691,13 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   margin: var(--space-sm) 2px 6px;
 }
 
-.group-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  margin-bottom: var(--space-lg);
-}
+/* The single explicit flex: 1 spacer in GroupView.jsx's own header row —
+   claims the row's remaining width so Search/Share/Stats/Settings sit
+   flush against the right edge, at the row's normal gap, regardless of
+   which of those actually render (Search/Share are both conditional).
+   min-width keeps it from fully collapsing to 0 if every icon after it is
+   ever hidden at once, though that's not a real case today. */
+.header-spacer { flex: 1; min-width: 4px; }
 
 /* No display/width rule needed here on purpose — .bill-list-item (this
    <li>) is left as an ordinary block box precisely so its one child
@@ -781,21 +796,6 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    own right edge, after Filters, rather than a separate header row just
    for it. */
 .bill-search-collapse { flex-shrink: 0; }
-/* The search toggle in .group-actions that opens the section back up —
-   icon-only (a magnifying glass, no "Search" label — it only ever opens
-   the box, filtering itself already happens live as you type), pushed to
-   the row's right edge (margin-left: auto) rather than sitting immediately
-   next to the member-count button, so it reads as its own thing on the
-   opposite side of the row instead of crowding it on the left. Sized down
-   from .btn-secondary's own text padding, which reads as oversized around
-   a lone 16px icon. */
-.bill-search-toggle { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; padding: 9px; }
-/* Same "something's set even though you can't see it right now" signal
-   .bill-filter-toggle-active gives its own text — inverted to a solid fill
-   instead, since there's no text left here to weight/recolor once this
-   became icon-only. */
-.bill-search-toggle-active { background: var(--accent); color: white; }
-
 .bill-filters-panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -982,6 +982,17 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .payment-history { margin-top: var(--space-md); font-size: 14px; }
 .payment-history summary { cursor: pointer; color: var(--ink-soft); }
 .payment-history .settlement-list { margin-top: var(--space-sm); }
+
+/* SettleUp.jsx — the debts that involve you come first, unmissable
+   (.settle-your-debts' own bottom margin separates them from the
+   collapsed section below); everyone else's sit collapsed by default
+   under .other-debts, same collapsed-by-default/summary look as
+   .payment-history just above, deliberately reused rather than invented
+   fresh — both are "here's more, if you want it" sections under a
+   primary list. */
+.settle-your-debts { margin-bottom: var(--space-lg); }
+.other-debts summary { cursor: pointer; color: var(--ink-soft); font-size: 14px; }
+.other-debts .settlement-list { margin-top: var(--space-sm); }
 
 /* A CSS-only expand/collapse — a `grid-template-rows: 0fr -> 1fr` animates
    to the content's real height exactly, no guessed max-height. The pair
