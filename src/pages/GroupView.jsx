@@ -90,6 +90,14 @@ export default function GroupView() {
   const [monthTotal, setMonthTotal] = useState(0)
   const [payments, setPayments] = useState([])
   const [error, setError] = useState(null)
+  // Which bill (if any) is mid-rename via the ⋮ menu's own "Rename" —
+  // same two-state shape (an id + a draft string) as GroupCategoriesSection/
+  // GroupGuestsSection's own editing*Id/editing*Name pairs, and the same
+  // reason: the draft needs to live in state independently of `bills`
+  // itself so typing doesn't touch the real title until Save actually
+  // commits it (see saveBillRename below).
+  const [editingBillId, setEditingBillId] = useState(null)
+  const [editingBillTitle, setEditingBillTitle] = useState('')
   const [selectMode, setSelectMode] = useState(false)
   // Select mode's only entry point is now a bill's own "..." menu (see
   // enterSelectModeWith below) — there's no dedicated "Select bills" button
@@ -703,6 +711,25 @@ export default function GroupView() {
     reloadAll()
   }
 
+  // Entry point is the ⋮ menu's own "Rename" (see BillActionsMenu below) —
+  // no confirm step, same as every other rename in this app (a group's own
+  // name, a category, a guest). Same empty-stays-unrenamed guard as those
+  // too, just inlined here rather than going through InlineEditable, since
+  // this is a full replace-the-row form (see the list's own JSX below),
+  // not a click-to-edit value in place.
+  async function saveBillRename(billId) {
+    const trimmed = editingBillTitle.trim()
+    if (!trimmed) return
+    setError(null)
+    const { error: renameError } = await supabase.from('bills').update({ title: trimmed }).eq('id', billId)
+    if (renameError) {
+      setError(renameError.message)
+      return
+    }
+    setEditingBillId(null)
+    reloadAll()
+  }
+
   // Selection is independent of pagination on purpose — picking bills on
   // page 1, paging over, and picking more on page 2 before deleting all of
   // them together is a reasonable thing to want, so selectedIds isn't reset
@@ -1178,7 +1205,36 @@ export default function GroupView() {
                         className={`bill-list-item${isFocused ? ' list-row-focused' : ''}`}
                         ref={isFocused ? billNav.rowRef : null}
                       >
-                        {selectMode ? (
+                        {editingBillId === bill.id ? (
+                          // Reuses .guest-rename-form's shape verbatim —
+                          // Categories already does the same rather than
+                          // this being its own bespoke form — with its own
+                          // border/padding/radius here matching
+                          // .bill-row-outer exactly (see styles.css) so
+                          // swapping into "renaming" and back doesn't shift
+                          // this row's size against its still-normal
+                          // siblings in the same list.
+                          <form
+                            className="guest-rename-form"
+                            onSubmit={(e) => {
+                              e.preventDefault()
+                              saveBillRename(bill.id)
+                            }}
+                          >
+                            <input
+                              value={editingBillTitle}
+                              onChange={(e) => setEditingBillTitle(e.target.value)}
+                              aria-label={`Rename ${bill.title}`}
+                              autoFocus
+                            />
+                            <button type="submit" className="btn-link">
+                              Save
+                            </button>
+                            <button type="button" className="btn-link" onClick={() => setEditingBillId(null)}>
+                              Cancel
+                            </button>
+                          </form>
+                        ) : selectMode ? (
                           <label className="card-list-item bill-select-row">
                             {billLabel}
                             <span className="bill-row-right">
@@ -1220,6 +1276,10 @@ export default function GroupView() {
                                 </div>
                                 <BillActionsMenu
                                   billTitle={bill.title}
+                                  onRename={() => {
+                                    setEditingBillId(bill.id)
+                                    setEditingBillTitle(bill.title)
+                                  }}
                                   onSelect={() => enterSelectModeWith(bill.id)}
                                   onShare={() => shareBills([bill.id])}
                                   onDelete={() => deleteBill(bill)}

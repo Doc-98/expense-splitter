@@ -8,7 +8,7 @@ import { useClickOutside } from '../lib/useClickOutside'
 // to turn selection mode on with this one bill already picked, landing in
 // the exact state a person would be in if they'd hit the list's own
 // "Select" toggle and then ticked this row themselves.
-export default function BillActionsMenu({ billTitle, onSelect, onShare, onDelete }) {
+export default function BillActionsMenu({ billTitle, onRename, onSelect, onShare, onDelete }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   useClickOutside(wrapRef, () => setOpen(false), open)
@@ -30,6 +30,11 @@ export default function BillActionsMenu({ billTitle, onSelect, onShare, onDelete
       </button>
       {open && (
         <div className="bill-menu-popover">
+          {/* Same position as every other row menu's own Rename — first,
+              ahead of Select/Share/Delete — see CategoryMenu/GuestMenu. */}
+          <button type="button" className="dropdown-item" onClick={() => run(onRename)}>
+            Rename
+          </button>
           <button type="button" className="dropdown-item" onClick={() => run(onSelect)}>
             Select
           </button>

@@ -297,6 +297,37 @@ code {
   flex: 1;
 }
 
+/* BillView.jsx's own title — an InlineEditable <button> inside the <h1>
+   above rather than a plain text node, so the page can be renamed right
+   where it's read instead of only from a group's bill list (see
+   GroupView.jsx's ⋮ menu). Redeclares the same font-family/size/weight
+   .page-header h1 already sets, deliberately not left to inherit them:
+   .item-editable's own reset (shared by every other InlineEditable button
+   in the app) intentionally leaves font untouched so each use can combine
+   it with whatever class already carries the right look, same reasoning
+   as .item-name/.amount-card-value — a <button> has no free ride to a
+   parent <h1>'s styling the way a plain text node would. display: block +
+   width: 100% + text-align: left makes it wrap and lay out exactly like
+   the plain text node it replaces (a bare <button> is inline-block and
+   shrinks to fit its own content otherwise), and the dotted underline
+   .item-editable adds is this app's one consistent "this is editable"
+   signal, same as every other click-to-edit value on this same page. */
+.bill-title-editable {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+}
+input.bill-title-editable-input {
+  display: block;
+  width: 100%;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+}
+
 /* Wraps a title + a smaller subtitle line together as one flex item, for
    pages that need both (currently just Group Stats: "Group Stats" plus
    the group's own name underneath) — .page-header h1's own flex: 1 above
@@ -722,6 +753,22 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    .bill-select-row, never inside a shell — keeps its own border
    exactly as it already did. */
 .bill-row-shell .card-list-item { border: none; border-radius: 0; }
+
+/* The ⋮ menu's own "Rename" (GroupView.jsx) swaps a bill row for this
+   form entirely rather than editing in place — same choice
+   GroupCategoriesSection/GroupGuestsSection already made for their own
+   rename, and .guest-rename-form itself is exactly the class Categories
+   already reuses for its own version, so this is a third reuse, not a
+   new one. Its own border/background/radius/padding here matches
+   .bill-row-outer/.card-list-item exactly (down to the same padding) so
+   a row swapping into "renaming" and back doesn't change size against
+   its still-normal siblings in the same list. */
+.bill-list-item > .guest-rename-form {
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
 
 /* Reuses the same "receipt tape" search bar treatment as the in-app
    guide's own search (.guide-search-input) — same torn-edge look, same
