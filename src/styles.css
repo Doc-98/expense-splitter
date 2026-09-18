@@ -130,10 +130,13 @@ code {
    unit rather than an uneven two-then-one stack. clamp()'s middle term is
    in vw rather than a fixed size because it's the row's own available
    width (≈ viewport width on a phone, .page has no side content next to
-   it) that determines how much these three buttons need to shrink by. */
+   it) that determines how much these three buttons need to shrink by.
+   flex: 1 1 auto (not 0 1 auto) so the three buttons actually grow to fill
+   the row's full width — content-hugging alone left a dead gap after
+   "History" on any phone wider than the narrowest target. */
 .settle-actions { display: flex; flex-wrap: nowrap; gap: 5px; margin-bottom: var(--space-lg); }
 .settle-actions .btn-primary, .settle-actions .btn-secondary {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
   padding: 10px clamp(3px, 2.1vw, 18px);
   font-size: clamp(11px, 3vw, 15px);
@@ -144,8 +147,17 @@ code {
 /* Pairs an icon with a button's own text label, vertically centered —
    SettleIcon/ReceiptIcon next to "Settle up"/"History" here; a plain
    .btn-primary/.btn-secondary on its own is just `display: inline-block`,
-   which doesn't align an icon child against its text at all. */
-.btn-with-icon { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+   which doesn't align an icon child against its text at all.
+   Scoped to .settle-actions rather than a bare .btn-with-icon rule: at
+   equal specificity, source order alone would otherwise decide the fight
+   over `display` against .btn-primary/.btn-secondary/.btn-danger's own
+   `display: inline-block` further down this file (whichever rule happens
+   to sit later in the cascade wins) — that's exactly the bug this scoping
+   fixes: the two-class selector always outranks that one-class rule, so
+   the icon row actually gets to be a flex container (and justify-content
+   below actually has something to act on) regardless of where either rule
+   sits in the file. */
+.settle-actions .btn-with-icon { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
 
 .app-header {
   display: flex;
