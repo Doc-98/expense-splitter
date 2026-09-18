@@ -8,6 +8,13 @@ expectations, etc.) — read that first, every session.
 
 ## PR workflow
 
+- Only open a pull request when explicitly asked to — standing preference,
+  confirmed 2026-09-18. Default to accumulating multiple rounds of work as
+  plain commits on the working branch and pushing them; one PR then covers
+  the whole accumulated batch, rather than a PR per small change. This
+  overrides the general instruction to open a PR once a task is "complete"
+  — completing a task here just means committing and pushing, unless the
+  user's own request that round was to open a PR.
 - After opening a pull request in this repo, subscribe to its activity
   (`subscribe_pr_activity`) immediately, without asking first — standing
   preference, confirmed 2026-08-20. Also schedule a check-in roughly an
