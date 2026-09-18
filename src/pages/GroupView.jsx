@@ -26,13 +26,12 @@ import { getGroupViewPreferences } from '../lib/groupViewPreferences'
 import { parseAmount } from '../lib/parseNumber'
 import { groupFilterStateCache } from '../lib/groupFilterState'
 import { buildGroupCsvRows, toCsv, downloadCsv } from '../lib/csv'
-import SettlementSummary from '../components/SettlementSummary'
 import ShareButton from '../components/ShareButton'
 import Pagination from '../components/Pagination'
 import BillActionsMenu from '../components/BillActionsMenu'
 import RangeSlider from '../components/RangeSlider'
 import { PrintableSettlementRecap, PrintablePersonalSpaceRecap } from '../components/PrintableRecap'
-import { SearchIcon, PieChartIcon, SettingsIcon, ArrowRightIcon } from '../components/icons'
+import { SearchIcon, PieChartIcon, SettingsIcon, ArrowRightIcon, SettleIcon, ReceiptIcon } from '../components/icons'
 import BackButton from '../components/BackButton'
 
 const BILLS_PAGE_SIZE = 15
@@ -42,7 +41,7 @@ export default function GroupView() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { format } = useCurrency()
-  const { showQuickStats, showLentBorrowedStatus, stickyFilters, colorWholeBalanceLine } = getGroupViewPreferences()
+  const { showQuickStats, showLentBorrowedStatus, stickyFilters, highlightFullBalanceLine } = getGroupViewPreferences()
   // Only actually consulted when stickyFilters is on (see the state
   // declarations below and the write-back effect near the other filter
   // effects) — groupFilterStateCache.js has the full reasoning for why
@@ -191,15 +190,15 @@ export default function GroupView() {
   const isAdmin = myParticipantId && myParticipantId === group?.admin_id
   // Used only by the balance summary below (settlement's own from/to are
   // member ids, same as everywhere else this app resolves a name from
-  // one) — SettlementSummary.jsx/SettleUp.jsx each keep their own copy
-  // rather than sharing this one, same as every other small per-file
+  // one) — SettleUp.jsx/History.jsx/RecordPayment.jsx each keep their own
+  // copy rather than sharing this one, same as every other small per-file
   // nameOf in this codebase.
   const nameOf = (id) => allMembers.find((m) => m.id === id)?.name || 'Someone'
   // The debts that actually involve you, out of the group's full
   // simplified list — everything else now lives one tap away on the
-  // Settle Up page (see the "Settle up" button below), not here. Personal
-  // space is always trivially "no one else to owe," same reasoning
-  // SettlementSummary itself is hidden there for.
+  // Settle Up page (see the action row below), not here. Personal space
+  // is always trivially "no one else to owe," same reasoning the whole
+  // action row is hidden there for.
   const myBalanceLines =
     group && !group.is_personal && settlement
       ? settlement.filter((t) => t.from === myParticipantId || t.to === myParticipantId)
@@ -697,28 +696,6 @@ export default function GroupView() {
     }
   }
 
-  async function recordPayment(fromMemberId, toMemberId, amount) {
-    if (!fromMemberId || !toMemberId || fromMemberId === toMemberId || !amount) return
-    setError(null)
-    const { error: paymentError } = await supabase.from('payments').insert({
-      group_id: groupId,
-      from_member: fromMemberId,
-      to_member: toMemberId,
-      amount,
-      created_by: user.id,
-    })
-    if (paymentError) setError(paymentError.message)
-    loadPaymentsAndSettlement()
-  }
-
-  async function deletePayment(paymentId) {
-    if (!window.confirm('Delete this payment record?')) return
-    setError(null)
-    const { error: deleteError } = await supabase.from('payments').delete().eq('id', paymentId)
-    if (deleteError) setError(deleteError.message)
-    loadPaymentsAndSettlement()
-  }
-
   async function deleteBill(bill) {
     if (!window.confirm(`Delete "${bill.title}"? This removes all its items too.`)) return
     setError(null)
@@ -1122,16 +1099,16 @@ export default function GroupView() {
               const colorClass = iOwe ? 'balance-negative' : 'balance-positive'
               const otherName = iOwe ? nameOf(t.to) : nameOf(t.from)
               return (
-                <p key={i} className={`balance-line ${colorWholeBalanceLine ? colorClass : ''}`}>
+                <p key={i} className={`balance-line ${highlightFullBalanceLine ? colorClass : ''}`}>
                   {iOwe ? (
                     <>
                       You owe <strong>{otherName}</strong>{' '}
-                      <span className={`mono ${colorWholeBalanceLine ? '' : colorClass}`}>{format(t.amount)}</span>
+                      <span className={`mono ${highlightFullBalanceLine ? '' : colorClass}`}>{format(t.amount)}</span>
                     </>
                   ) : (
                     <>
                       <strong>{otherName}</strong> owes You{' '}
-                      <span className={`mono ${colorWholeBalanceLine ? '' : colorClass}`}>{format(t.amount)}</span>
+                      <span className={`mono ${highlightFullBalanceLine ? '' : colorClass}`}>{format(t.amount)}</span>
                     </>
                   )}
                 </p>
@@ -1140,10 +1117,49 @@ export default function GroupView() {
           )}
         </div>
       )}
+      {/* Settle up is deliberately the loud one here (.btn-primary, its own
+          icon) — it's the action that actually resolves something; Record
+          a payment and History are both just navigation to their own pages
+          (RecordPayment.jsx/History.jsx), plain .btn-secondary like any
+          other secondary action in this app. */}
       {!group?.is_personal && settlement && (
-        <Link to={`/groups/${groupId}/settle-up`} className="btn-secondary balance-settle-btn">
-          Settle up
-        </Link>
+        <div className="settle-actions">
+          <Link to={`/groups/${groupId}/settle-up`} className="btn-primary btn-with-icon">
+            <SettleIcon size={16} />
+            Settle up
+          </Link>
+          <Link to={`/groups/${groupId}/record-payment`} className="btn-secondary">
+            Record payment
+          </Link>
+          <Link to={`/groups/${groupId}/history`} className="btn-secondary btn-with-icon">
+            <ReceiptIcon size={16} />
+            History
+          </Link>
+        </div>
+      )}
+
+      {/* Quick stats moved up here, right after the action row, and slimmed
+          down (.stats-summary.is-slim) — joins the title/balance/actions as
+          one "your standing at a glance" block, before anything about
+          adding or browsing bills starts. Plain .settings-section-title
+          (not .group-stats-preview-title's own bottom-of-page divider
+          treatment) — :first-of-type zeroes its border-top/padding-top
+          since nothing else on this page uses that class above it, so it
+          reads as a plain heading rather than a section boundary. */}
+      {showQuickStats && (
+        <>
+          <h2 className="settings-section-title">Quick stats</h2>
+          <div className="stats-summary is-slim">
+            <div className="stats-summary-item">
+              <span className="stats-summary-value mono">{format(weekTotal)}</span>
+              <span className="muted">this week</span>
+            </div>
+            <div className="stats-summary-item">
+              <span className="stats-summary-value mono">{format(monthTotal)}</span>
+              <span className="muted">this month</span>
+            </div>
+          </div>
+        </>
       )}
 
       {/* One form, not a choice between two (that used to be a per-space
@@ -1378,16 +1394,6 @@ export default function GroupView() {
       </div>
       <Pagination page={billsPage} setPage={setBillsPage} totalItems={filteredBills.length} pageSize={BILLS_PAGE_SIZE} />
 
-      {!group?.is_personal && (
-        <SettlementSummary
-          transactions={settlement}
-          members={allMembers}
-          payments={payments}
-          onRecordPayment={recordPayment}
-          onDeletePayment={deletePayment}
-        />
-      )}
-
       {/* Share settle-up + Export CSV both moved up into the page header
           (see the icon-only ShareButton next to Stats/Settings) — this
           used to be its own row down here with the same two actions, and
@@ -1395,30 +1401,13 @@ export default function GroupView() {
           still needs to render somewhere on the page for that header
           button's "Download as PDF" to have anything to print; neither
           needs to sit visually next to the button that triggers it, and
-          contributes no visible spacing of its own (print-only). "Quick
-          stats" below already draws its own divider
-          (.group-stats-preview-title) — a second one here would just
-          double up. */}
+          contributes no visible spacing of its own (print-only). Quick
+          stats itself lives up near the top of the page now, right after
+          the action row — nothing left down here to double up with. */}
       {group?.is_personal ? (
         <PrintablePersonalSpaceRecap recap={personalRecap} />
       ) : (
         <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />
-      )}
-
-      {showQuickStats && (
-        <>
-          <h2 className="settings-section-title group-stats-preview-title">Quick stats</h2>
-          <div className="stats-summary">
-            <div className="stats-summary-item">
-              <span className="stats-summary-value mono">{format(weekTotal)}</span>
-              <span className="muted">this week</span>
-            </div>
-            <div className="stats-summary-item">
-              <span className="stats-summary-value mono">{format(monthTotal)}</span>
-              <span className="muted">this month</span>
-            </div>
-          </div>
-        </>
       )}
     </div>
   )

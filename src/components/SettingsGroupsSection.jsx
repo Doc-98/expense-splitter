@@ -151,34 +151,6 @@ export default function SettingsGroupsSection() {
       )}
 
       <h2 className="settings-section-title">Display</h2>
-      <p className="muted">
-        Applies to every group's page alike, not one at a time — if you don't want these, you
-        almost certainly don't want them anywhere.
-      </p>
-      <div className="settings-row">
-        <span>Show Quick stats on the group page</span>
-        <label className="switch">
-          <input
-            type="checkbox"
-            checked={prefs.showQuickStats}
-            onChange={(e) => updatePref({ showQuickStats: e.target.checked })}
-            aria-label="Show Quick stats on the group page"
-          />
-          <span className="switch-slider" />
-        </label>
-      </div>
-      <div className="settings-row">
-        <span>Show "You lent/borrowed" on each bill</span>
-        <label className="switch">
-          <input
-            type="checkbox"
-            checked={prefs.showLentBorrowedStatus}
-            onChange={(e) => updatePref({ showLentBorrowedStatus: e.target.checked })}
-            aria-label="Show 'You lent' or 'You borrowed' status on each bill"
-          />
-          <span className="switch-slider" />
-        </label>
-      </div>
       <div className="settings-row">
         <span>Sticky filters</span>
         <label className="switch">
@@ -196,22 +168,9 @@ export default function SettingsGroupsSection() {
         open a bill and come back — right now they reset the moment you leave. Off (the default)
         keeps today's behavior. Either way, reloading the page itself still clears them.
       </p>
-      <div className="settings-row">
-        <span>Color the whole balance line</span>
-        <label className="switch">
-          <input
-            type="checkbox"
-            checked={prefs.colorWholeBalanceLine}
-            onChange={(e) => updatePref({ colorWholeBalanceLine: e.target.checked })}
-            aria-label="Color the whole balance line red or green, not just the amount"
-          />
-          <span className="switch-slider" />
-        </label>
-      </div>
       <p className="muted">
-        Applies to the "You owe…" / "…owes You" lines under a group's title. On (the default)
-        colors the whole line; off leaves the line in the ordinary text color and colors only the
-        amount.
+        What shows on a group page itself (Quick stats, "You lent/borrowed", balance-line coloring)
+        and the Record a payment layout both moved to Settings &gt; Layout.
       </p>
 
       {pendingLeave && (
