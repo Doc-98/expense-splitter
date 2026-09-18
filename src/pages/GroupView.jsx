@@ -1129,13 +1129,37 @@ export default function GroupView() {
             Settle up
           </Link>
           <Link to={`/groups/${groupId}/record-payment`} className="btn-secondary">
-            Record a payment
+            Record payment
           </Link>
           <Link to={`/groups/${groupId}/history`} className="btn-secondary btn-with-icon">
             <ReceiptIcon size={16} />
             History
           </Link>
         </div>
+      )}
+
+      {/* Quick stats moved up here, right after the action row, and slimmed
+          down (.stats-summary.is-slim) — joins the title/balance/actions as
+          one "your standing at a glance" block, before anything about
+          adding or browsing bills starts. Plain .settings-section-title
+          (not .group-stats-preview-title's own bottom-of-page divider
+          treatment) — :first-of-type zeroes its border-top/padding-top
+          since nothing else on this page uses that class above it, so it
+          reads as a plain heading rather than a section boundary. */}
+      {showQuickStats && (
+        <>
+          <h2 className="settings-section-title">Quick stats</h2>
+          <div className="stats-summary is-slim">
+            <div className="stats-summary-item">
+              <span className="stats-summary-value mono">{format(weekTotal)}</span>
+              <span className="muted">this week</span>
+            </div>
+            <div className="stats-summary-item">
+              <span className="stats-summary-value mono">{format(monthTotal)}</span>
+              <span className="muted">this month</span>
+            </div>
+          </div>
+        </>
       )}
 
       {/* One form, not a choice between two (that used to be a per-space
@@ -1377,30 +1401,13 @@ export default function GroupView() {
           still needs to render somewhere on the page for that header
           button's "Download as PDF" to have anything to print; neither
           needs to sit visually next to the button that triggers it, and
-          contributes no visible spacing of its own (print-only). "Quick
-          stats" below already draws its own divider
-          (.group-stats-preview-title) — a second one here would just
-          double up. */}
+          contributes no visible spacing of its own (print-only). Quick
+          stats itself lives up near the top of the page now, right after
+          the action row — nothing left down here to double up with. */}
       {group?.is_personal ? (
         <PrintablePersonalSpaceRecap recap={personalRecap} />
       ) : (
         <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />
-      )}
-
-      {showQuickStats && (
-        <>
-          <h2 className="settings-section-title group-stats-preview-title">Quick stats</h2>
-          <div className="stats-summary">
-            <div className="stats-summary-item">
-              <span className="stats-summary-value mono">{format(weekTotal)}</span>
-              <span className="muted">this week</span>
-            </div>
-            <div className="stats-summary-item">
-              <span className="stats-summary-value mono">{format(monthTotal)}</span>
-              <span className="muted">this month</span>
-            </div>
-          </div>
-        </>
       )}
     </div>
   )

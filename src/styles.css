@@ -121,16 +121,31 @@ code {
 .balance-line { margin: 0; }
 .balance-line strong { font-weight: 600; }
 
-/* The three buttons right under the balance summary — Settle up, Record a
+/* The three buttons right under the balance summary — Settle up, Record
    payment, History (all three now their own page: SettleUp.jsx,
-   RecordPayment.jsx, History.jsx). flex-wrap so a narrow phone stacks them
-   rather than squeezing three buttons onto one line. */
-.settle-actions { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-bottom: var(--space-lg); }
+   RecordPayment.jsx, History.jsx). All three stay on one line on any phone
+   width Spesa actually needs to support (see WIDTHS in the design mockup:
+   360-430px) — padding/font-size shrink together via clamp() instead of
+   wrapping, so the row keeps reading as one "your standing at a glance"
+   unit rather than an uneven two-then-one stack. clamp()'s middle term is
+   in vw rather than a fixed size because it's the row's own available
+   width (≈ viewport width on a phone, .page has no side content next to
+   it) that determines how much these three buttons need to shrink by. */
+.settle-actions { display: flex; flex-wrap: nowrap; gap: 5px; margin-bottom: var(--space-lg); }
+.settle-actions .btn-primary, .settle-actions .btn-secondary {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 10px clamp(3px, 2.1vw, 18px);
+  font-size: clamp(11px, 3vw, 15px);
+  white-space: nowrap;
+  text-align: center;
+}
+.settle-actions .btn-with-icon svg { width: clamp(13px, 3.8vw, 16px); height: clamp(13px, 3.8vw, 16px); flex-shrink: 0; }
 /* Pairs an icon with a button's own text label, vertically centered —
    SettleIcon/ReceiptIcon next to "Settle up"/"History" here; a plain
    .btn-primary/.btn-secondary on its own is just `display: inline-block`,
    which doesn't align an icon child against its text at all. */
-.btn-with-icon { display: inline-flex; align-items: center; gap: 7px; }
+.btn-with-icon { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
 
 .app-header {
   display: flex;
@@ -1581,25 +1596,25 @@ input.item-editable-input, textarea.item-editable-input {
    (Your Stats' "Spending thresholds" can render at the top or the
    bottom, per that page's own preference), since every .settings-section-title
    here is a plain, unwrapped sibling of the others — unlike the bill-month
-   case, nothing needs a dedicated wrapper.
-   :not(.group-stats-preview-title) excludes the one other place this
-   class is reused (GroupView.jsx's "Quick stats" preview), which already
-   has its own bespoke divider treatment below and shouldn't get a second,
-   conflicting one here. :not(.section-always-divided) excludes a section
-   that's the *only* .settings-section-title on its page (so it'd
-   otherwise trivially count as "first") but still sits below real content
-   above it — Groups.jsx's "Create a new group", below the group list —
-   and so still wants its divider despite having no sibling section to be
-   "not the first" relative to. */
-.settings-section-title:not(.group-stats-preview-title):not(.section-always-divided) {
+   case, nothing needs a dedicated wrapper. GroupView.jsx's own "Quick
+   stats" heading reuses this same class for its font treatment and relies
+   on this exact :first-of-type behavior too — it's the only
+   .settings-section-title on that page, so it always renders divider-free
+   right under the action row, never as a section boundary.
+   :not(.section-always-divided) excludes a section that's the *only*
+   .settings-section-title on its page (so it'd otherwise trivially count
+   as "first") but still sits below real content above it — Groups.jsx's
+   "Create a new group", below the group list — and so still wants its
+   divider despite having no sibling section to be "not the first"
+   relative to. */
+.settings-section-title:not(.section-always-divided) {
   padding-top: var(--space-lg);
   border-top: 1px solid var(--border);
 }
-.settings-section-title:first-of-type:not(.group-stats-preview-title):not(.section-always-divided) {
+.settings-section-title:first-of-type:not(.section-always-divided) {
   padding-top: 0;
   border-top: none;
 }
-.group-stats-preview-title { margin-top: 40px; padding-top: var(--space-lg); border-top: 1px solid var(--border); }
 /* A lighter-weight heading for grouping a few related controls *within*
    one .settings-section-title section — Danger Zone's "Delete all bills"
    and "Delete group" each need their own explanation/button under one
@@ -1635,13 +1650,6 @@ input.item-editable-input, textarea.item-editable-input {
   border-top: 1px solid var(--border);
 }
 .settings-section-title-row .settings-section-title { margin: 0; padding-top: 0; border-top: none; }
-/* Same divider look as .group-stats-preview-title above (generous top
-   margin, a thin rule, breathing room below it) but as a standalone
-   utility rather than coupled to .settings-section-title — for a heading
-   that shouldn't take on that class's own font treatment (SettlementSummary's
-   "Settle up"/"Record a payment"), or for a bare divider between two rows
-   of buttons with no heading at all. */
-.section-divider { margin-top: 40px; padding-top: var(--space-lg); border-top: 1px solid var(--border); }
 
 .member-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .member-list-item {
@@ -1862,6 +1870,16 @@ input.item-editable-input, textarea.item-editable-input {
   font-size: 20px;
   font-weight: 600;
 }
+
+/* GroupView.jsx's "Quick stats" preview only — a smaller, tighter variant
+   for a tile that now sits right under the action row instead of at the
+   bottom of the page, where the full stats-page size (above) would
+   compete with the title/balance/actions above it rather than sit
+   quietly underneath them. */
+.stats-summary.is-slim { margin-bottom: var(--space-md); }
+.stats-summary.is-slim .stats-summary-item { padding: 10px 12px; gap: 2px; }
+.stats-summary.is-slim .stats-summary-value { font-size: 16px; }
+.stats-summary.is-slim .muted { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; }
 
 .stats-table {
   width: 100%;
