@@ -33,6 +33,20 @@ expectations, etc.) — read that first, every session.
   more commits landed on the same branch before anyone noticed, and the
   next PR needed a rebase to reconcile. Subscribing closes that gap.
 
+## Release hygiene
+
+- `src/lib/appVersion.js`'s `WHATS_NEW` array is hand-maintained and does
+  not update itself — before committing/pushing a round of work that ships
+  anything user-visible, check whether `WHATS_NEW` still describes it and
+  update it if not. It's drifted stale before (Settings > Updates showing
+  a previous release's notes, not what actually just shipped) — standing
+  preference, confirmed 2026-09-19.
+- `APP_VERSION` (same file) needs no equivalent check — it's computed
+  automatically at build time from git history (`readAppVersion()` /
+  `findLatestVersion()` in `vite.config.js`, driven by each squash-merge
+  commit's own "(#123)" suffix), so unlike `WHATS_NEW` there's nothing
+  about it that can drift out of sync by hand.
+
 ## Product conventions
 
 - "Spent" / "expenses" — for a *personal* figure, unless a request
