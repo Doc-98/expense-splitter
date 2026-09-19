@@ -35,16 +35,23 @@ export default function SettleUp() {
   const [allMembers, setAllMembers] = useState(cached?.allMembers ?? [])
   const [settlement, setSettlement] = useState(cached?.settlement ?? null)
   const [error, setError] = useState(null)
+  // Kept separate from `error` above — loadGroup() and load() both fire
+  // from the same mount effect and run concurrently, so sharing one error
+  // state meant a successful balances load (which always clears `error`
+  // on success) could silently wipe out a failed group load's message the
+  // moment it finished, whichever order the two happened to settle in.
+  const [groupError, setGroupError] = useState(null)
 
   const nameOf = (id) => allMembers.find((m) => m.id === id)?.name || 'Someone'
   const myParticipantId = allMembers.find((m) => m.userId === user.id)?.id
 
   const loadGroup = useCallback(async () => {
-    const { data, error: groupError } = await supabase.from('groups').select('*').eq('id', groupId).single()
-    if (groupError) {
-      setError(`Couldn't load this group: ${loadErrorMessage(groupError)}`)
+    const { data, error: groupErr } = await supabase.from('groups').select('*').eq('id', groupId).single()
+    if (groupErr) {
+      setGroupError(`Couldn't load this group: ${loadErrorMessage(groupErr)}`)
       return
     }
+    setGroupError(null)
     setGroup(data)
   }, [groupId])
 
@@ -136,6 +143,7 @@ export default function SettleUp() {
         <h1>Settle up</h1>
       </header>
 
+      {groupError && <p className="status-error">{groupError}</p>}
       {error && <p className="status-error">{error}</p>}
 
       {settlement === null ? (

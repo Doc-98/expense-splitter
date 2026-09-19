@@ -180,14 +180,53 @@ each of those leans on.
 A second layer, `src/components/*.test.jsx`, covers components with [React
 Testing Library](https://testing-library.com/react). Most so far are
 **self-contained** — `Pagination.jsx`, `InlineEditable.jsx`,
-`BillActionsMenu.jsx` — meaning no Supabase call, no context
-(auth/theme/currency), no router, so there's nothing to mock: `render()`
-the real component, `userEvent` through it, assert on what's in the DOM.
-`Pagination.test.jsx`'s `PaginationHarness` wrapper is the pattern for a
-component whose prop is a real `setState` updater rather than a plain
-callback — give it a real `useState` in the test instead of asserting on
-mock call arguments, so clicking through it exercises the same clamping
-logic a real page does.
+`BillActionsMenu.jsx`, `ConfirmSheet.jsx`, `RangeSlider.jsx`,
+`ComparisonBadge.jsx`, `PieChart.jsx`, `LineChart.jsx` — meaning no
+Supabase call, no context (auth/theme/currency), no router, so there's
+nothing to mock: `render()` the real component, `userEvent` through it,
+assert on what's in the DOM. `Pagination.test.jsx`'s `PaginationHarness`
+wrapper is the pattern for a component whose prop is a real `setState`
+updater rather than a plain callback — give it a real `useState` in the
+test instead of asserting on mock call arguments, so clicking through it
+exercises the same clamping logic a real page does.
+
+The five newer self-contained ones (`ConfirmSheet`, `RangeSlider`,
+`ComparisonBadge`, `PieChart`, `LineChart`) turned up a few reusable
+tricks worth knowing before you hit the same shape elsewhere:
+
+- `RangeSlider.jsx` uses two native `<input type="range">` handles —
+  jsdom has no real pointer-drag support for those, so a drag is
+  simulated with `fireEvent.change(input, { target: { value } })`
+  (`fireEvent` from `@testing-library/react`) rather than `userEvent`,
+  which sets the value through the input's own native setter and fires
+  the event React's `onChange` actually listens for. Its two numeric
+  labels are `InlineEditable`s with an `aria-label` *and* a separately
+  formatted `display` — same split as `ItemRow`'s money fields — so
+  `getByRole('button', { name: 'Minimum amount' })` (the aria-label) is
+  what finds the element, and asserting the formatted text needs
+  `toHaveTextContent('€20.00')` against that, not a `name` match, since
+  the accessible name is the label, not the formatted display text.
+- `PieChart.jsx`'s legend row is a `<button>` whose accessible name is
+  computed from three adjacent `<span>`s with no whitespace text node
+  between them in the JSX — concatenating without a natural word
+  boundary (`"Food€30.0030%"`-shaped), the same accidental-concatenation
+  trap `MultiPayerModal.test.jsx` already found in a `<label>`. Rather
+  than asserting on that computed name, `PieChart.test.jsx` locates a
+  legend row by its own `.pie-chart-legend-name` text node and scopes
+  into its `<li>` with `within(...).getByRole('button')` instead. Its
+  wedges are plain SVG `<path>`s with a literal `aria-label` (not
+  content-derived), so those *are* safe to query by exact `name`. Also
+  worth knowing: a `disabled` `<button>` still keeps its `"button"` ARIA
+  role and matches `getByRole('button', ...)` — disabled doesn't mean
+  invisible to that query, so "is this read-only" has to be asserted via
+  `.disabled`/element count, not via absence from a role query.
+- `LineChart.jsx`'s per-point hover/tap target is a transparent SVG
+  `<circle>` wired to `onMouseEnter`/`onFocus`/`onMouseLeave`/`onBlur`
+  rather than a real `<button>` click — `fireEvent.mouseEnter(target)` /
+  `fireEvent.focus(target)` (and their `Leave`/`blur` counterparts) drive
+  the same state a real hover or keyboard-tab would, without needing
+  `userEvent.hover()`'s pointer-event machinery for something this
+  simple.
 
 `GroupGeneralSection.test.jsx` is the first of the other kind — a
 **Supabase-coupled** component, and the template for one going forward.
@@ -240,10 +279,242 @@ knowing if you're extending this one or writing something similar:
   for the "cancelled" cases, covers both without duplicating the render
   setup.
 
-**What isn't**: any page (nothing under `src/pages/` has a test file yet —
-the pattern above extends to one the same way, just with more to mock:
-several Supabase calls instead of one, sometimes a realtime subscription),
-and the AI-calling strategy modules themselves
+`GroupDangerZoneSection.test.jsx` extends the lib-function pattern to a
+third module (`../lib/groupRole`'s `fetchGroupRole()`, alongside
+`fetchCategories`/`snapshotAndRemoveMember` again) and adds `useNavigate`
+to the `react-router-dom` mock (a bare `{ useParams: () => ..., useNavigate:
+() => mockNavigate }`) for the two actions that redirect home on success.
+The one real gotcha here, worth knowing before it costs you a confusing
+"found multiple elements" error: a trigger button and the confirm button
+inside the `ConfirmSheet`/`TypedConfirmSheet` it opens often share the
+*exact same text* ("Delete all bills" trigger → "Delete all bills"
+confirm button, both present in the DOM at once once the sheet is open,
+since the trigger never unmounts). `screen.getByRole('button', { name:
+'Delete all bills' })` at that point matches both and throws — scope the
+query to the dialog instead: `within(screen.getByRole('dialog')).getByRole('button',
+{ name: 'Delete all bills' })` (`within` comes from
+`@testing-library/react`, same package as `render`/`screen`). This test
+file is also the only place `TypedConfirmSheet`'s "type the exact word,
+case-sensitive" gate gets exercised (type a near-miss — wrong case is
+enough — and confirm the button stays disabled; type the real thing and
+confirm it enables) rather than needing its own dedicated test file for
+that one behavior.
+
+`RecordPayment.test.jsx` is the first test under `src/pages/`, and turned
+out to need both established Supabase-mocking styles in the same file
+rather than a third one: a query chain it builds itself (`groups`,
+`payments` — same mirror-the-actual-chain approach as
+`GroupGeneralSection.test.jsx`) alongside a lib function for the rest
+(`../lib/members`'s `fetchAllGroupMembers()`, same boundary
+`GroupMembersSection.test.jsx` already mocks). Two things worth knowing
+if you're testing another page:
+
+- It's the first component test in this suite to render a real
+  `react-router-dom` `<Link>` (`BackButton`'s `to` prop) — earlier ones
+  only ever needed `useParams`/`useAuth`/`useNavigate`. The router mock
+  needs a `Link` stub too then: `Link: ({ to, children, ...props }) =>
+  <a href={to} {...props}>{children}</a>`.
+- `getGroupViewPreferences()`/`setGroupViewPreferences()` (a real,
+  localStorage-backed preference module — same treatment as
+  `avatarIconCache`/`groupRosterCache` elsewhere in this suite) decides
+  which of this page's two form layouts renders. Call the real
+  `setGroupViewPreferences({ paymentFormLayout: 'avatars' })` before
+  rendering rather than mocking the module, and `localStorage.clear()` in
+  `beforeEach` so one test's choice doesn't leak into the next.
+
+Also worth knowing even though it's not this page's own lesson: not every
+line a component's logic covers is reachable through its actual UI.
+`pick()`'s "clear the other side if the same person's already picked
+there" branch looked testable at first, but every button that could
+trigger it is already `disabled` by the same mutual-exclusion logic in
+both layouts — so there's no click that reaches it. Don't force a test
+through a disabled control (e.g. `fireEvent` bypassing it) just to
+exercise a branch; if the UI can't reach it, a UI-level test shouldn't
+either — see `RecordPayment.test.jsx`'s "disables a person on the
+opposite row" test for how that one landed once the unreachable half was
+dropped.
+
+`ItemRow.test.jsx` and `MultiPayerModal.test.jsx` are the first tests
+against `CurrencyContext` — and the first context in this suite worth
+wrapping for real (`<CurrencyProvider>{children}</CurrencyProvider>`
+around the component under test) instead of mocking `useCurrency()`.
+Unlike `AuthContext`, `CurrencyProvider` never touches Supabase or any
+browser API beyond `localStorage` on mount, so there's nothing to mock
+and no risk in using the real thing — real coverage of `format()` itself
+is a bonus, not a cost. Both files also turned up real, fixable
+accessible-name bugs rather than test-only workarounds, worth knowing
+before you hit the same shape elsewhere:
+
+- `ItemRow`'s "Split with" avatar buttons had a `title` (e.g. "Carol
+  (left)") but no `aria-label`. That's not equivalent: a button's
+  accessible name comes from its own visible content first (here,
+  `AvatarGlyph`'s rendered initial letter, "C") — `title` is only a
+  fallback used when there's no content at all, so it was never actually
+  reached. Fixed by adding `aria-label` with the same string `title`
+  already computes, same as the avatar-picker trigger fix above.
+- `MultiPayerModal`'s per-member `<label>` wraps three things — a
+  checkbox, a name, *and* the amount `<input>` — not just the one control
+  a `<label>` normally pairs with. That's enough to make the checkbox's
+  computed name include the amount input's current *value* too (so it
+  read "Alice 6" once she had an amount typed, "Alice" before that) —
+  and the amount input itself had no accessible name of its own at all
+  (`placeholder` isn't one). Fixed with an explicit `aria-label` on each:
+  `aria-label={m.name}` on the checkbox, `aria-label={`${m.name}'s
+  amount`}` on the amount field — both now stable regardless of the
+  other's state.
+
+`SettingsGroupsSection.test.jsx` combines the lib-function pattern with a
+one-off query chain in the same file, same idea as `RecordPayment.test.jsx`
+but the other way around: its own list load and its leave-group write both
+go through lib functions (`../lib/prefetchSettings`'s
+`fetchSettingsGroupsRows()`, `../lib/leaveGroup`'s
+`snapshotAndRemoveMember()`), but `confirmLeave()` also builds one direct
+Supabase query chain itself (`supabase.from('categories').select('id,
+name').eq('group_id', …)`) rather than going through a lib function for
+that specific lookup — so `supabaseClient` still needs a bare `{ from:
+mockFrom }`, mirroring just that one chain, alongside the two `vi.mock()`
+calls for the lib functions. This component has no router import at all
+(no `useParams`/`useNavigate`/`Link`), so `react-router-dom` isn't mocked
+here. It also reads/writes the same real, localStorage-backed
+`getGroupViewPreferences()`/`setGroupViewPreferences()` module
+`RecordPayment.test.jsx` uses (for its own "Sticky filters" toggle) —
+same treatment, `localStorage.clear()` in `beforeEach`.
+
+`GroupCategoriesSection.test.jsx` is a pure lib-function case (`../lib/categories`'s
+`fetchCategories()`/`addCategory()`/`renameCategory()`/`deleteCategory()`/`updateCategoryColor()`)
+with `useParams` as its only router need and `window.confirm` gating the
+delete flow — same shapes as before. The one new wrinkle: `ColorSwatchPicker`
+(rendered for real here, unmocked, since it's self-contained) imports
+`CATEGORY_COLORS` from that same `../lib/categories` module, so the mock
+factory has to keep exporting it alongside the mocked functions. Reaching
+for `vi.importActual()` to get the real array "for free" doesn't work here
+— the real `lib/categories.js` also imports `supabase`, and
+`supabaseClient.js` calls `createClient(url, anonKey, …)` at module-eval
+time, which throws immediately with no env vars configured (the case in
+every test run here — see "no Supabase project or any other secret needed"
+above). Simplest fix: inline the real preset array as a plain literal
+inside the `vi.mock()` factory instead. Its optimistic color-change is
+also the first place in this suite testing an optimistic update where the
+easiest-looking assertion (checking the changed swatch's inline `style`)
+turns out to be the wrong one — jsdom normalizes inline hex colors to
+`rgb(...)` on read in ways that don't reliably round-trip back to the
+original hex string for `toHaveStyle()` comparisons. Asserting on which
+`ColorSwatchPicker` swatch now carries the `selected` class instead (the
+popover deliberately stays open after a pick, so it's still on screen to
+check) sidesteps that entirely and is a more direct proxy for "did the
+state actually change" anyway.
+
+`AppHeader.test.jsx` is the smallest Supabase/context-coupled component
+tested so far — one `useAuth()` read (for `displayName` and, on click,
+`user.id`) and two fire-and-forget prefetch calls
+(`../lib/prefetchSettings`'s `prefetchSettingsGroups()`/`prefetchBudgets()`),
+no query chain of its own at all, so `supabaseClient` doesn't need
+mocking here even indirectly. Its own real gotcha: `APP_VERSION`
+(`../lib/appVersion.js`) is `import.meta.env.VITE_APP_VERSION`, which is
+`undefined` in a test run (no `.env` — same reasoning as everywhere else
+in this suite needing no secret) — rather than asserting on that version
+string's exact content, the brand link is queried by its stable text
+("Expense Splitter") and `href`, leaving the version chip itself
+unasserted.
+
+`InviteMenu.test.jsx` and `ShareButton.test.jsx` are both self-contained
+(no Supabase, no context, no router), but unlike the earlier self-contained
+batch they lean on real browser APIs — `navigator.share`/
+`navigator.clipboard.writeText` (`../lib/shareText`'s `shareOrCopyText()`,
+which now has its own direct test too, see below) — that don't exist on
+jsdom's `navigator` by default. Rather than mocking `shareOrCopyText`
+itself (which would just move the interesting behavior out of what's
+tested), both files stub `navigator.share`/`navigator.clipboard` directly,
+per test, with `Object.defineProperty(navigator, 'share', { value: impl,
+configurable: true })` — a plain `navigator.share = impl` assignment
+doesn't work, since jsdom's `navigator` only exposes those as read-only
+getters. `delete navigator.share` / `delete navigator.clipboard` in
+`afterEach` keeps one test's stub from leaking into the next. Two other
+things worth knowing:
+
+- `InviteMenu.jsx` generates its QR code via a *dynamic* `import('qrcode')`
+  on first open (see the component's own comment — lazy, cached, no point
+  building one nobody opens). `vi.mock('qrcode', () => ({ toDataURL: ...
+  }))` covers a dynamic import exactly the same way it covers a static
+  one — the mock factory returns `toDataURL` as a plain named export
+  (not under `.default`) since that's how the component reads it off the
+  awaited namespace. The "shows the QR code" and "still generating"
+  cases needed splitting into two separate tests rather than one
+  before/after sequence — `userEvent.click()` already awaits the
+  mocked (immediately-resolving) promise internally, so by the time the
+  click resolves the "Generating…" placeholder has already been replaced;
+  a `mockToDataURL.mockReturnValue(new Promise(() => {}))` in its own
+  test is what actually catches the pending state, same "never-resolving
+  promise" trick used elsewhere in this suite for a still-loading state.
+- `ShareButton.jsx` calls `window.print()` directly for its "Download as
+  PDF" item — jsdom's own `window.print` exists but only logs a "Not
+  implemented" warning rather than actually doing nothing quietly, so
+  `vi.stubGlobal('print', vi.fn())` in `beforeEach` (undone with
+  `vi.unstubAllGlobals()` after) replaces it with something assertable.
+
+`shareText.test.js` is the one exception to "component tests don't test
+their own lib module" in this batch — `shareOrCopyText()`'s own branching
+(share succeeds, the share sheet is cancelled via `AbortError` vs. share
+failing for another reason and falling through to the clipboard, no
+`navigator.share` at all) is real logic worth covering directly at the
+`src/lib/` level, same as any other pure function here, rather than only
+indirectly through whichever one UI path a component happens to exercise
+it from.
+
+`SettleUp.test.jsx` is the second page tested, and the first to combine
+everything `RecordPayment.test.jsx` needed with a realtime subscription
+on top — `supabase.channel()`/`removeChannel()`, mocked with a small
+`makeChannel()` helper (`{ on: vi.fn(() => channel), subscribe: vi.fn(()
+=> channel) }`, chainable the same way the real query builder's mock
+objects already are) rather than anything from a Supabase testing
+package; the test asserts the channel name, that all five
+`.on(...)`s got wired up, and that `removeChannel` runs on unmount — not
+that a broadcast round-trips end to end, which would need a realtime
+package of its own to fake convincingly. It's also the first place in
+this suite to derive its own settlement fixture from real, unmocked
+`settlement.js` math (two small bills feeding `computeGroupViewSnapshot()`
+for real) rather than asserting on a canned list, and it turned up a real
+bug in the component along the way: `loadGroup()` and `load()` both fire
+from the same mount effect and run concurrently, but originally shared
+one `error` state — since `load()` unconditionally clears that state on
+its own success, a `loadGroup()` failure (a group that itself can't be
+fetched) got silently wiped out the moment the *unrelated* balances load
+finished after it, whichever order the two settled in. Fixed by giving
+`loadGroup()` its own `groupError` state, rendered alongside `error`
+rather than sharing it — same "fix the real thing, don't paper over it in
+the test" principle this suite has applied to accessibility gaps all
+along, just for a state bug instead of a missing `aria-label`. One
+smaller gotcha along the way: `toHaveTextContent('Carol owes You')` looks
+like it should work but doesn't — adjacent `<span>`s with no whitespace
+text node between them in the JSX concatenate with no space
+(`"CarolowesYou"`), the same trap `PieChart.test.jsx`'s legend row
+already hit; asserting on each `<span>` individually side-steps it.
+
+`GroupSubscriptionsSection.test.jsx` is the largest and most-coupled
+component tested so far, and closes out this round of UI tests. Its own
+load goes through one combined lib function
+(`../lib/prefetchGroupSettings`'s `fetchGroupSubscriptionsData()`), but
+its five write actions live in a *different* module
+(`../lib/recurringBills`) whose functions all take the raw `supabase`
+client as an explicit first argument (`addRecurringBill(supabase, ...)`)
+rather than importing it themselves — so unlike every earlier
+lib-function suite, `../supabaseClient` still needs mocking here too,
+just as an inert `{}` the mocked recurring-bills functions never actually
+read. Two gotchas worth knowing before extending this one: jsdom doesn't
+implement `scrollIntoView` at all, which `startEdit()` calls unconditionally
+on mount of the edit form — `window.HTMLElement.prototype.scrollIntoView
+= vi.fn()` in `beforeEach` stands in for it, the same shape as `window.print`
+needing a stub in `ShareButton.test.jsx`. And the form's default
+"split with everyone" state comes from a *second* `useEffect` keyed on
+`members` rather than running inline with the load, so it lands in its
+own follow-up render pass after the one the template list itself first
+appears in — asserting on it needs `waitFor`, not an immediate check
+right after the data-loaded `findBy`, or the assertion races a render
+that hasn't happened yet.
+
+**What isn't**: any other page beyond the two above (the pattern extends
+the same way, just with more to mock: more Supabase calls, sometimes a
+realtime subscription), and the AI-calling strategy modules themselves
 (`billCategorization/strategies/`, `bank-statement-parsing/`,
 `receipt-parsing/` — these make real network calls to whichever provider is
 configured, so testing them meaningfully needs mocking the provider
@@ -271,11 +542,27 @@ fixing (a one-line `aria-label`, same as `GroupGeneralSection`'s and
 Settings > Profile's own avatar-picker trigger got) rather than working
 around it with a CSS-class query in the test — the test should exercise
 the component the way a real user (including one on a screen reader)
-actually would. Follow `Pagination`/`InlineEditable`/`BillActionsMenu` as
+actually would. Follow `Pagination`/`InlineEditable`/`BillActionsMenu`/
+`ConfirmSheet`/`RangeSlider`/`ComparisonBadge`/`PieChart`/`LineChart` as
 the template if the component is self-contained; if it's Supabase-coupled,
-follow `GroupGeneralSection` for one that builds its own query chains, or
-`GroupMembersSection` for one that goes through lib functions instead —
-whichever shape matches what the component you're testing actually calls.
+follow `GroupGeneralSection` for one that builds its own query chains,
+`AppHeader` for one that's only lib-function calls with no query chain at
+all, or `GroupMembersSection`/`GroupDangerZoneSection`/`GroupCategoriesSection`/
+`GroupSubscriptionsSection` for a fuller lib-function case (the last of
+those when the component's writes live in a different module than its
+reads, each taking `supabase` as an explicit argument rather than
+importing it) — whichever shape matches what the component you're
+testing actually calls (a component often needs both a query chain and
+lib functions at once, like `RecordPayment.test.jsx`/
+`SettingsGroupsSection.test.jsx`/`SettleUp.test.jsx`, the last of those
+also adding a realtime subscription — see `makeChannel()` there for the
+mock shape). If it's coupled to `CurrencyContext` instead of (or
+alongside) Supabase, follow `ItemRow`/`MultiPayerModal` — wrap it in a
+real `<CurrencyProvider>` rather than mocking `useCurrency()`. If it
+touches `navigator.share`/`navigator.clipboard` (or another real browser
+API jsdom doesn't stub by default), follow `InviteMenu`/`ShareButton` —
+stub the browser API directly with `Object.defineProperty()` rather than
+mocking whichever lib function wraps it.
 `src/testSetup.js` (wired in via `vitest.config.js`'s `test.setupFiles`)
 registers [jest-dom](https://github.com/testing-library/jest-dom)'s
 matchers (`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each

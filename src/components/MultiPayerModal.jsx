@@ -59,7 +59,7 @@ export default function MultiPayerModal({ title = 'Multiple payers', members, bi
         <h2>{title}</h2>
         {members.map((m) => (
           <label key={m.id} className="payer-row">
-            <input type="checkbox" checked={m.id in draft} onChange={() => toggle(m.id)} />
+            <input type="checkbox" checked={m.id in draft} onChange={() => toggle(m.id)} aria-label={m.name} />
             <span>{m.name}</span>
             <input
               type="text"
@@ -68,6 +68,7 @@ export default function MultiPayerModal({ title = 'Multiple payers', members, bi
               value={draft[m.id] ?? ''}
               onChange={(e) => setAmount(m.id, e.target.value)}
               placeholder="0.00"
+              aria-label={`${m.name}'s amount`}
             />
           </label>
         ))}
