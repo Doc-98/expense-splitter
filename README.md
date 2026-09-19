@@ -261,9 +261,43 @@ enough — and confirm the button stays disabled; type the real thing and
 confirm it enables) rather than needing its own dedicated test file for
 that one behavior.
 
-**What isn't**: any page (nothing under `src/pages/` has a test file yet —
-the pattern above extends to one the same way, just with more to mock:
-several Supabase calls instead of one, sometimes a realtime subscription),
+`RecordPayment.test.jsx` is the first test under `src/pages/`, and turned
+out to need both established Supabase-mocking styles in the same file
+rather than a third one: a query chain it builds itself (`groups`,
+`payments` — same mirror-the-actual-chain approach as
+`GroupGeneralSection.test.jsx`) alongside a lib function for the rest
+(`../lib/members`'s `fetchAllGroupMembers()`, same boundary
+`GroupMembersSection.test.jsx` already mocks). Two things worth knowing
+if you're testing another page:
+
+- It's the first component test in this suite to render a real
+  `react-router-dom` `<Link>` (`BackButton`'s `to` prop) — earlier ones
+  only ever needed `useParams`/`useAuth`/`useNavigate`. The router mock
+  needs a `Link` stub too then: `Link: ({ to, children, ...props }) =>
+  <a href={to} {...props}>{children}</a>`.
+- `getGroupViewPreferences()`/`setGroupViewPreferences()` (a real,
+  localStorage-backed preference module — same treatment as
+  `avatarIconCache`/`groupRosterCache` elsewhere in this suite) decides
+  which of this page's two form layouts renders. Call the real
+  `setGroupViewPreferences({ paymentFormLayout: 'avatars' })` before
+  rendering rather than mocking the module, and `localStorage.clear()` in
+  `beforeEach` so one test's choice doesn't leak into the next.
+
+Also worth knowing even though it's not this page's own lesson: not every
+line a component's logic covers is reachable through its actual UI.
+`pick()`'s "clear the other side if the same person's already picked
+there" branch looked testable at first, but every button that could
+trigger it is already `disabled` by the same mutual-exclusion logic in
+both layouts — so there's no click that reaches it. Don't force a test
+through a disabled control (e.g. `fireEvent` bypassing it) just to
+exercise a branch; if the UI can't reach it, a UI-level test shouldn't
+either — see `RecordPayment.test.jsx`'s "disables a person on the
+opposite row" test for how that one landed once the unreachable half was
+dropped.
+
+**What isn't**: any other page (nothing else under `src/pages/` has a
+test file yet — the pattern above extends to one the same way, just with
+more to mock: more Supabase calls, sometimes a realtime subscription),
 and the AI-calling strategy modules themselves
 (`billCategorization/strategies/`, `bank-statement-parsing/`,
 `receipt-parsing/` — these make real network calls to whichever provider is
@@ -297,7 +331,8 @@ the template if the component is self-contained; if it's Supabase-coupled,
 follow `GroupGeneralSection` for one that builds its own query chains, or
 `GroupMembersSection`/`GroupDangerZoneSection` for one that goes through
 lib functions instead — whichever shape matches what the component
-you're testing actually calls.
+you're testing actually calls (a page often needs both at once, like
+`RecordPayment.test.jsx`).
 `src/testSetup.js` (wired in via `vitest.config.js`'s `test.setupFiles`)
 registers [jest-dom](https://github.com/testing-library/jest-dom)'s
 matchers (`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each
