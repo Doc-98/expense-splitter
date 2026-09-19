@@ -177,30 +177,54 @@ prompt/response handling (`billCategorization/classifyPrompt.js`), CSV
 parsing/export (`csv.js`), and the smaller date/number-formatting helpers
 each of those leans on.
 
-A second layer, `src/components/*.test.jsx`, covers **self-contained**
-components with [React Testing Library](https://testing-library.com/react)
-(`Pagination.jsx`, `InlineEditable.jsx`, `BillActionsMenu.jsx`, so far) —
-"self-contained" meaning no Supabase call, no context (auth/theme/currency),
-no router, so there's nothing to mock: `render()` the real component,
-`userEvent` through it, assert on what's in the DOM. `Pagination.test.jsx`'s
-`PaginationHarness` wrapper is the pattern for a component whose prop is a
-real `setState` updater rather than a plain callback — give it a real
-`useState` in the test instead of asserting on mock call arguments, so
-clicking through it exercises the same clamping logic a real page does.
+A second layer, `src/components/*.test.jsx`, covers components with [React
+Testing Library](https://testing-library.com/react). Most so far are
+**self-contained** — `Pagination.jsx`, `InlineEditable.jsx`,
+`BillActionsMenu.jsx` — meaning no Supabase call, no context
+(auth/theme/currency), no router, so there's nothing to mock: `render()`
+the real component, `userEvent` through it, assert on what's in the DOM.
+`Pagination.test.jsx`'s `PaginationHarness` wrapper is the pattern for a
+component whose prop is a real `setState` updater rather than a plain
+callback — give it a real `useState` in the test instead of asserting on
+mock call arguments, so clicking through it exercises the same clamping
+logic a real page does.
 
-**What isn't**: any page (nothing under `src/pages/` has a test file — every
-one of them talks to Supabase directly), any component that reaches into
-Supabase, a context provider, or `react-router`, and the AI-calling
-strategy modules themselves (`billCategorization/strategies/`,
-`bank-statement-parsing/`, `receipt-parsing/` — these make real network
-calls to whichever provider is configured, so testing them meaningfully
-needs mocking the provider response, not just running the code). If you're
-adding a test for one of those, `vi.mock()` the strategy/provider boundary
-rather than the whole module — keeps the test exercising real
-parsing/matching logic, not a hand-waved stub of it. The same idea applies
-to a Supabase-coupled component: mock `../supabaseClient`'s exported
-`supabase` client (`vi.mock('../supabaseClient', () => ({ supabase: {...} }))`),
-not the whole component.
+`GroupGeneralSection.test.jsx` is the first of the other kind — a
+**Supabase-coupled** component, and the template for one going forward.
+Three things make that different from the self-contained case:
+
+- `../supabaseClient`'s exported `supabase` client is mocked entirely
+  (`vi.mock('../supabaseClient', () => ({ supabase: { from: mockFrom } }))`),
+  with `mockFrom` built via `vi.hoisted()` rather than a plain top-level
+  `const` — `vi.mock()` calls are hoisted above the rest of the file
+  (imports included), so a factory closing over an ordinary variable would
+  run before that variable's own declaration was ever reached.
+- The mock's shape mirrors the component's *actual* query chains
+  (`.from('groups').select('name').eq('id', groupId).single()`,
+  `.from('groups').update({ name }).eq('id', groupId)`, and the
+  `group_members` equivalents) rather than a generic catch-all query
+  builder — easier to read, and just as easy to extend if a later test
+  needs a chain this doesn't cover yet. Each canned response lives in a
+  `let`, reassigned per test (or mid-test, for a save-error case), so
+  `mockFrom` always returns whatever the test currently wants without a
+  fresh `mockImplementation` for every case.
+- `useParams` (`react-router-dom`) and `useAuth` (`../context/AuthContext`)
+  are mocked outright rather than wrapped in a real `<MemoryRouter>` /
+  `<AuthProvider>` — a real `AuthProvider` talks to `supabase.auth` on
+  mount, which would just be more to mock for no benefit to what this
+  component actually reads from it (`user.id`, `displayName`).
+
+**What isn't**: any page (nothing under `src/pages/` has a test file yet —
+the pattern above extends to one the same way, just with more to mock:
+several Supabase calls instead of one, sometimes a realtime subscription),
+and the AI-calling strategy modules themselves
+(`billCategorization/strategies/`, `bank-statement-parsing/`,
+`receipt-parsing/` — these make real network calls to whichever provider is
+configured, so testing them meaningfully needs mocking the provider
+response, not just running the code). If you're adding a test for one of
+those, `vi.mock()` the strategy/provider boundary rather than the whole
+module — keeps the test exercising real parsing/matching logic, not a
+hand-waved stub of it.
 
 **Adding a test**: for `src/lib/`, colocate `yourModule.test.js` next to
 `yourModule.js`, `import { describe, it, expect } from 'vitest'`. Vitest
@@ -209,18 +233,23 @@ browser globals work directly — no environment setup needed even for
 something like `bankCategoryMappings.test.js`, which exercises real
 `localStorage` rather than a mock of it.
 
-For a self-contained component, colocate `YourComponent.test.jsx` next to
-`YourComponent.jsx` and follow the existing three as a template: `import {
-render, screen } from '@testing-library/react'`,
-`import userEvent from '@testing-library/user-event'`, query by role/label
-text (`getByRole`, `getByLabelText`) rather than by class name or test id —
-it's both closer to how someone actually uses the component and more
-resistant to a class-name-only refactor. `src/testSetup.js` (wired in via
-`vitest.config.js`'s `test.setupFiles`) registers
-[jest-dom](https://github.com/testing-library/jest-dom)'s matchers
-(`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each test's DOM
-automatically — nothing to import for either beyond the matchers
-themselves working out of the box.
+For a component, colocate `YourComponent.test.jsx` next to
+`YourComponent.jsx`: `import { render, screen } from
+'@testing-library/react'`, `import userEvent from
+'@testing-library/user-event'`, query by role/label text (`getByRole`,
+`getByLabelText`) rather than by class name or test id — it's both closer
+to how someone actually uses the component and more resistant to a
+class-name-only refactor (a plain CSS-class query is still the right call
+for the rare element with no accessible name of its own, the way
+`GroupGeneralSection.test.jsx`'s `openAvatarPicker` helper falls back for
+one trigger button that's missing one — see that file's own comment).
+Follow `Pagination`/`InlineEditable`/`BillActionsMenu` as the template if
+the component is self-contained, or `GroupGeneralSection` if it isn't.
+`src/testSetup.js` (wired in via `vitest.config.js`'s `test.setupFiles`)
+registers [jest-dom](https://github.com/testing-library/jest-dom)'s
+matchers (`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each
+test's DOM automatically — nothing to import for either beyond the
+matchers themselves working out of the box.
 
 ### Resetting the database
 
