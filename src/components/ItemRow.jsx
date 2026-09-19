@@ -168,17 +168,21 @@ export default function ItemRow({
               <div className="item-body-row">
                 <span className="item-body-label">Split with</span>
                 <div className="avatar-row">
-                  {visibleMembers.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      className={`avatar ${avatarSizeClass} ${buyerIds.has(m.id) ? 'active' : ''} ${m.active ? '' : 'former'}`}
-                      title={`${m.name}${m.isGuest ? ' (guest)' : ''}${!m.active ? ' (left)' : ''}`}
-                      onClick={() => onToggleBuyer(m.id)}
-                    >
-                      <AvatarGlyph iconId={m.avatarIcon} name={m.name} size={avatarIconPx} />
-                    </button>
-                  ))}
+                  {visibleMembers.map((m) => {
+                    const label = `${m.name}${m.isGuest ? ' (guest)' : ''}${!m.active ? ' (left)' : ''}`
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        className={`avatar ${avatarSizeClass} ${buyerIds.has(m.id) ? 'active' : ''} ${m.active ? '' : 'former'}`}
+                        title={label}
+                        aria-label={label}
+                        onClick={() => onToggleBuyer(m.id)}
+                      >
+                        <AvatarGlyph iconId={m.avatarIcon} name={m.name} size={avatarIconPx} />
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             )}

@@ -295,6 +295,35 @@ either — see `RecordPayment.test.jsx`'s "disables a person on the
 opposite row" test for how that one landed once the unreachable half was
 dropped.
 
+`ItemRow.test.jsx` and `MultiPayerModal.test.jsx` are the first tests
+against `CurrencyContext` — and the first context in this suite worth
+wrapping for real (`<CurrencyProvider>{children}</CurrencyProvider>`
+around the component under test) instead of mocking `useCurrency()`.
+Unlike `AuthContext`, `CurrencyProvider` never touches Supabase or any
+browser API beyond `localStorage` on mount, so there's nothing to mock
+and no risk in using the real thing — real coverage of `format()` itself
+is a bonus, not a cost. Both files also turned up real, fixable
+accessible-name bugs rather than test-only workarounds, worth knowing
+before you hit the same shape elsewhere:
+
+- `ItemRow`'s "Split with" avatar buttons had a `title` (e.g. "Carol
+  (left)") but no `aria-label`. That's not equivalent: a button's
+  accessible name comes from its own visible content first (here,
+  `AvatarGlyph`'s rendered initial letter, "C") — `title` is only a
+  fallback used when there's no content at all, so it was never actually
+  reached. Fixed by adding `aria-label` with the same string `title`
+  already computes, same as the avatar-picker trigger fix above.
+- `MultiPayerModal`'s per-member `<label>` wraps three things — a
+  checkbox, a name, *and* the amount `<input>` — not just the one control
+  a `<label>` normally pairs with. That's enough to make the checkbox's
+  computed name include the amount input's current *value* too (so it
+  read "Alice 6" once she had an amount typed, "Alice" before that) —
+  and the amount input itself had no accessible name of its own at all
+  (`placeholder` isn't one). Fixed with an explicit `aria-label` on each:
+  `aria-label={m.name}` on the checkbox, `aria-label={`${m.name}'s
+  amount`}` on the amount field — both now stable regardless of the
+  other's state.
+
 **What isn't**: any other page (nothing else under `src/pages/` has a
 test file yet — the pattern above extends to one the same way, just with
 more to mock: more Supabase calls, sometimes a realtime subscription),
@@ -332,7 +361,9 @@ follow `GroupGeneralSection` for one that builds its own query chains, or
 `GroupMembersSection`/`GroupDangerZoneSection` for one that goes through
 lib functions instead — whichever shape matches what the component
 you're testing actually calls (a page often needs both at once, like
-`RecordPayment.test.jsx`).
+`RecordPayment.test.jsx`). If it's coupled to `CurrencyContext` instead
+of (or alongside) Supabase, follow `ItemRow`/`MultiPayerModal` — wrap it
+in a real `<CurrencyProvider>` rather than mocking `useCurrency()`.
 `src/testSetup.js` (wired in via `vitest.config.js`'s `test.setupFiles`)
 registers [jest-dom](https://github.com/testing-library/jest-dom)'s
 matchers (`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each
