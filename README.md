@@ -417,6 +417,50 @@ string's exact content, the brand link is queried by its stable text
 ("Expense Splitter") and `href`, leaving the version chip itself
 unasserted.
 
+`InviteMenu.test.jsx` and `ShareButton.test.jsx` are both self-contained
+(no Supabase, no context, no router), but unlike the earlier self-contained
+batch they lean on real browser APIs — `navigator.share`/
+`navigator.clipboard.writeText` (`../lib/shareText`'s `shareOrCopyText()`,
+which now has its own direct test too, see below) — that don't exist on
+jsdom's `navigator` by default. Rather than mocking `shareOrCopyText`
+itself (which would just move the interesting behavior out of what's
+tested), both files stub `navigator.share`/`navigator.clipboard` directly,
+per test, with `Object.defineProperty(navigator, 'share', { value: impl,
+configurable: true })` — a plain `navigator.share = impl` assignment
+doesn't work, since jsdom's `navigator` only exposes those as read-only
+getters. `delete navigator.share` / `delete navigator.clipboard` in
+`afterEach` keeps one test's stub from leaking into the next. Two other
+things worth knowing:
+
+- `InviteMenu.jsx` generates its QR code via a *dynamic* `import('qrcode')`
+  on first open (see the component's own comment — lazy, cached, no point
+  building one nobody opens). `vi.mock('qrcode', () => ({ toDataURL: ...
+  }))` covers a dynamic import exactly the same way it covers a static
+  one — the mock factory returns `toDataURL` as a plain named export
+  (not under `.default`) since that's how the component reads it off the
+  awaited namespace. The "shows the QR code" and "still generating"
+  cases needed splitting into two separate tests rather than one
+  before/after sequence — `userEvent.click()` already awaits the
+  mocked (immediately-resolving) promise internally, so by the time the
+  click resolves the "Generating…" placeholder has already been replaced;
+  a `mockToDataURL.mockReturnValue(new Promise(() => {}))` in its own
+  test is what actually catches the pending state, same "never-resolving
+  promise" trick used elsewhere in this suite for a still-loading state.
+- `ShareButton.jsx` calls `window.print()` directly for its "Download as
+  PDF" item — jsdom's own `window.print` exists but only logs a "Not
+  implemented" warning rather than actually doing nothing quietly, so
+  `vi.stubGlobal('print', vi.fn())` in `beforeEach` (undone with
+  `vi.unstubAllGlobals()` after) replaces it with something assertable.
+
+`shareText.test.js` is the one exception to "component tests don't test
+their own lib module" in this batch — `shareOrCopyText()`'s own branching
+(share succeeds, the share sheet is cancelled via `AbortError` vs. share
+failing for another reason and falling through to the clipboard, no
+`navigator.share` at all) is real logic worth covering directly at the
+`src/lib/` level, same as any other pure function here, rather than only
+indirectly through whichever one UI path a component happens to exercise
+it from.
+
 **What isn't**: any other page (nothing else under `src/pages/` has a
 test file yet — the pattern above extends to one the same way, just with
 more to mock: more Supabase calls, sometimes a realtime subscription),
@@ -460,7 +504,11 @@ query chain and lib functions at once, like
 `RecordPayment.test.jsx`/`SettingsGroupsSection.test.jsx`). If it's
 coupled to `CurrencyContext` instead of (or alongside) Supabase, follow
 `ItemRow`/`MultiPayerModal` — wrap it in a real `<CurrencyProvider>`
-rather than mocking `useCurrency()`.
+rather than mocking `useCurrency()`. If it touches `navigator.share`/
+`navigator.clipboard` (or another real browser API jsdom doesn't stub by
+default), follow `InviteMenu`/`ShareButton` — stub the browser API
+directly with `Object.defineProperty()` rather than mocking whichever lib
+function wraps it.
 `src/testSetup.js` (wired in via `vitest.config.js`'s `test.setupFiles`)
 registers [jest-dom](https://github.com/testing-library/jest-dom)'s
 matchers (`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each
