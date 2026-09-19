@@ -16,9 +16,5 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
-  'Fixed a crash where any group page — including your Personal space — could go blank',
-  'Bills can now be renamed, from the ⋮ menu or right inside Bill View',
-  'Settle up, Record payment, and History each get their own page now, off three buttons under your balance',
-  'New Settings > Layout section: theme (with a "System" option that follows your device live), stats defaults, and group-page display toggles, all in one place',
-  'Quick stats moved up next to those action buttons and got slimmer',
+  "Fixed Settle up sometimes silently hiding an error about the group itself failing to load, if your balances happened to finish loading right after",
 ]

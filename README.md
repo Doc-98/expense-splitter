@@ -461,10 +461,60 @@ failing for another reason and falling through to the clipboard, no
 indirectly through whichever one UI path a component happens to exercise
 it from.
 
-**What isn't**: any other page (nothing else under `src/pages/` has a
-test file yet — the pattern above extends to one the same way, just with
-more to mock: more Supabase calls, sometimes a realtime subscription),
-and the AI-calling strategy modules themselves
+`SettleUp.test.jsx` is the second page tested, and the first to combine
+everything `RecordPayment.test.jsx` needed with a realtime subscription
+on top — `supabase.channel()`/`removeChannel()`, mocked with a small
+`makeChannel()` helper (`{ on: vi.fn(() => channel), subscribe: vi.fn(()
+=> channel) }`, chainable the same way the real query builder's mock
+objects already are) rather than anything from a Supabase testing
+package; the test asserts the channel name, that all five
+`.on(...)`s got wired up, and that `removeChannel` runs on unmount — not
+that a broadcast round-trips end to end, which would need a realtime
+package of its own to fake convincingly. It's also the first place in
+this suite to derive its own settlement fixture from real, unmocked
+`settlement.js` math (two small bills feeding `computeGroupViewSnapshot()`
+for real) rather than asserting on a canned list, and it turned up a real
+bug in the component along the way: `loadGroup()` and `load()` both fire
+from the same mount effect and run concurrently, but originally shared
+one `error` state — since `load()` unconditionally clears that state on
+its own success, a `loadGroup()` failure (a group that itself can't be
+fetched) got silently wiped out the moment the *unrelated* balances load
+finished after it, whichever order the two settled in. Fixed by giving
+`loadGroup()` its own `groupError` state, rendered alongside `error`
+rather than sharing it — same "fix the real thing, don't paper over it in
+the test" principle this suite has applied to accessibility gaps all
+along, just for a state bug instead of a missing `aria-label`. One
+smaller gotcha along the way: `toHaveTextContent('Carol owes You')` looks
+like it should work but doesn't — adjacent `<span>`s with no whitespace
+text node between them in the JSX concatenate with no space
+(`"CarolowesYou"`), the same trap `PieChart.test.jsx`'s legend row
+already hit; asserting on each `<span>` individually side-steps it.
+
+`GroupSubscriptionsSection.test.jsx` is the largest and most-coupled
+component tested so far, and closes out this round of UI tests. Its own
+load goes through one combined lib function
+(`../lib/prefetchGroupSettings`'s `fetchGroupSubscriptionsData()`), but
+its five write actions live in a *different* module
+(`../lib/recurringBills`) whose functions all take the raw `supabase`
+client as an explicit first argument (`addRecurringBill(supabase, ...)`)
+rather than importing it themselves — so unlike every earlier
+lib-function suite, `../supabaseClient` still needs mocking here too,
+just as an inert `{}` the mocked recurring-bills functions never actually
+read. Two gotchas worth knowing before extending this one: jsdom doesn't
+implement `scrollIntoView` at all, which `startEdit()` calls unconditionally
+on mount of the edit form — `window.HTMLElement.prototype.scrollIntoView
+= vi.fn()` in `beforeEach` stands in for it, the same shape as `window.print`
+needing a stub in `ShareButton.test.jsx`. And the form's default
+"split with everyone" state comes from a *second* `useEffect` keyed on
+`members` rather than running inline with the load, so it lands in its
+own follow-up render pass after the one the template list itself first
+appears in — asserting on it needs `waitFor`, not an immediate check
+right after the data-loaded `findBy`, or the assertion races a render
+that hasn't happened yet.
+
+**What isn't**: any other page beyond the two above (the pattern extends
+the same way, just with more to mock: more Supabase calls, sometimes a
+realtime subscription), and the AI-calling strategy modules themselves
 (`billCategorization/strategies/`, `bank-statement-parsing/`,
 `receipt-parsing/` — these make real network calls to whichever provider is
 configured, so testing them meaningfully needs mocking the provider
@@ -497,18 +547,22 @@ actually would. Follow `Pagination`/`InlineEditable`/`BillActionsMenu`/
 the template if the component is self-contained; if it's Supabase-coupled,
 follow `GroupGeneralSection` for one that builds its own query chains,
 `AppHeader` for one that's only lib-function calls with no query chain at
-all, or `GroupMembersSection`/`GroupDangerZoneSection`/`GroupCategoriesSection`
-for a fuller lib-function case — whichever shape matches what the
-component you're testing actually calls (a component often needs both a
-query chain and lib functions at once, like
-`RecordPayment.test.jsx`/`SettingsGroupsSection.test.jsx`). If it's
-coupled to `CurrencyContext` instead of (or alongside) Supabase, follow
-`ItemRow`/`MultiPayerModal` — wrap it in a real `<CurrencyProvider>`
-rather than mocking `useCurrency()`. If it touches `navigator.share`/
-`navigator.clipboard` (or another real browser API jsdom doesn't stub by
-default), follow `InviteMenu`/`ShareButton` — stub the browser API
-directly with `Object.defineProperty()` rather than mocking whichever lib
-function wraps it.
+all, or `GroupMembersSection`/`GroupDangerZoneSection`/`GroupCategoriesSection`/
+`GroupSubscriptionsSection` for a fuller lib-function case (the last of
+those when the component's writes live in a different module than its
+reads, each taking `supabase` as an explicit argument rather than
+importing it) — whichever shape matches what the component you're
+testing actually calls (a component often needs both a query chain and
+lib functions at once, like `RecordPayment.test.jsx`/
+`SettingsGroupsSection.test.jsx`/`SettleUp.test.jsx`, the last of those
+also adding a realtime subscription — see `makeChannel()` there for the
+mock shape). If it's coupled to `CurrencyContext` instead of (or
+alongside) Supabase, follow `ItemRow`/`MultiPayerModal` — wrap it in a
+real `<CurrencyProvider>` rather than mocking `useCurrency()`. If it
+touches `navigator.share`/`navigator.clipboard` (or another real browser
+API jsdom doesn't stub by default), follow `InviteMenu`/`ShareButton` —
+stub the browser API directly with `Object.defineProperty()` rather than
+mocking whichever lib function wraps it.
 `src/testSetup.js` (wired in via `vitest.config.js`'s `test.setupFiles`)
 registers [jest-dom](https://github.com/testing-library/jest-dom)'s
 matchers (`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each
