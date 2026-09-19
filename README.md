@@ -239,12 +239,15 @@ For a component, colocate `YourComponent.test.jsx` next to
 '@testing-library/user-event'`, query by role/label text (`getByRole`,
 `getByLabelText`) rather than by class name or test id — it's both closer
 to how someone actually uses the component and more resistant to a
-class-name-only refactor (a plain CSS-class query is still the right call
-for the rare element with no accessible name of its own, the way
-`GroupGeneralSection.test.jsx`'s `openAvatarPicker` helper falls back for
-one trigger button that's missing one — see that file's own comment).
-Follow `Pagination`/`InlineEditable`/`BillActionsMenu` as the template if
-the component is self-contained, or `GroupGeneralSection` if it isn't.
+class-name-only refactor. A component that turns out to have an
+icon-only trigger or similar with no accessible name of its own is worth
+fixing (a one-line `aria-label`, same as `GroupGeneralSection`'s and
+Settings > Profile's own avatar-picker trigger got) rather than working
+around it with a CSS-class query in the test — the test should exercise
+the component the way a real user (including one on a screen reader)
+actually would. Follow `Pagination`/`InlineEditable`/`BillActionsMenu` as
+the template if the component is self-contained, or `GroupGeneralSection`
+if it isn't.
 `src/testSetup.js` (wired in via `vitest.config.js`'s `test.setupFiles`)
 registers [jest-dom](https://github.com/testing-library/jest-dom)'s
 matchers (`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each

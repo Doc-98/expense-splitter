@@ -118,21 +118,12 @@ describe('GroupGeneralSection', () => {
     expect(input).toHaveValue('Mountain Trip') // draft survives the failed save
   })
 
-  // The trigger button that expands the picker has no accessible name of
-  // its own — "Choose your avatar" is a sibling <span>, and its only
-  // content is an aria-hidden icon preview plus a bare chevron SVG — so
-  // it can't be queried by role/name the way every other button in this
-  // file is. Falls back to a plain CSS-class query instead.
-  function openAvatarPicker(container) {
-    return container.querySelector('.avatar-picker-trigger')
-  }
-
   it('picks an avatar icon, saving it optimistically', async () => {
     const user = userEvent.setup()
-    const { container } = render(<GroupGeneralSection />)
+    render(<GroupGeneralSection />)
 
     await screen.findByPlaceholderText('Group name') // wait for the initial loads to settle
-    await user.click(openAvatarPicker(container))
+    await user.click(screen.getByRole('button', { name: 'Choose your avatar' }))
     await user.click(screen.getByRole('button', { name: 'Bomb' }))
 
     // Optimistic: the tile lights up before the (mocked) request even
@@ -143,10 +134,10 @@ describe('GroupGeneralSection', () => {
 
   it('reverts the icon and shows an error when saving it fails', async () => {
     const user = userEvent.setup()
-    const { container } = render(<GroupGeneralSection />)
+    render(<GroupGeneralSection />)
 
     await screen.findByPlaceholderText('Group name')
-    await user.click(openAvatarPicker(container))
+    await user.click(screen.getByRole('button', { name: 'Choose your avatar' }))
     membersUpdateResult = { error: { message: 'could not save icon' } }
     await user.click(screen.getByRole('button', { name: 'Bomb' }))
 
