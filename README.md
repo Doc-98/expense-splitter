@@ -312,6 +312,35 @@ drop table if exists profiles cascade;
 Doesn't delete anyone's actual login (`auth.users` is untouched) — create a
 fresh group and have everyone rejoin via a new invite link afterward.
 
+### Migrations & Supabase branching
+
+Every file in `supabase/migrations/` needs a `<timestamp>_name.sql` name
+(e.g. `20260911182229_avatar_icons.sql`) — that's not just a convention,
+it's what Supabase's own tooling requires to recognize a file as a
+migration at all. Use `supabase migration new <name>` (or hand-timestamp
+one with `date -u +%Y%m%d%H%M%S`) rather than a plain descriptive
+filename. This matters more here than it would on a project actually
+using [branching](https://supabase.com/docs/guides/deployment/branching):
+every migration in this repo up to and including
+`20260911182229_avatar_icons.sql` was applied by hand in the SQL Editor
+(matching this section's own instructions above), not via the CLI, which
+is exactly how the migration files ended up without timestamp prefixes
+in the first place — they only got them, retroactively, once that
+mismatch broke the Supabase GitHub integration's own tracked history
+(see below).
+
+**Preview branches for pull requests are a Supabase Pro-Plan feature**
+([confirmed in Supabase's own docs](https://supabase.com/docs/guides/deployment#do-you-need-a-paid-plan)) —
+this project stays on the Free plan, so **Automatic branching** is
+switched off in the GitHub Integration settings (Project Settings >
+Integrations > GitHub, in the Supabase dashboard). **Deploy to
+production** stays on — that half works on every plan, and is what
+auto-applies a merged migration to the live database on push to
+`master`. If a "Supabase Preview" check ever reappears on a PR, that
+toggle got flipped back on somehow; turn it back off rather than trying
+to fix it from the repo side — there's nothing in this repo that
+controls it.
+
 ## Receipt scanning
 
 Every strategy runs entirely in the browser — nothing server-side to deploy.
@@ -520,7 +549,7 @@ Danger Zone has three actions, not all shown to everyone:
   second, unused pattern.
 
 **Delete group** is new: `delete_group()` (schema.sql; standalone migration
-`admin_delete_group.sql`) is the actual nuclear option — not just a group's
+`20260908141045_admin_delete_group.sql`) is the actual nuclear option — not just a group's
 bills, the group itself, cascading to every member, guest, category,
 subscription, bill, payment, and departed member's own frozen snapshot for
 it. Same admin gate as `delete_all_group_bills()`, plus one more: a personal
