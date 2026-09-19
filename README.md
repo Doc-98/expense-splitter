@@ -214,6 +214,32 @@ Three things make that different from the self-contained case:
   mount, which would just be more to mock for no benefit to what this
   component actually reads from it (`user.id`, `displayName`).
 
+`GroupMembersSection.test.jsx` is the second Supabase-coupled pattern, for
+when a component doesn't build its own query chains: it reads/writes
+through `../lib/prefetchGroupSettings`'s `fetchGroupRosterData()`,
+`../lib/categories`'s `fetchCategories()`, and `../lib/leaveGroup`'s
+`snapshotAndRemoveMember()` — those three lib functions are what get
+mocked (`vi.mock('../lib/prefetchGroupSettings', () => ({
+fetchGroupRosterData: mockFetchGroupRosterData }))`, one per module), the
+same "mock the boundary, not the whole module" idea the AI strategy
+modules below already use — `supabaseClient` itself only needs a bare
+`{ rpc: mockRpc }`, for the one direct `supabase.rpc('transfer_admin', …)`
+call this component still makes on its own. Two other things worth
+knowing if you're extending this one or writing something similar:
+
+- `groupRosterCache` (a real, module-level LRU cache — same kind as
+  `avatarIconCache` in `GroupGeneralSection.test.jsx`) is left real rather
+  than mocked, and cleared in `beforeEach` — a component that seeds its
+  initial state from a cache like this is worth a test that pre-populates
+  it and asserts the seeded value renders *before* the mocked fetch
+  resolves (`GroupMembersSection.test.jsx`'s "paints from
+  groupRosterCache" test never awaits anything — that's the point).
+- `window.confirm` gates both the admin-transfer and remove-member
+  actions here; `vi.spyOn(window, 'confirm').mockReturnValue(true)` in
+  `beforeEach`, overridden per test with `window.confirm.mockReturnValue(false)`
+  for the "cancelled" cases, covers both without duplicating the render
+  setup.
+
 **What isn't**: any page (nothing under `src/pages/` has a test file yet —
 the pattern above extends to one the same way, just with more to mock:
 several Supabase calls instead of one, sometimes a realtime subscription),
@@ -246,8 +272,10 @@ Settings > Profile's own avatar-picker trigger got) rather than working
 around it with a CSS-class query in the test — the test should exercise
 the component the way a real user (including one on a screen reader)
 actually would. Follow `Pagination`/`InlineEditable`/`BillActionsMenu` as
-the template if the component is self-contained, or `GroupGeneralSection`
-if it isn't.
+the template if the component is self-contained; if it's Supabase-coupled,
+follow `GroupGeneralSection` for one that builds its own query chains, or
+`GroupMembersSection` for one that goes through lib functions instead —
+whichever shape matches what the component you're testing actually calls.
 `src/testSetup.js` (wired in via `vitest.config.js`'s `test.setupFiles`)
 registers [jest-dom](https://github.com/testing-library/jest-dom)'s
 matchers (`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each
