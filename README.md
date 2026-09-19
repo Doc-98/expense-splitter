@@ -324,6 +324,47 @@ before you hit the same shape elsewhere:
   amount`}` on the amount field — both now stable regardless of the
   other's state.
 
+`SettingsGroupsSection.test.jsx` combines the lib-function pattern with a
+one-off query chain in the same file, same idea as `RecordPayment.test.jsx`
+but the other way around: its own list load and its leave-group write both
+go through lib functions (`../lib/prefetchSettings`'s
+`fetchSettingsGroupsRows()`, `../lib/leaveGroup`'s
+`snapshotAndRemoveMember()`), but `confirmLeave()` also builds one direct
+Supabase query chain itself (`supabase.from('categories').select('id,
+name').eq('group_id', …)`) rather than going through a lib function for
+that specific lookup — so `supabaseClient` still needs a bare `{ from:
+mockFrom }`, mirroring just that one chain, alongside the two `vi.mock()`
+calls for the lib functions. This component has no router import at all
+(no `useParams`/`useNavigate`/`Link`), so `react-router-dom` isn't mocked
+here. It also reads/writes the same real, localStorage-backed
+`getGroupViewPreferences()`/`setGroupViewPreferences()` module
+`RecordPayment.test.jsx` uses (for its own "Sticky filters" toggle) —
+same treatment, `localStorage.clear()` in `beforeEach`.
+
+`GroupCategoriesSection.test.jsx` is a pure lib-function case (`../lib/categories`'s
+`fetchCategories()`/`addCategory()`/`renameCategory()`/`deleteCategory()`/`updateCategoryColor()`)
+with `useParams` as its only router need and `window.confirm` gating the
+delete flow — same shapes as before. The one new wrinkle: `ColorSwatchPicker`
+(rendered for real here, unmocked, since it's self-contained) imports
+`CATEGORY_COLORS` from that same `../lib/categories` module, so the mock
+factory has to keep exporting it alongside the mocked functions. Reaching
+for `vi.importActual()` to get the real array "for free" doesn't work here
+— the real `lib/categories.js` also imports `supabase`, and
+`supabaseClient.js` calls `createClient(url, anonKey, …)` at module-eval
+time, which throws immediately with no env vars configured (the case in
+every test run here — see "no Supabase project or any other secret needed"
+above). Simplest fix: inline the real preset array as a plain literal
+inside the `vi.mock()` factory instead. Its optimistic color-change is
+also the first place in this suite testing an optimistic update where the
+easiest-looking assertion (checking the changed swatch's inline `style`)
+turns out to be the wrong one — jsdom normalizes inline hex colors to
+`rgb(...)` on read in ways that don't reliably round-trip back to the
+original hex string for `toHaveStyle()` comparisons. Asserting on which
+`ColorSwatchPicker` swatch now carries the `selected` class instead (the
+popover deliberately stays open after a pick, so it's still on screen to
+check) sidesteps that entirely and is a more direct proxy for "did the
+state actually change" anyway.
+
 **What isn't**: any other page (nothing else under `src/pages/` has a
 test file yet — the pattern above extends to one the same way, just with
 more to mock: more Supabase calls, sometimes a realtime subscription),
@@ -358,10 +399,10 @@ the component the way a real user (including one on a screen reader)
 actually would. Follow `Pagination`/`InlineEditable`/`BillActionsMenu` as
 the template if the component is self-contained; if it's Supabase-coupled,
 follow `GroupGeneralSection` for one that builds its own query chains, or
-`GroupMembersSection`/`GroupDangerZoneSection` for one that goes through
-lib functions instead — whichever shape matches what the component
-you're testing actually calls (a page often needs both at once, like
-`RecordPayment.test.jsx`). If it's coupled to `CurrencyContext` instead
+`GroupMembersSection`/`GroupDangerZoneSection`/`GroupCategoriesSection`
+for one that goes through lib functions instead — whichever shape matches
+what the component you're testing actually calls (a component often needs
+both at once, like `RecordPayment.test.jsx`/`SettingsGroupsSection.test.jsx`). If it's coupled to `CurrencyContext` instead
 of (or alongside) Supabase, follow `ItemRow`/`MultiPayerModal` — wrap it
 in a real `<CurrencyProvider>` rather than mocking `useCurrency()`.
 `src/testSetup.js` (wired in via `vitest.config.js`'s `test.setupFiles`)
