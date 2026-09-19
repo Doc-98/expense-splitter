@@ -180,14 +180,53 @@ each of those leans on.
 A second layer, `src/components/*.test.jsx`, covers components with [React
 Testing Library](https://testing-library.com/react). Most so far are
 **self-contained** — `Pagination.jsx`, `InlineEditable.jsx`,
-`BillActionsMenu.jsx` — meaning no Supabase call, no context
-(auth/theme/currency), no router, so there's nothing to mock: `render()`
-the real component, `userEvent` through it, assert on what's in the DOM.
-`Pagination.test.jsx`'s `PaginationHarness` wrapper is the pattern for a
-component whose prop is a real `setState` updater rather than a plain
-callback — give it a real `useState` in the test instead of asserting on
-mock call arguments, so clicking through it exercises the same clamping
-logic a real page does.
+`BillActionsMenu.jsx`, `ConfirmSheet.jsx`, `RangeSlider.jsx`,
+`ComparisonBadge.jsx`, `PieChart.jsx`, `LineChart.jsx` — meaning no
+Supabase call, no context (auth/theme/currency), no router, so there's
+nothing to mock: `render()` the real component, `userEvent` through it,
+assert on what's in the DOM. `Pagination.test.jsx`'s `PaginationHarness`
+wrapper is the pattern for a component whose prop is a real `setState`
+updater rather than a plain callback — give it a real `useState` in the
+test instead of asserting on mock call arguments, so clicking through it
+exercises the same clamping logic a real page does.
+
+The five newer self-contained ones (`ConfirmSheet`, `RangeSlider`,
+`ComparisonBadge`, `PieChart`, `LineChart`) turned up a few reusable
+tricks worth knowing before you hit the same shape elsewhere:
+
+- `RangeSlider.jsx` uses two native `<input type="range">` handles —
+  jsdom has no real pointer-drag support for those, so a drag is
+  simulated with `fireEvent.change(input, { target: { value } })`
+  (`fireEvent` from `@testing-library/react`) rather than `userEvent`,
+  which sets the value through the input's own native setter and fires
+  the event React's `onChange` actually listens for. Its two numeric
+  labels are `InlineEditable`s with an `aria-label` *and* a separately
+  formatted `display` — same split as `ItemRow`'s money fields — so
+  `getByRole('button', { name: 'Minimum amount' })` (the aria-label) is
+  what finds the element, and asserting the formatted text needs
+  `toHaveTextContent('€20.00')` against that, not a `name` match, since
+  the accessible name is the label, not the formatted display text.
+- `PieChart.jsx`'s legend row is a `<button>` whose accessible name is
+  computed from three adjacent `<span>`s with no whitespace text node
+  between them in the JSX — concatenating without a natural word
+  boundary (`"Food€30.0030%"`-shaped), the same accidental-concatenation
+  trap `MultiPayerModal.test.jsx` already found in a `<label>`. Rather
+  than asserting on that computed name, `PieChart.test.jsx` locates a
+  legend row by its own `.pie-chart-legend-name` text node and scopes
+  into its `<li>` with `within(...).getByRole('button')` instead. Its
+  wedges are plain SVG `<path>`s with a literal `aria-label` (not
+  content-derived), so those *are* safe to query by exact `name`. Also
+  worth knowing: a `disabled` `<button>` still keeps its `"button"` ARIA
+  role and matches `getByRole('button', ...)` — disabled doesn't mean
+  invisible to that query, so "is this read-only" has to be asserted via
+  `.disabled`/element count, not via absence from a role query.
+- `LineChart.jsx`'s per-point hover/tap target is a transparent SVG
+  `<circle>` wired to `onMouseEnter`/`onFocus`/`onMouseLeave`/`onBlur`
+  rather than a real `<button>` click — `fireEvent.mouseEnter(target)` /
+  `fireEvent.focus(target)` (and their `Leave`/`blur` counterparts) drive
+  the same state a real hover or keyboard-tab would, without needing
+  `userEvent.hover()`'s pointer-event machinery for something this
+  simple.
 
 `GroupGeneralSection.test.jsx` is the first of the other kind — a
 **Supabase-coupled** component, and the template for one going forward.
@@ -365,6 +404,19 @@ popover deliberately stays open after a pick, so it's still on screen to
 check) sidesteps that entirely and is a more direct proxy for "did the
 state actually change" anyway.
 
+`AppHeader.test.jsx` is the smallest Supabase/context-coupled component
+tested so far — one `useAuth()` read (for `displayName` and, on click,
+`user.id`) and two fire-and-forget prefetch calls
+(`../lib/prefetchSettings`'s `prefetchSettingsGroups()`/`prefetchBudgets()`),
+no query chain of its own at all, so `supabaseClient` doesn't need
+mocking here even indirectly. Its own real gotcha: `APP_VERSION`
+(`../lib/appVersion.js`) is `import.meta.env.VITE_APP_VERSION`, which is
+`undefined` in a test run (no `.env` — same reasoning as everywhere else
+in this suite needing no secret) — rather than asserting on that version
+string's exact content, the brand link is queried by its stable text
+("Expense Splitter") and `href`, leaving the version chip itself
+unasserted.
+
 **What isn't**: any other page (nothing else under `src/pages/` has a
 test file yet — the pattern above extends to one the same way, just with
 more to mock: more Supabase calls, sometimes a realtime subscription),
@@ -396,15 +448,19 @@ fixing (a one-line `aria-label`, same as `GroupGeneralSection`'s and
 Settings > Profile's own avatar-picker trigger got) rather than working
 around it with a CSS-class query in the test — the test should exercise
 the component the way a real user (including one on a screen reader)
-actually would. Follow `Pagination`/`InlineEditable`/`BillActionsMenu` as
+actually would. Follow `Pagination`/`InlineEditable`/`BillActionsMenu`/
+`ConfirmSheet`/`RangeSlider`/`ComparisonBadge`/`PieChart`/`LineChart` as
 the template if the component is self-contained; if it's Supabase-coupled,
-follow `GroupGeneralSection` for one that builds its own query chains, or
-`GroupMembersSection`/`GroupDangerZoneSection`/`GroupCategoriesSection`
-for one that goes through lib functions instead — whichever shape matches
-what the component you're testing actually calls (a component often needs
-both at once, like `RecordPayment.test.jsx`/`SettingsGroupsSection.test.jsx`). If it's coupled to `CurrencyContext` instead
-of (or alongside) Supabase, follow `ItemRow`/`MultiPayerModal` — wrap it
-in a real `<CurrencyProvider>` rather than mocking `useCurrency()`.
+follow `GroupGeneralSection` for one that builds its own query chains,
+`AppHeader` for one that's only lib-function calls with no query chain at
+all, or `GroupMembersSection`/`GroupDangerZoneSection`/`GroupCategoriesSection`
+for a fuller lib-function case — whichever shape matches what the
+component you're testing actually calls (a component often needs both a
+query chain and lib functions at once, like
+`RecordPayment.test.jsx`/`SettingsGroupsSection.test.jsx`). If it's
+coupled to `CurrencyContext` instead of (or alongside) Supabase, follow
+`ItemRow`/`MultiPayerModal` — wrap it in a real `<CurrencyProvider>`
+rather than mocking `useCurrency()`.
 `src/testSetup.js` (wired in via `vitest.config.js`'s `test.setupFiles`)
 registers [jest-dom](https://github.com/testing-library/jest-dom)'s
 matchers (`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each
