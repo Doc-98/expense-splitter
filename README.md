@@ -240,6 +240,27 @@ knowing if you're extending this one or writing something similar:
   for the "cancelled" cases, covers both without duplicating the render
   setup.
 
+`GroupDangerZoneSection.test.jsx` extends the lib-function pattern to a
+third module (`../lib/groupRole`'s `fetchGroupRole()`, alongside
+`fetchCategories`/`snapshotAndRemoveMember` again) and adds `useNavigate`
+to the `react-router-dom` mock (a bare `{ useParams: () => ..., useNavigate:
+() => mockNavigate }`) for the two actions that redirect home on success.
+The one real gotcha here, worth knowing before it costs you a confusing
+"found multiple elements" error: a trigger button and the confirm button
+inside the `ConfirmSheet`/`TypedConfirmSheet` it opens often share the
+*exact same text* ("Delete all bills" trigger → "Delete all bills"
+confirm button, both present in the DOM at once once the sheet is open,
+since the trigger never unmounts). `screen.getByRole('button', { name:
+'Delete all bills' })` at that point matches both and throws — scope the
+query to the dialog instead: `within(screen.getByRole('dialog')).getByRole('button',
+{ name: 'Delete all bills' })` (`within` comes from
+`@testing-library/react`, same package as `render`/`screen`). This test
+file is also the only place `TypedConfirmSheet`'s "type the exact word,
+case-sensitive" gate gets exercised (type a near-miss — wrong case is
+enough — and confirm the button stays disabled; type the real thing and
+confirm it enables) rather than needing its own dedicated test file for
+that one behavior.
+
 **What isn't**: any page (nothing under `src/pages/` has a test file yet —
 the pattern above extends to one the same way, just with more to mock:
 several Supabase calls instead of one, sometimes a realtime subscription),
@@ -274,8 +295,9 @@ the component the way a real user (including one on a screen reader)
 actually would. Follow `Pagination`/`InlineEditable`/`BillActionsMenu` as
 the template if the component is self-contained; if it's Supabase-coupled,
 follow `GroupGeneralSection` for one that builds its own query chains, or
-`GroupMembersSection` for one that goes through lib functions instead —
-whichever shape matches what the component you're testing actually calls.
+`GroupMembersSection`/`GroupDangerZoneSection` for one that goes through
+lib functions instead — whichever shape matches what the component
+you're testing actually calls.
 `src/testSetup.js` (wired in via `vitest.config.js`'s `test.setupFiles`)
 registers [jest-dom](https://github.com/testing-library/jest-dom)'s
 matchers (`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each
