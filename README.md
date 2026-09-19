@@ -28,8 +28,28 @@ the (tiny) hosting bill. Setup takes about 20 minutes.
 > than left out entirely. A fuller reference site (mkdocs) is a likely future
 > home for the rest.
 
+📋 **[Project board](https://trello.com/b/AoQp8JgX/expense-splitter)** —
+planned features, in-progress work, and known issues, tracked publicly on
+Trello.
+
+## Latest update
+
+**Settle up, Record payment, and History now live on their own pages,**
+reached from a redesigned group page: a slimmer balance summary up top,
+three action buttons in place of the old inline settle-up list, and a
+"Quick stats" preview that moved up next to them instead of sitting at the
+bottom of the page. Payment history reuses the bill list's card design;
+recording a payment can pick people from a dropdown or by tapping their
+avatar, whichever you prefer in Settings.
+
+A new **Settings > Layout** section also consolidates every per-device
+display preference — theme (now with a live-tracking "System" option),
+default stats period, budgets position, and group-page display toggles —
+that used to be scattered across Profile and Groups.
+
 ## Contents
 
+- [Latest update](#latest-update)
 - [How it's built](#how-its-built)
 - [Setup](#setup)
 - [Receipt scanning](#receipt-scanning)
@@ -157,9 +177,73 @@ prompt/response handling (`billCategorization/classifyPrompt.js`), CSV
 parsing/export (`csv.js`), and the smaller date/number-formatting helpers
 each of those leans on.
 
-**What isn't**: components/pages (nothing under `src/pages/` or
-`src/components/` has a test file), anything that talks to Supabase
-directly, and the AI-calling strategy modules themselves
+A second layer, `src/components/*.test.jsx`, covers components with [React
+Testing Library](https://testing-library.com/react). Most so far are
+**self-contained** — `Pagination.jsx`, `InlineEditable.jsx`,
+`BillActionsMenu.jsx` — meaning no Supabase call, no context
+(auth/theme/currency), no router, so there's nothing to mock: `render()`
+the real component, `userEvent` through it, assert on what's in the DOM.
+`Pagination.test.jsx`'s `PaginationHarness` wrapper is the pattern for a
+component whose prop is a real `setState` updater rather than a plain
+callback — give it a real `useState` in the test instead of asserting on
+mock call arguments, so clicking through it exercises the same clamping
+logic a real page does.
+
+`GroupGeneralSection.test.jsx` is the first of the other kind — a
+**Supabase-coupled** component, and the template for one going forward.
+Three things make that different from the self-contained case:
+
+- `../supabaseClient`'s exported `supabase` client is mocked entirely
+  (`vi.mock('../supabaseClient', () => ({ supabase: { from: mockFrom } }))`),
+  with `mockFrom` built via `vi.hoisted()` rather than a plain top-level
+  `const` — `vi.mock()` calls are hoisted above the rest of the file
+  (imports included), so a factory closing over an ordinary variable would
+  run before that variable's own declaration was ever reached.
+- The mock's shape mirrors the component's *actual* query chains
+  (`.from('groups').select('name').eq('id', groupId).single()`,
+  `.from('groups').update({ name }).eq('id', groupId)`, and the
+  `group_members` equivalents) rather than a generic catch-all query
+  builder — easier to read, and just as easy to extend if a later test
+  needs a chain this doesn't cover yet. Each canned response lives in a
+  `let`, reassigned per test (or mid-test, for a save-error case), so
+  `mockFrom` always returns whatever the test currently wants without a
+  fresh `mockImplementation` for every case.
+- `useParams` (`react-router-dom`) and `useAuth` (`../context/AuthContext`)
+  are mocked outright rather than wrapped in a real `<MemoryRouter>` /
+  `<AuthProvider>` — a real `AuthProvider` talks to `supabase.auth` on
+  mount, which would just be more to mock for no benefit to what this
+  component actually reads from it (`user.id`, `displayName`).
+
+`GroupMembersSection.test.jsx` is the second Supabase-coupled pattern, for
+when a component doesn't build its own query chains: it reads/writes
+through `../lib/prefetchGroupSettings`'s `fetchGroupRosterData()`,
+`../lib/categories`'s `fetchCategories()`, and `../lib/leaveGroup`'s
+`snapshotAndRemoveMember()` — those three lib functions are what get
+mocked (`vi.mock('../lib/prefetchGroupSettings', () => ({
+fetchGroupRosterData: mockFetchGroupRosterData }))`, one per module), the
+same "mock the boundary, not the whole module" idea the AI strategy
+modules below already use — `supabaseClient` itself only needs a bare
+`{ rpc: mockRpc }`, for the one direct `supabase.rpc('transfer_admin', …)`
+call this component still makes on its own. Two other things worth
+knowing if you're extending this one or writing something similar:
+
+- `groupRosterCache` (a real, module-level LRU cache — same kind as
+  `avatarIconCache` in `GroupGeneralSection.test.jsx`) is left real rather
+  than mocked, and cleared in `beforeEach` — a component that seeds its
+  initial state from a cache like this is worth a test that pre-populates
+  it and asserts the seeded value renders *before* the mocked fetch
+  resolves (`GroupMembersSection.test.jsx`'s "paints from
+  groupRosterCache" test never awaits anything — that's the point).
+- `window.confirm` gates both the admin-transfer and remove-member
+  actions here; `vi.spyOn(window, 'confirm').mockReturnValue(true)` in
+  `beforeEach`, overridden per test with `window.confirm.mockReturnValue(false)`
+  for the "cancelled" cases, covers both without duplicating the render
+  setup.
+
+**What isn't**: any page (nothing under `src/pages/` has a test file yet —
+the pattern above extends to one the same way, just with more to mock:
+several Supabase calls instead of one, sometimes a realtime subscription),
+and the AI-calling strategy modules themselves
 (`billCategorization/strategies/`, `bank-statement-parsing/`,
 `receipt-parsing/` — these make real network calls to whichever provider is
 configured, so testing them meaningfully needs mocking the provider
@@ -168,12 +252,35 @@ those, `vi.mock()` the strategy/provider boundary rather than the whole
 module — keeps the test exercising real parsing/matching logic, not a
 hand-waved stub of it.
 
-**Adding a test**: colocate `yourModule.test.js` next to `yourModule.js`,
-`import { describe, it, expect } from 'vitest'`. Vitest runs under jsdom
-(see `vitest.config.js`), so `localStorage` and other browser globals work
-directly — no environment setup needed even for something like
-`bankCategoryMappings.test.js`, which exercises real `localStorage` rather
-than a mock of it.
+**Adding a test**: for `src/lib/`, colocate `yourModule.test.js` next to
+`yourModule.js`, `import { describe, it, expect } from 'vitest'`. Vitest
+runs under jsdom (see `vitest.config.js`), so `localStorage` and other
+browser globals work directly — no environment setup needed even for
+something like `bankCategoryMappings.test.js`, which exercises real
+`localStorage` rather than a mock of it.
+
+For a component, colocate `YourComponent.test.jsx` next to
+`YourComponent.jsx`: `import { render, screen } from
+'@testing-library/react'`, `import userEvent from
+'@testing-library/user-event'`, query by role/label text (`getByRole`,
+`getByLabelText`) rather than by class name or test id — it's both closer
+to how someone actually uses the component and more resistant to a
+class-name-only refactor. A component that turns out to have an
+icon-only trigger or similar with no accessible name of its own is worth
+fixing (a one-line `aria-label`, same as `GroupGeneralSection`'s and
+Settings > Profile's own avatar-picker trigger got) rather than working
+around it with a CSS-class query in the test — the test should exercise
+the component the way a real user (including one on a screen reader)
+actually would. Follow `Pagination`/`InlineEditable`/`BillActionsMenu` as
+the template if the component is self-contained; if it's Supabase-coupled,
+follow `GroupGeneralSection` for one that builds its own query chains, or
+`GroupMembersSection` for one that goes through lib functions instead —
+whichever shape matches what the component you're testing actually calls.
+`src/testSetup.js` (wired in via `vitest.config.js`'s `test.setupFiles`)
+registers [jest-dom](https://github.com/testing-library/jest-dom)'s
+matchers (`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each
+test's DOM automatically — nothing to import for either beyond the
+matchers themselves working out of the box.
 
 ### Resetting the database
 
@@ -204,6 +311,35 @@ drop table if exists profiles cascade;
 
 Doesn't delete anyone's actual login (`auth.users` is untouched) — create a
 fresh group and have everyone rejoin via a new invite link afterward.
+
+### Migrations & Supabase branching
+
+Every file in `supabase/migrations/` needs a `<timestamp>_name.sql` name
+(e.g. `20260911182229_avatar_icons.sql`) — that's not just a convention,
+it's what Supabase's own tooling requires to recognize a file as a
+migration at all. Use `supabase migration new <name>` (or hand-timestamp
+one with `date -u +%Y%m%d%H%M%S`) rather than a plain descriptive
+filename. This matters more here than it would on a project actually
+using [branching](https://supabase.com/docs/guides/deployment/branching):
+every migration in this repo up to and including
+`20260911182229_avatar_icons.sql` was applied by hand in the SQL Editor
+(matching this section's own instructions above), not via the CLI, which
+is exactly how the migration files ended up without timestamp prefixes
+in the first place — they only got them, retroactively, once that
+mismatch broke the Supabase GitHub integration's own tracked history
+(see below).
+
+**Preview branches for pull requests are a Supabase Pro-Plan feature**
+([confirmed in Supabase's own docs](https://supabase.com/docs/guides/deployment#do-you-need-a-paid-plan)) —
+this project stays on the Free plan, so **Automatic branching** is
+switched off in the GitHub Integration settings (Project Settings >
+Integrations > GitHub, in the Supabase dashboard). **Deploy to
+production** stays on — that half works on every plan, and is what
+auto-applies a merged migration to the live database on push to
+`master`. If a "Supabase Preview" check ever reappears on a PR, that
+toggle got flipped back on somehow; turn it back off rather than trying
+to fix it from the repo side — there's nothing in this repo that
+controls it.
 
 ## Receipt scanning
 
@@ -413,7 +549,7 @@ Danger Zone has three actions, not all shown to everyone:
   second, unused pattern.
 
 **Delete group** is new: `delete_group()` (schema.sql; standalone migration
-`admin_delete_group.sql`) is the actual nuclear option — not just a group's
+`20260908141045_admin_delete_group.sql`) is the actual nuclear option — not just a group's
 bills, the group itself, cascading to every member, guest, category,
 subscription, bill, payment, and departed member's own frozen snapshot for
 it. Same admin gate as `delete_all_group_bills()`, plus one more: a personal

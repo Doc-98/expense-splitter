@@ -8,6 +8,13 @@ expectations, etc.) — read that first, every session.
 
 ## PR workflow
 
+- Only open a pull request when explicitly asked to — standing preference,
+  confirmed 2026-09-18. Default to accumulating multiple rounds of work as
+  plain commits on the working branch and pushing them; one PR then covers
+  the whole accumulated batch, rather than a PR per small change. This
+  overrides the general instruction to open a PR once a task is "complete"
+  — completing a task here just means committing and pushing, unless the
+  user's own request that round was to open a PR.
 - After opening a pull request in this repo, subscribe to its activity
   (`subscribe_pr_activity`) immediately, without asking first — standing
   preference, confirmed 2026-08-20. Also schedule a check-in roughly an
@@ -25,6 +32,20 @@ expectations, etc.) — read that first, every session.
 - This is why the dance happened once already: a PR merged mid-session,
   more commits landed on the same branch before anyone noticed, and the
   next PR needed a rebase to reconcile. Subscribing closes that gap.
+
+## Release hygiene
+
+- `src/lib/appVersion.js`'s `WHATS_NEW` array is hand-maintained and does
+  not update itself — before committing/pushing a round of work that ships
+  anything user-visible, check whether `WHATS_NEW` still describes it and
+  update it if not. It's drifted stale before (Settings > Updates showing
+  a previous release's notes, not what actually just shipped) — standing
+  preference, confirmed 2026-09-19.
+- `APP_VERSION` (same file) needs no equivalent check — it's computed
+  automatically at build time from git history (`readAppVersion()` /
+  `findLatestVersion()` in `vite.config.js`, driven by each squash-merge
+  commit's own "(#123)" suffix), so unlike `WHATS_NEW` there's nothing
+  about it that can drift out of sync by hand.
 
 ## Product conventions
 

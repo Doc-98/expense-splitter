@@ -180,6 +180,7 @@ function ProfileSection() {
             onClick={() => setAvatarPickerOpen((o) => !o)}
             aria-expanded={avatarPickerOpen}
             aria-controls="avatar-picker-panel"
+            aria-label="Choose your avatar"
           >
             <span className="avatar-picker-current" aria-hidden="true">
               <AvatarGlyph iconId={avatarIcon} name={displayName} size={19} />

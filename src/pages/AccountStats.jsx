@@ -228,10 +228,10 @@ export default function AccountStats() {
     } catch (err) {
       // Without this, a failure anywhere above (most likely: fetchThresholds
       // hitting a spending_thresholds table that doesn't exist yet on a
-      // database that hasn't run supabase/migrations/thresholds.sql) silently
-      // aborted the rest of load() with nothing shown — whatever state had
-      // already been set before the failure just stayed on screen,
-      // incomplete, with no indication anything had gone wrong.
+      // database that hasn't run supabase/migrations/20260820224234_thresholds.sql)
+      // silently aborted the rest of load() with nothing shown — whatever
+      // state had already been set before the failure just stayed on
+      // screen, incomplete, with no indication anything had gone wrong.
       setError(loadErrorMessage(err))
     }
   }, [user.id])
