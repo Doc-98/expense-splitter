@@ -28,8 +28,28 @@ the (tiny) hosting bill. Setup takes about 20 minutes.
 > than left out entirely. A fuller reference site (mkdocs) is a likely future
 > home for the rest.
 
+📋 **[Project board](https://trello.com/b/AoQp8JgX/expense-splitter)** —
+planned features, in-progress work, and known issues, tracked publicly on
+Trello.
+
+## Latest update
+
+**Settle up, Record payment, and History now live on their own pages,**
+reached from a redesigned group page: a slimmer balance summary up top,
+three action buttons in place of the old inline settle-up list, and a
+"Quick stats" preview that moved up next to them instead of sitting at the
+bottom of the page. Payment history reuses the bill list's card design;
+recording a payment can pick people from a dropdown or by tapping their
+avatar, whichever you prefer in Settings.
+
+A new **Settings > Layout** section also consolidates every per-device
+display preference — theme (now with a live-tracking "System" option),
+default stats period, budgets position, and group-page display toggles —
+that used to be scattered across Profile and Groups.
+
 ## Contents
 
+- [Latest update](#latest-update)
 - [How it's built](#how-its-built)
 - [Setup](#setup)
 - [Receipt scanning](#receipt-scanning)
