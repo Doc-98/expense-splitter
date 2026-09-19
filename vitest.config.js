@@ -9,6 +9,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     environment: 'jsdom',
+    setupFiles: ['./src/testSetup.js'],
     // Reuses one jsdom instance per worker instead of spinning up a fresh
     // one per test file — vitest's own perf warning suggested this once
     // the suite passed 10 files, and it's a one-line change with no

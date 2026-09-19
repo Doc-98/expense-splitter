@@ -177,23 +177,50 @@ prompt/response handling (`billCategorization/classifyPrompt.js`), CSV
 parsing/export (`csv.js`), and the smaller date/number-formatting helpers
 each of those leans on.
 
-**What isn't**: components/pages (nothing under `src/pages/` or
-`src/components/` has a test file), anything that talks to Supabase
-directly, and the AI-calling strategy modules themselves
-(`billCategorization/strategies/`, `bank-statement-parsing/`,
-`receipt-parsing/` — these make real network calls to whichever provider is
-configured, so testing them meaningfully needs mocking the provider
-response, not just running the code). If you're adding a test for one of
-those, `vi.mock()` the strategy/provider boundary rather than the whole
-module — keeps the test exercising real parsing/matching logic, not a
-hand-waved stub of it.
+A second layer, `src/components/*.test.jsx`, covers **self-contained**
+components with [React Testing Library](https://testing-library.com/react)
+(`Pagination.jsx`, `InlineEditable.jsx`, `BillActionsMenu.jsx`, so far) —
+"self-contained" meaning no Supabase call, no context (auth/theme/currency),
+no router, so there's nothing to mock: `render()` the real component,
+`userEvent` through it, assert on what's in the DOM. `Pagination.test.jsx`'s
+`PaginationHarness` wrapper is the pattern for a component whose prop is a
+real `setState` updater rather than a plain callback — give it a real
+`useState` in the test instead of asserting on mock call arguments, so
+clicking through it exercises the same clamping logic a real page does.
 
-**Adding a test**: colocate `yourModule.test.js` next to `yourModule.js`,
-`import { describe, it, expect } from 'vitest'`. Vitest runs under jsdom
-(see `vitest.config.js`), so `localStorage` and other browser globals work
-directly — no environment setup needed even for something like
-`bankCategoryMappings.test.js`, which exercises real `localStorage` rather
-than a mock of it.
+**What isn't**: any page (nothing under `src/pages/` has a test file — every
+one of them talks to Supabase directly), any component that reaches into
+Supabase, a context provider, or `react-router`, and the AI-calling
+strategy modules themselves (`billCategorization/strategies/`,
+`bank-statement-parsing/`, `receipt-parsing/` — these make real network
+calls to whichever provider is configured, so testing them meaningfully
+needs mocking the provider response, not just running the code). If you're
+adding a test for one of those, `vi.mock()` the strategy/provider boundary
+rather than the whole module — keeps the test exercising real
+parsing/matching logic, not a hand-waved stub of it. The same idea applies
+to a Supabase-coupled component: mock `../supabaseClient`'s exported
+`supabase` client (`vi.mock('../supabaseClient', () => ({ supabase: {...} }))`),
+not the whole component.
+
+**Adding a test**: for `src/lib/`, colocate `yourModule.test.js` next to
+`yourModule.js`, `import { describe, it, expect } from 'vitest'`. Vitest
+runs under jsdom (see `vitest.config.js`), so `localStorage` and other
+browser globals work directly — no environment setup needed even for
+something like `bankCategoryMappings.test.js`, which exercises real
+`localStorage` rather than a mock of it.
+
+For a self-contained component, colocate `YourComponent.test.jsx` next to
+`YourComponent.jsx` and follow the existing three as a template: `import {
+render, screen } from '@testing-library/react'`,
+`import userEvent from '@testing-library/user-event'`, query by role/label
+text (`getByRole`, `getByLabelText`) rather than by class name or test id —
+it's both closer to how someone actually uses the component and more
+resistant to a class-name-only refactor. `src/testSetup.js` (wired in via
+`vitest.config.js`'s `test.setupFiles`) registers
+[jest-dom](https://github.com/testing-library/jest-dom)'s matchers
+(`toBeInTheDocument()`, `toHaveClass()`, etc.) and unmounts each test's DOM
+automatically — nothing to import for either beyond the matchers
+themselves working out of the box.
 
 ### Resetting the database
 

@@ -4,9 +4,10 @@ name: Test
 # unit tests, and a production build (catches the class of bug the other
 # two don't, e.g. an import that only breaks under Rollup's bundling) — on
 # every push and PR against master. No Supabase credentials or any other
-# secret is needed: everything here is either a static check or exercises
-# src/lib/*.test.js's pure logic in isolation (see README's own "Testing"
-# section for what that does and doesn't cover).
+# secret is needed: everything here is either a static check, exercises
+# src/lib/*.test.js's pure logic in isolation, or renders a self-contained
+# component in jsdom via React Testing Library (see README's own "Running
+# the tests" section for what that does and doesn't cover).
 on:
   push:
     branches: [master]
