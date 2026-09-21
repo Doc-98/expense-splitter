@@ -530,7 +530,10 @@ export default function AccountStats() {
   // Built once and placed at whichever end of the page thresholdsPosition
   // says — top (above the period selector) or bottom (after everything
   // else) — never in the middle, since every other section on this page
-  // moves with the period selector and this one deliberately doesn't.
+  // moves with the period selector and this one deliberately doesn't. A
+  // third preference value, 'hidden', needs no branch of its own here —
+  // it just matches neither check below, so thresholdsSection ends up
+  // built but never actually placed anywhere on the page.
   // (Variable/preference names here stay "threshold" — see
   // statsPreferences.js — only the heading and links say "Budgets" now.)
   const thresholdsSection = thresholdRows.length > 0 && (

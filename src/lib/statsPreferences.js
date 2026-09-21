@@ -13,10 +13,14 @@ const DEFAULTS = {
   defaultGranularity: 'month',
   // Where the "Spending thresholds" section sits on Your Stats — 'top'
   // (above the period selector, since thresholds are always this-month and
-  // everything else on the page moves with the selector) or 'bottom'
-  // (after everything else).
+  // everything else on the page moves with the selector), 'bottom' (after
+  // everything else), or 'hidden' (not shown on Your Stats at all;
+  // AccountStats.jsx only ever renders it for 'top'/'bottom', so 'hidden'
+  // needs no extra branch there — it's just the value neither one matches).
   thresholdsPosition: 'top',
 }
+
+export const THRESHOLDS_POSITION_OPTIONS = ['top', 'bottom', 'hidden']
 
 export function getStatsPreferences() {
   try {

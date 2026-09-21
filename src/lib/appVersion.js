@@ -16,5 +16,7 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
+  'Settings > Layout: tap a setting to see a live preview of what it actually changes, right there on the page',
+  'Budgets position on Your Stats gained a third option, Hidden, alongside Top and Bottom',
   "Fixed Settle up sometimes silently hiding an error about the group itself failing to load, if your balances happened to finish loading right after",
 ]

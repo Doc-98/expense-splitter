@@ -2325,6 +2325,72 @@ input.item-editable-input, textarea.item-editable-input {
 .switch input:checked + .switch-slider::before { transform: translateX(20px); }
 .switch input:focus-visible + .switch-slider { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* Settings > Layout's own live previews — a row's label doubles as the
+   button that opens/closes a small example of what the setting actually
+   does (see SettingsLayoutSection.jsx's own comment for why). Same
+   disclosure-chevron convention as .item-row-chevron/.provider-chevron
+   elsewhere (a plain, unscoped `.is-open` ancestor rather than a
+   dedicated modifier class, so this reads the exact same way those do)
+   and the same .xwrap/.xinner smooth-height collapse every other
+   reveal-on-open panel in this app already uses — nothing new invented
+   for either mechanic, just a new thing they're both applied to. */
+.settings-row-label-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.settings-row-label-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.settings-row-chevron { color: var(--ink-soft); flex: none; transition: transform 0.2s ease; }
+.is-open .settings-row-chevron { transform: rotate(90deg); color: var(--accent); }
+
+/* The preview itself — tinted background, an accent rule down the left
+   edge, and a small "Preview" eyebrow, deliberately unlike any real
+   settings row or card in this app so it never reads as another control
+   to interact with, just an example. */
+.settings-preview-box {
+  background: var(--accent-light);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+  padding: 10px 12px 12px;
+  margin: 8px 0 6px;
+}
+.settings-preview-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+  margin: 0 0 8px;
+}
+.settings-preview-eyebrow::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none; }
+.settings-preview-empty-note { margin: 0; font-size: 13px; color: var(--ink-soft); font-style: italic; }
+
+/* The Budgets position preview's own bar rows — same colors/shape as the
+   real .stats-bar-row on Your Stats (accent fill, warn when over budget),
+   but with flexible rather than fixed label/value column widths: those
+   fixed widths (110px/130px) are sized for the full-width Stats page and
+   would force this preview box wider than a phone's settings page ever
+   gets, or overflow it, if reused as-is here. */
+.settings-preview-stats-mock { display: flex; flex-direction: column; gap: 8px; }
+.settings-preview-budgets-block { background: var(--surface); border-radius: 8px; padding: 9px 10px; }
+.settings-preview-budgets-title { font-family: var(--font-display); font-size: 12px; font-weight: 600; margin: 0 0 7px; }
+.settings-preview-budget-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 7px; }
+.settings-preview-budget-row:last-child { margin-bottom: 0; }
+.settings-preview-budget-label {
+  flex: 0 1 80px; min-width: 0; color: var(--ink-soft); display: flex; align-items: center; gap: 5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.settings-preview-budget-track { flex: 1; min-width: 30px; height: 8px; background: var(--surface); border-radius: 999px; overflow: hidden; }
+.settings-preview-budget-fill { height: 100%; border-radius: 999px; background: var(--accent); }
+.settings-preview-budget-fill.over-budget { background: var(--warn); }
+.settings-preview-budget-value { flex: none; white-space: nowrap; }
+
 /* Spending thresholds / scan settings, collapsed by default on the
    Settings page — same visual language as .guide-section (Guide.jsx) but
    kept as its own rule rather than sharing that class, since the two
