@@ -5,6 +5,10 @@ import { saveThreshold, deleteThreshold } from '../lib/thresholds'
 import { parseNumber } from '../lib/parseNumber'
 import { fetchBudgetsData } from '../lib/prefetchSettings'
 import { budgetsCache, BUDGETS_CACHE_KEY } from '../lib/budgetsCache'
+import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
+import { BUDGET_PERIOD_OPTIONS, monthlyToDisplayAmount, displayToMonthlyAmount } from '../lib/budgetPeriod'
+
+const BUDGET_PERIOD_LABELS = { week: 'Week', month: 'Month' }
 
 // The actual "budgets" (formerly "spending thresholds" — renamed in the UI,
 // see the Settings restructure) UI/logic. Used to also be reachable
@@ -31,6 +35,15 @@ export default function BudgetsSection() {
   const [drafts, setDrafts] = useState({}) // lowercased name -> in-progress input string
   const [savedKey, setSavedKey] = useState(null)
   const [error, setError] = useState(null)
+  // Read once on mount, same as every other per-device preference read this
+  // way elsewhere (AccountStats.jsx's own granularity/thresholdsPosition) —
+  // this page is the only place it's ever changed, via updatePeriod below.
+  const [period, setPeriod] = useState(() => getStatsPreferences().budgetPeriod)
+
+  function updatePeriod(p) {
+    setStatsPreferences({ budgetPeriod: p })
+    setPeriod(p)
+  }
 
   const load = useCallback(async () => {
     setError(null)
@@ -58,7 +71,13 @@ export default function BudgetsSection() {
   function draftValue(name) {
     const key = name.toLowerCase()
     if (key in drafts) return drafts[key]
-    return thresholdByKey.get(key)?.amount ?? ''
+    const existing = thresholdByKey.get(key)
+    // thresholdByKey always holds the raw monthly figure straight out of
+    // spending_thresholds — converted to whatever this device currently
+    // displays only right here, at the point of showing it. Number(...)
+    // since Supabase hands numeric columns back as strings, same as
+    // AccountStats.jsx's own thresholdRows already has to account for.
+    return existing ? monthlyToDisplayAmount(Number(existing.amount), period) : ''
   }
 
   function updateDraft(name, value) {
@@ -84,7 +103,13 @@ export default function BudgetsSection() {
           })
         }
       } else {
-        const amount = Math.round(parseNumber(raw) * 100) / 100
+        // What's typed is in whatever period this device currently shows
+        // (a weekly figure, if `period` is 'week') — converted to the
+        // monthly figure spending_thresholds.amount always stores before
+        // anything gets validated or saved, so `amount` below is always
+        // that canonical monthly number, same as thresholdByKey holds
+        // everywhere else in this component.
+        const amount = displayToMonthlyAmount(parseNumber(raw), period)
         if (!Number.isFinite(amount) || amount <= 0) {
           setError(`"${raw}" isn't a valid budget amount.`)
           return
@@ -132,9 +157,33 @@ export default function BudgetsSection() {
 
   return (
     <>
+      <div className="settings-row">
+        <span>Budget period</span>
+      </div>
+      <div className="tab-row">
+        {BUDGET_PERIOD_OPTIONS.map((p) => (
+          <button
+            key={p}
+            type="button"
+            className={`tab ${period === p ? 'active' : ''}`}
+            onClick={() => updatePeriod(p)}
+            aria-pressed={period === p}
+          >
+            {BUDGET_PERIOD_LABELS[p]}
+          </button>
+        ))}
+      </div>
+      {period === 'week' && (
+        <p className="muted">
+          Weekly amounts here are your monthly ones divided by 4 — rounding logic might shift by a
+          cent or two when switching between month and week time ranges.
+        </p>
+      )}
+
       <p className="muted">
-        A personal monthly budget per category — always compared against this calendar month, and
-        only your own share of what's been spent (not what you've fronted for others). Shown on
+        A personal {period === 'week' ? 'weekly' : 'monthly'} budget per category — always compared
+        against {period === 'week' ? 'the current week (Monday–Sunday)' : 'this calendar month'},
+        and only your own share of what's been spent (not what you've fronted for others). Shown on
         Your Stats once set. Leave a category blank to stop tracking it.
       </p>
 

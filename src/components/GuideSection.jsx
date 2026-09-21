@@ -608,14 +608,15 @@ const GROUPS = [
       },
       {
         id: 'thresholds',
-        title: 'Budgets: personal monthly spending limits',
-        keywords: 'threshold budget limit spending cap groceries monthly',
+        title: 'Budgets: personal spending limits',
+        keywords: 'threshold budget limit spending cap groceries monthly weekly',
         body: (
           <>
             <p>
-              Set a monthly budget per category from <strong>Settings → Budgets</strong> — a
-              personal setting, tracking your own spending across every group you're in, not any
-              one group's total.
+              Set a weekly or monthly budget per category from <strong>Settings → Budgets</strong>{' '}
+              — a personal setting, tracking your own spending across every group you're in, not
+              any one group's total. Switch between the two any time; your existing amounts adjust
+              automatically rather than needing to be re-entered.
             </p>
             <p>
               <strong>A category with the same name is one shared budget</strong>, even across
@@ -623,9 +624,9 @@ const GROUPS = [
               another share a single budget rather than two separate ones.
             </p>
             <p>
-              Once set, it shows as a progress bar on Your Stats — always the current calendar
-              month, and always just your own share of what's been spent, not anything you've
-              fronted for the rest of the group.
+              Once set, it shows as a progress bar on Your Stats — always the current week or
+              month (whichever you've picked), and always just your own share of what's been
+              spent, not anything you've fronted for the rest of the group.
             </p>
           </>
         ),
@@ -743,7 +744,7 @@ const GROUPS = [
                 group's search/filters intact after opening a bill and coming back).
               </li>
               <li>
-                <strong>Budgets</strong> — a personal monthly limit per category.
+                <strong>Budgets</strong> — a personal weekly or monthly limit per category.
               </li>
               <li>
                 <strong>Scan</strong> — how receipts get read.

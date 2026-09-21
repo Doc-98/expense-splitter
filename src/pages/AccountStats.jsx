@@ -11,6 +11,7 @@ import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { accountStatsCache } from '../lib/accountStatsCache'
 import { getStatsPreferences } from '../lib/statsPreferences'
+import { monthlyToDisplayAmount, budgetComparisonRange } from '../lib/budgetPeriod'
 import {
   getPeriodRange,
   filterByDateRange,
@@ -67,6 +68,7 @@ export default function AccountStats() {
   // reasoning as granularity above. Both preferences are set exclusively
   // from Settings → Profile now, not from any control on this page itself.
   const [thresholdsPosition] = useState(() => getStatsPreferences().thresholdsPosition)
+  const [budgetPeriod] = useState(() => getStatsPreferences().budgetPeriod)
   const [error, setError] = useState(null)
   // 'loading' until the background backfill (see load() below) finishes,
   // 'complete' once every one of my groups' full history is in rawBills,
@@ -301,12 +303,12 @@ export default function AccountStats() {
   const { start, end, label, yearLabel } = getPeriodRange(granularity, offset)
   const { bills, items, itemShares } = filterByDateRange(rawBills, rawItems, rawShares, start, end)
 
-  // Budgets are always compared against the current calendar month
-  // specifically, independent of whatever period this page's own selector
-  // is showing above (see BudgetsSection.jsx for why) — a separate, fixed
-  // date range from the granularity/offset-driven one above.
-  const thisMonth = getPeriodRange('month', 0)
-  const monthFiltered = filterByDateRange(rawBills, rawItems, rawShares, thisMonth.start, thisMonth.end)
+  // Budgets are always compared against their own fixed period — the
+  // current calendar week or month, whichever Settings → Budgets has set
+  // (see lib/budgetPeriod.js) — independent of whatever period this page's
+  // own selector is showing above.
+  const budgetRange = budgetComparisonRange(budgetPeriod)
+  const budgetFiltered = filterByDateRange(rawBills, rawItems, rawShares, budgetRange.start, budgetRange.end)
   const myParticipantIds = new Set(myParticipantByGroup.values())
   const categoryNameById = new Map(rawCategories.map((c) => [c.id, c.name]))
   const categoryColorByKey = new Map(mergeCategoriesByName(rawCategories).map((c) => [c.name.toLowerCase(), c.color]))
@@ -325,19 +327,23 @@ export default function AccountStats() {
 
   const myCategorySpend = mergeCategorySpend(
     computeMyCategorySpend({
-      bills: monthFiltered.bills,
-      items: monthFiltered.items,
-      itemShares: monthFiltered.itemShares,
+      bills: budgetFiltered.bills,
+      items: budgetFiltered.items,
+      itemShares: budgetFiltered.itemShares,
       myParticipantIds,
       categoryNameById,
     }),
-    snapshotCategorySpendForRange(thisMonth.start, thisMonth.end)
+    snapshotCategorySpendForRange(budgetRange.start, budgetRange.end)
   )
   const thresholdRows = thresholds
     .map((t) => {
       const key = t.category_name.trim().toLowerCase()
       const spent = myCategorySpend[key]?.amount || 0
-      const amount = Number(t.amount)
+      // t.amount is always the raw monthly figure stored in
+      // spending_thresholds — converted to whatever this device currently
+      // displays (and, above, whatever window `spent` was just measured
+      // over) so the two always move together. See lib/budgetPeriod.js.
+      const amount = monthlyToDisplayAmount(Number(t.amount), budgetPeriod)
       return {
         key,
         name: t.category_name,
@@ -530,7 +536,10 @@ export default function AccountStats() {
   // Built once and placed at whichever end of the page thresholdsPosition
   // says — top (above the period selector) or bottom (after everything
   // else) — never in the middle, since every other section on this page
-  // moves with the period selector and this one deliberately doesn't.
+  // moves with the period selector and this one deliberately doesn't. A
+  // third preference value, 'hidden', needs no branch of its own here —
+  // it just matches neither check below, so thresholdsSection ends up
+  // built but never actually placed anywhere on the page.
   // (Variable/preference names here stay "threshold" — see
   // statsPreferences.js — only the heading and links say "Budgets" now.)
   const thresholdsSection = thresholdRows.length > 0 && (
@@ -559,9 +568,10 @@ export default function AccountStats() {
         ))}
       </div>
       <p className="muted stats-note">
-        Always this calendar month, and always your own share — not scoped to the period
-        selected above. Manage budgets from <strong>Settings → Budgets</strong>; where this
-        section sits on the page is set from <strong>Settings → Profile</strong>.
+        Always {budgetPeriod === 'week' ? 'the current week (Monday–Sunday)' : 'this calendar month'},
+        and always your own share — not scoped to the period selected above. Manage budgets, or
+        switch between weekly and monthly, from <strong>Settings → Budgets</strong>; where this
+        section sits on the page is set from <strong>Settings → Layout</strong>.
       </p>
     </>
   )

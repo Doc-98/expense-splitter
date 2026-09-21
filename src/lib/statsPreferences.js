@@ -12,11 +12,29 @@ const DEFAULTS = {
   // "default" means a granularity, never a specific frozen point in time.
   defaultGranularity: 'month',
   // Where the "Spending thresholds" section sits on Your Stats — 'top'
-  // (above the period selector, since thresholds are always this-month and
-  // everything else on the page moves with the selector) or 'bottom'
-  // (after everything else).
+  // (above the period selector, since a budget's own comparison window is
+  // fixed — see budgetPeriod below — and everything else on the page moves
+  // with the selector), 'bottom' (after everything else), or 'hidden' (not
+  // shown on Your Stats at all; AccountStats.jsx only ever renders it for
+  // 'top'/'bottom', so 'hidden' needs no extra branch there — it's just the
+  // value neither one matches).
   thresholdsPosition: 'top',
+  // Whether Budgets (Settings → Budgets, and the section on Your Stats) are
+  // compared against the current calendar week or the current calendar
+  // month — see lib/budgetPeriod.js for the full reasoning. Deliberately
+  // still just a local preference like everything else here, even though
+  // it governs real Supabase-backed data: spending_thresholds.amount is
+  // always, unconditionally, a *monthly* figure in the database regardless
+  // of this setting — 'week' only changes the unit this device divides
+  // that figure into for display and editing, it never rewrites what's
+  // actually stored. That's what keeps this safe to leave device-local
+  // (no migration, no account-wide sync) — two devices with this set
+  // differently are just viewing the same unambiguous monthly number in
+  // different units, not disagreeing about what it means.
+  budgetPeriod: 'month',
 }
+
+export const THRESHOLDS_POSITION_OPTIONS = ['top', 'bottom', 'hidden']
 
 export function getStatsPreferences() {
   try {
