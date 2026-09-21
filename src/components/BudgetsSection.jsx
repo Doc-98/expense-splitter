@@ -175,9 +175,8 @@ export default function BudgetsSection() {
       </div>
       {period === 'week' && (
         <p className="muted">
-          Weekly amounts here are your monthly ones divided by 4 — a rare edge case, but worth
-          knowing: re-saving one that doesn't split evenly into whole cents can shift it by a cent
-          or two.
+          Weekly amounts here are your monthly ones divided by 4 — rounding logic might shift by a
+          cent or two when switching between month and week time ranges.
         </p>
       )}
 
