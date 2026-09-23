@@ -8,6 +8,7 @@ import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
 import { GROUP_BILLS_SELECT, computeGroupViewSnapshot } from '../lib/groupViewSnapshot'
+import { fetchGroupSettlement } from '../lib/groupBalances'
 import { getStatsWindowStart } from '../lib/timeRange'
 import { recordGroupVisit } from '../lib/recentGroups'
 import { formatSettlementRecap, formatMultiBillRecap, formatPersonalSpaceRecap } from '../lib/recapText'
@@ -52,14 +53,11 @@ export default function GroupView() {
   const [group, setGroup] = useState(null)
   const [allMembers, setAllMembers] = useState([])
   const [bills, setBills] = useState(null)
-  // Mirrors `bills` for loadPaymentsAndSettlement below to read from,
-  // rather than closing over `bills` directly — that function is handed
-  // to the realtime subscription's payments handler (see the effect with
-  // [groupId] deps further down), which is only ever set up once per
-  // group, not re-subscribed every time `bills` changes; closing over
-  // `bills` there would freeze it at whatever it was when the channel was
-  // created (its initial `null`), silently computing settlement against
-  // an empty bill list forever after a realtime payment update. A ref
+  // Mirrors `bills` for loadRecentBillsForFirstPaint's own race-check to
+  // read from (see that function below), rather than closing over `bills`
+  // directly — the mount effect that calls it runs once per group, not on
+  // every `bills` change, so a plain closure would freeze it at whatever
+  // `bills` was (its initial `null`) when that effect first ran. A ref
   // sidesteps that — always reads the latest value, with nothing to go
   // stale.
   const billsRef = useRef(null)
@@ -67,27 +65,27 @@ export default function GroupView() {
     billsRef.current = bills
   }, [bills])
   // True once the definitive, complete (unwindowed) bill history has been
-  // fetched at least once this visit — see loadRecentBillsForFirstPaint
-  // below for why the all-time settlement specifically has to wait for
-  // this, even though the bill list itself, and week/month totals, can
-  // safely paint from a partial recent window sooner. Starts true
-  // whenever cache hydration already found something (a cached snapshot
-  // is only ever written once complete — see the cache-write effect
-  // further down), false otherwise. Mirrored to a ref for the same reason
-  // billsRef exists just above: the realtime payments subscription is
-  // wired up once per group, not re-subscribed every time this changes.
+  // fetched at least once this visit — used by the "select all"/Danger
+  // Zone check and the price-filter slider's own initialization (see each
+  // one's own comment), both of which need the real full list, not
+  // loadRecentBillsForFirstPaint's windowed preview. Starts true whenever
+  // cache hydration already found something (a cached snapshot is only
+  // ever written once complete — see the cache-write effect further
+  // down), false otherwise. The group's balance no longer waits on this at
+  // all — see loadSettlement below.
   const [historyComplete, setHistoryComplete] = useState(false)
-  const historyCompleteRef = useRef(false)
-  useEffect(() => {
-    historyCompleteRef.current = historyComplete
-  }, [historyComplete])
   const [billsPage, setBillsPage] = useState(0)
   const [newBillTitle, setNewBillTitle] = useState('')
   const [newBillAmount, setNewBillAmount] = useState('')
+  // null until the server-computed balance actually arrives (see
+  // fetchGroupSettlement/get_group_balances) — never derived from
+  // whatever's currently in `bills`, so there's no code path left that can
+  // show a wrong number computed from a partial/windowed bill list. Stays
+  // null (rather than flashing an empty "You're all settled up") for the
+  // brief moment before that first resolves.
   const [settlement, setSettlement] = useState(null)
   const [weekTotal, setWeekTotal] = useState(0)
   const [monthTotal, setMonthTotal] = useState(0)
-  const [payments, setPayments] = useState([])
   const [error, setError] = useState(null)
   // Which bill (if any) is mid-rename via the ⋮ menu's own "Rename" —
   // same two-state shape (an id + a draft string) as GroupCategoriesSection/
@@ -106,12 +104,12 @@ export default function GroupView() {
   useEscapeKey(() => toggleSelectMode(), selectMode)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [shareStatus, setShareStatus] = useState(null)
-  // { [billId]: { [memberId]: { paid, consumed } } } — computed alongside
-  // the group's overall settlement (see computeAndSetSettlement below), reusing
-  // the exact same per-bill items/shares it already assembles for that,
-  // just kept around per-bill instead of only flowing into one pooled
-  // balance. Lets each bill row show what *this* bill specifically means
-  // for you, independent of the group's running balance.
+  // { [billId]: { [memberId]: { paid, consumed } } } — computed from bills
+  // already fetched (see computeAndSetBillDerivedState below), independent
+  // of the group's own overall balance (which comes from the server now —
+  // see loadSettlement). Lets each bill row show what *this* bill
+  // specifically means for you, independent of the group's running
+  // balance.
   const [billPersonalTotals, setBillPersonalTotals] = useState({})
   const [categories, setCategories] = useState([])
   // Every piece of filter-related state below seeds from cachedFilters
@@ -255,38 +253,51 @@ export default function GroupView() {
     }
   }, [groupId])
 
-  // Derives the settlement-side state (per-bill personal totals, the
-  // group's simplified debts, the week/month preview totals) from bills
-  // already fetched — deliberately separate from the fetch itself, so a
-  // payments-only change (see loadPayments below) can recompute all of
-  // this from whatever's already in `bills` state without re-fetching the
-  // bill list just because a payment came or went. The actual derivation
-  // lives in groupViewSnapshot.js now, shared with the app-boot prefetch
-  // (see prefetchGroup.js) so both compute this the same way.
-  function computeAndSetSettlement(billsData, paymentsData) {
-    const { billPersonalTotals, weekTotal, monthTotal, settlement } = computeGroupViewSnapshot(billsData, paymentsData)
+  // Derives billPersonalTotals/week/monthTotal from bills already fetched
+  // — deliberately separate from the fetch itself so both
+  // loadBillsAndSettlement and loadRecentBillsForFirstPaint below can share
+  // it. The actual derivation lives in groupViewSnapshot.js, shared with
+  // the app-boot prefetch (see prefetchGroup.js) so both compute this the
+  // same way. The group's own balance is set separately now, by
+  // loadSettlement just below — see that function's own comment for why.
+  function computeAndSetBillDerivedState(billsData) {
+    const { billPersonalTotals, weekTotal, monthTotal } = computeGroupViewSnapshot(billsData)
     setBillPersonalTotals(billPersonalTotals)
     setWeekTotal(weekTotal)
     setMonthTotal(monthTotal)
-    setSettlement(settlement)
-    // Every caller of this function is working from a definitive, complete
-    // bill set — loadBillsAndSettlement below always fetches everything,
-    // unwindowed, and loadPaymentsAndSettlement only ever reaches this
-    // once historyComplete is already true (see its own guard) — so this
-    // is always a safe place to (re)confirm it.
-    setHistoryComplete(true)
   }
+
+  // The group's balance — fetched entirely independently of whatever
+  // `bills` currently holds. get_group_balances (see groupBalances.js)
+  // always sums the group's *complete* history server-side, so unlike the
+  // old client-side computation this was never unsafe to run against a
+  // partial/windowed bill list — there's no bill list involved here at
+  // all anymore, which is also what fixes the "balance briefly shows a
+  // wildly wrong number, then corrects itself" bug this used to have: that
+  // was the background warm-up prefetch (see prefetchGroup.js) computing a
+  // balance from *all* payments ever made but only a recent window of
+  // bills, and there's simply no such mismatch possible once neither this
+  // function nor that prefetch ever computes a balance from bills at all.
+  // Called for both a real bill-list reload and a payments-only realtime
+  // update (see the subscription below) — either one can change the
+  // balance, and re-fetching it is cheap enough not to bother
+  // special-casing "just a payment."
+  const loadSettlement = useCallback(async () => {
+    try {
+      setSettlement(await fetchGroupSettlement(supabase, groupId))
+      setError(null)
+    } catch (err) {
+      setError(`Couldn't load balances: ${loadErrorMessage(err)}`)
+    }
+  }, [groupId])
 
   // Paints the bill list — and the week/month totals, safe from a partial
   // window since "this week"/"this month" is always inside it — fast, for
   // the one case that actually needs it: a group with no cached snapshot
   // at all yet (see the mount effect below, which only calls this when
   // groupViewCache came up empty). Deliberately never touches
-  // `settlement`: the all-time balance sums *every* bill and payment
-  // together, so computing it from just a recent window would show a
-  // wrong number, not merely an incomplete one — loadBillsAndSettlement,
-  // always running right alongside this, is what actually gets to decide
-  // the real balance, exactly as it always has.
+  // `settlement` — loadSettlement above is the only thing that ever sets
+  // it now, real load or not.
   const loadRecentBillsForFirstPaint = useCallback(async () => {
     try {
       const windowStart = getStatsWindowStart()
@@ -306,10 +317,7 @@ export default function GroupView() {
       if (billsRef.current) return
       setBills(billsData)
       setError(null)
-      const { billPersonalTotals, weekTotal, monthTotal } = computeGroupViewSnapshot(billsData, [])
-      setBillPersonalTotals(billPersonalTotals)
-      setWeekTotal(weekTotal)
-      setMonthTotal(monthTotal)
+      computeAndSetBillDerivedState(billsData)
     } catch {
       // Best-effort only — loadBillsAndSettlement is what actually has to
       // succeed; if this one fails there's simply nothing extra to show
@@ -319,9 +327,9 @@ export default function GroupView() {
 
   const loadBillsAndSettlement = useCallback(async () => {
     try {
-      // Bills and payments don't depend on each other, so fetch both at
+      // Bills and the balance don't depend on each other, so fetch both at
       // once rather than waiting on one before starting the other.
-      const [billsData, paymentsData] = await Promise.all([
+      const [billsData, settlementData] = await Promise.all([
         fetchAllRows(() =>
           supabase
             .from('bills')
@@ -329,52 +337,18 @@ export default function GroupView() {
             .eq('group_id', groupId)
             .order('created_at', { ascending: false })
         ),
-        fetchAllRows(() =>
-          supabase
-            .from('payments')
-            .select('id, from_member, to_member, amount, created_at', { count: 'exact' })
-            .eq('group_id', groupId)
-            .order('created_at', { ascending: false })
-        ),
+        fetchGroupSettlement(supabase, groupId),
       ])
 
       setBills(billsData)
-      setPayments(paymentsData)
+      setSettlement(settlementData)
       setError(null)
-      computeAndSetSettlement(billsData, paymentsData)
+      computeAndSetBillDerivedState(billsData)
+      // The one place this ever gets confirmed true — this is the only
+      // function that fetches the group's complete, unwindowed bill list.
+      setHistoryComplete(true)
     } catch (err) {
       setError(`Couldn't load this group's bills: ${loadErrorMessage(err)}`)
-    }
-  }, [groupId])
-
-  // A payments-only change (recording or deleting one) never touches the
-  // bill list itself, so this only re-fetches payments and recomputes
-  // settlement from the bills already sitting in state — no reason to
-  // re-fetch every bill in the group just because a payment came or went.
-  const loadPaymentsAndSettlement = useCallback(async () => {
-    try {
-      const paymentsData = await fetchAllRows(() =>
-        supabase
-          .from('payments')
-          .select('id, from_member, to_member, amount, created_at', { count: 'exact' })
-          .eq('group_id', groupId)
-          .order('created_at', { ascending: false })
-      )
-      setPayments(paymentsData)
-      setError(null)
-      // A payment coming in while the initial full bill load is still in
-      // flight has nothing safe to recompute against yet — billsRef.current
-      // would only be loadRecentBillsForFirstPaint's windowed preview, and
-      // settling against a partial bill history would show a wrong
-      // balance, not just an incomplete one. That in-flight load re-fetches
-      // payments fresh on its own once it resolves regardless, so this
-      // payment isn't lost — it just isn't reflected in the balance until
-      // the complete picture is.
-      if (historyCompleteRef.current) {
-        computeAndSetSettlement(billsRef.current || [], paymentsData)
-      }
-    } catch (err) {
-      setError(`Couldn't load payments: ${loadErrorMessage(err)}`)
     }
   }, [groupId])
 
@@ -516,7 +490,7 @@ export default function GroupView() {
   // concept call sites actually care about — bill create/delete, the
   // recurring-bills sweep, and the bills/items/item_shares realtime
   // subscription below all mean "the bill list itself changed," as
-  // opposed to loadPaymentsAndSettlement's narrower "just a payment."
+  // opposed to loadSettlement's narrower "just the balance."
   const reloadAll = loadBillsAndSettlement
 
   // Keeps the cache current with whatever's actually on screen — the
@@ -538,23 +512,10 @@ export default function GroupView() {
       bills,
       billPersonalTotals,
       settlement,
-      payments,
       weekTotal,
       monthTotal,
     })
-  }, [
-    groupId,
-    group,
-    allMembers,
-    categories,
-    bills,
-    billPersonalTotals,
-    settlement,
-    payments,
-    weekTotal,
-    monthTotal,
-    historyComplete,
-  ])
+  }, [groupId, group, allMembers, categories, bills, billPersonalTotals, settlement, weekTotal, monthTotal, historyComplete])
 
   useEffect(() => {
     // Paints instantly from whatever was on screen last time this group was
@@ -571,7 +532,6 @@ export default function GroupView() {
       setBills(cached.bills)
       setBillPersonalTotals(cached.billPersonalTotals)
       setSettlement(cached.settlement)
-      setPayments(cached.payments)
       setWeekTotal(cached.weekTotal)
       setMonthTotal(cached.monthTotal)
       // A cached snapshot is only ever written once complete (see the
@@ -631,7 +591,7 @@ export default function GroupView() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'payments', filter: groupFilter },
-        loadPaymentsAndSettlement
+        loadSettlement
       )
       .on(
         'postgres_changes',

@@ -4,10 +4,9 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
 import { fetchAllGroupMembers } from '../lib/members'
-import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
-import { GROUP_BILLS_SELECT, computeGroupViewSnapshot } from '../lib/groupViewSnapshot'
+import { fetchGroupSettlement } from '../lib/groupBalances'
 import BackButton from '../components/BackButton'
 
 // Every debt in the group, full stop — GroupView.jsx's own balance summary
@@ -55,33 +54,20 @@ export default function SettleUp() {
     setGroup(data)
   }, [groupId])
 
-  // Bills + payments in, one simplified debt list out — same derivation
-  // GroupView.jsx's own settlement uses (groupViewSnapshot.js), so the two
-  // pages can never quietly disagree about who owes whom. Members are
-  // fetched alongside rather than left to the cached seed alone, since
-  // Mark paid below can be the very first thing that adds someone new to
-  // this group's balance.
+  // The group's simplified debt list, computed server-side (see
+  // fetchGroupSettlement/get_group_balances) — same source GroupView.jsx's
+  // own balance summary uses, so the two pages can never quietly disagree
+  // about who owes whom. Members are fetched alongside rather than left to
+  // the cached seed alone, since Mark paid below can be the very first
+  // thing that adds someone new to this group's balance.
   const load = useCallback(async () => {
     try {
-      const [membersData, billsData, paymentsData] = await Promise.all([
+      const [membersData, settlementData] = await Promise.all([
         fetchAllGroupMembers(groupId),
-        fetchAllRows(() =>
-          supabase
-            .from('bills')
-            .select(GROUP_BILLS_SELECT, { count: 'exact' })
-            .eq('group_id', groupId)
-            .order('created_at', { ascending: false })
-        ),
-        fetchAllRows(() =>
-          supabase
-            .from('payments')
-            .select('id, from_member, to_member, amount, created_at', { count: 'exact' })
-            .eq('group_id', groupId)
-            .order('created_at', { ascending: false })
-        ),
+        fetchGroupSettlement(supabase, groupId),
       ])
       setAllMembers(membersData)
-      setSettlement(computeGroupViewSnapshot(billsData, paymentsData).settlement)
+      setSettlement(settlementData)
       setError(null)
     } catch (err) {
       setError(`Couldn't load balances: ${loadErrorMessage(err)}`)
