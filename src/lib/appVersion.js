@@ -16,6 +16,7 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
+  'Free OCR can now read a PDF receipt directly — no AI key needed. Reads a digital PDF\'s real text straight away, or falls back to scanning it like a photo if it turns out to be a scan',
   'Budgets can now be weekly or monthly (Settings > Budgets) — existing amounts adjust automatically when you switch',
   'Settings > Layout: tap a setting to see a live preview of what it actually changes, right there on the page',
   'Budgets position on Your Stats gained a third option, Hidden, alongside Top and Bottom',

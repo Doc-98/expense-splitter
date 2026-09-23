@@ -2,6 +2,7 @@ import { extractItemsFromLines } from '../lineParser'
 import { getReceiptSettings } from '../../receiptSettings'
 import { preprocessImageForOcr } from '../preprocessImage'
 import { mediaKindFor } from '../mediaKind'
+import { extractPdfLines, hasSubstantialText, renderPdfPageToImage } from '../pdfText'
 
 // Tesseract's actual nested shape is blocks[].paragraphs[].lines[].words[]
 // — there's no flat data.lines. Block-level output also has to be
@@ -82,15 +83,36 @@ export const spatialStrategy = {
   // Items come back with no `category` field at all, same as before this
   // feature existed — plain undefined, nothing for the caller to resolve.
   parse: (imageBase64, mediaType, onProgress) => {
-    // Tesseract reads pixels off a photo — a PDF or text file has none to
-    // read, so this fails fast with an actionable message instead of
-    // running OCR over raw file bytes and returning garbage.
-    if (mediaKindFor(mediaType) !== 'image') {
+    const kind = mediaKindFor(mediaType)
+    // A text/HTML export has no pixels and no positioned text runs either
+    // (base64ToText's flat string has no x/y to sort by) — nothing this
+    // strategy's line-position heuristic can work with.
+    if (kind === 'text') {
       throw new Error(
-        'Free OCR can only read a photo, not a PDF or text file — take a photo instead, or add a Claude/Gemini API key in Scan settings to read documents directly.'
+        'Free OCR can only read a photo or a PDF, not a plain text/HTML file — take a photo instead, or add a Claude/Gemini API key in Scan settings to read documents directly.'
       )
+    }
+    if (kind === 'document') {
+      return parsePdf(imageBase64, onProgress)
     }
     const { ocrLanguage } = getReceiptSettings()
     return runSpatialOCR(imageBase64, mediaType, ocrLanguage, onProgress)
   },
+}
+
+// Most PDFs anyone actually has are a digital export (an emailed receipt,
+// an invoice) with real, positioned text already in them — pulled out
+// directly here, no OCR involved at all, and more accurate than OCR could
+// ever be since there's no misread-character risk. Only when a PDF turns
+// out to have no real text layer (i.e. it's actually a scanned photo saved
+// as a PDF) does this fall back to rendering its first page to an image
+// and reading that the same way a photo would be.
+async function parsePdf(imageBase64, onProgress) {
+  const lines = await extractPdfLines(imageBase64)
+  if (hasSubstantialText(lines)) {
+    return extractItemsFromLines(lines)
+  }
+  const { ocrLanguage } = getReceiptSettings()
+  const rendered = await renderPdfPageToImage(imageBase64)
+  return runSpatialOCR(rendered.base64, rendered.mediaType, ocrLanguage, onProgress)
 }

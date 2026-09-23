@@ -396,11 +396,13 @@ const GROUPS = [
             <p>Three ways to actually read whichever file you give it:</p>
             <ul>
               <li>
-                <strong>Free OCR</strong> — no setup, entirely on your phone, images only. Best on
-                a clear, well-lit photo.
+                <strong>Free OCR</strong> — no setup, entirely on your phone. Reads a photo, and a
+                PDF too — directly if it's a digital export, or by treating it like a photo of
+                itself if it's actually a scan. Doesn't read a plain-text/HTML file. Best on a
+                clear, well-lit photo.
               </li>
               <li>
-                <strong>Google Gemini / Anthropic Claude</strong> — more accurate, reads a PDF or
+                <strong>Google Gemini / Anthropic Claude</strong> — more accurate, reads a
                 text file too, needs your own API key (<strong>Settings → Scan</strong>).
               </li>
               <li>
