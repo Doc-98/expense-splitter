@@ -9,7 +9,10 @@
 // admin" from that (same as this file does internally) costs them nothing
 // extra — this is for the sections that don't otherwise need the roster.
 export async function fetchGroupRole(supabase, groupId, userId) {
-  const [{ data: group }, { data: memberRow }] = await Promise.all([
+  const [
+    { data: group, error: groupError },
+    { data: memberRow, error: memberError },
+  ] = await Promise.all([
     supabase.from('groups').select('name, is_personal, admin_id').eq('id', groupId).single(),
     supabase
       .from('group_members')
@@ -19,6 +22,14 @@ export async function fetchGroupRole(supabase, groupId, userId) {
       .eq('active', true)
       .maybeSingle(),
   ])
+  // Without these, a network failure on either query silently returned a
+  // plausible-looking-but-wrong role object (isPersonal: false, isAdmin:
+  // false, name: '') instead of the caller ever finding out the real
+  // values couldn't be confirmed — every admin-gated action this feeds
+  // (Danger Zone chief among them) would then render as if it genuinely
+  // knew the answer.
+  if (groupError) throw groupError
+  if (memberError) throw memberError
 
   const myParticipantId = memberRow?.id || null
   return {

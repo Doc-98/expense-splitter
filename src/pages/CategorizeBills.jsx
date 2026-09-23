@@ -178,13 +178,33 @@ export default function CategorizeBills() {
       const requests = []
       for (const [categoryId, billIds] of billIdsByCategory) {
         for (const idsChunk of chunk(billIds, UPDATE_CHUNK_SIZE)) {
-          requests.push(supabase.from('bills').update({ category_id: categoryId }).in('id', idsChunk))
+          requests.push({ promise: supabase.from('bills').update({ category_id: categoryId }).in('id', idsChunk), count: idsChunk.length })
         }
       }
 
-      const results = await Promise.all(requests)
-      const firstError = results.find((r) => r.error)?.error
-      if (firstError) throw firstError
+      // Fired in parallel and awaited as a whole — a category spanning more
+      // than one chunk means a network failure partway through can leave
+      // some chunks committed and others not. Counting exactly how many
+      // bills succeeded (rather than just "it worked"/"it didn't") is what
+      // stops that from reading as a total failure when most of it actually
+      // went through, and what makes "try again" a safe, honest suggestion:
+      // this is a plain UPDATE, so re-submitting the whole batch again just
+      // re-sets the same category_id on the bills that already got it —
+      // never a duplicate, unlike an insert-based operation would risk.
+      const results = await Promise.all(requests.map((r) => r.promise))
+      const succeededCount = results.reduce((sum, r, i) => (r.error ? sum : sum + requests[i].count), 0)
+      const failedCount = resolvedBillCount - succeededCount
+
+      if (failedCount > 0) {
+        const firstError = results.find((r) => r.error)?.error
+        setAppliedCount(succeededCount)
+        setError(
+          succeededCount > 0
+            ? `Categorized ${succeededCount} of ${resolvedBillCount} bills — the rest failed: ${firstError?.message || 'unknown error'}. Try again to pick up where this left off.`
+            : firstError?.message || 'Could not categorize these bills — try again.'
+        )
+        return
+      }
 
       setAppliedCount(resolvedBillCount)
       setStep('done')

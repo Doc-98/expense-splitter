@@ -88,11 +88,19 @@ export default function BillView() {
   ).filter((id) => activeMembers.some((m) => m.id === id))
 
   const loadItems = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error: loadError } = await supabase
       .from('items')
       .select('*, item_shares(member_id, shares)')
       .eq('bill_id', billId)
       .order('created_at', { ascending: true })
+    if (loadError) {
+      // Leaves the currently-shown items alone rather than blanking the
+      // whole receipt to "no items yet" on a transient network failure —
+      // this runs after nearly every mutation on this page, so that would
+      // otherwise be an easy way to make a real receipt look empty.
+      setError(loadError.message)
+      return
+    }
     setItems(data || [])
   }, [billId])
 
@@ -100,39 +108,55 @@ export default function BillView() {
     // Used for realtime updates only — deliberately doesn't touch
     // noteDraft, or a bill_payers change from elsewhere would clobber
     // whatever note text is currently being typed.
-    const { data: billData } = await supabase
+    const { data: billData, error: loadError } = await supabase
       .from('bills')
       .select('*, bill_payers(member_id, amount)')
       .eq('id', billId)
       .single()
+    if (loadError) {
+      setError(loadError.message)
+      return
+    }
     setBill(billData)
     setBillPayers(billData?.bill_payers || [])
   }, [billId])
 
   useEffect(() => {
     async function loadBillAndMembers() {
-      // Run in parallel and land in one setState pass, rather than four
-      // sequential awaits each committing its own render — the "paid by"/
-      // "split with" rows below only ever show once `group` is known
-      // (never for the split second beforehand where its absence would
-      // otherwise read as "not personal, go ahead and show them"), but a
-      // fetch that lagged behind the others still meant those rows
-      // flashed visible then vanished the instant it caught up. Fetching
-      // everything together removes that lag rather than just papering
-      // over it.
-      const [billResult, allMembersData, categoriesData, groupResult] = await Promise.all([
-        supabase.from('bills').select('*, bill_payers(member_id, amount)').eq('id', billId).single(),
-        fetchAllGroupMembers(groupId),
-        fetchCategories(groupId),
-        supabase.from('groups').select('is_personal').eq('id', groupId).single(),
-      ])
-      const billData = billResult.data
-      setBill(billData)
-      setBillPayers(billData?.bill_payers || [])
-      setNoteDraft(billData?.note || '')
-      setAllMembers(allMembersData)
-      setCategories(categoriesData)
-      setGroup(groupResult.data)
+      setError(null)
+      try {
+        // Run in parallel and land in one setState pass, rather than four
+        // sequential awaits each committing its own render — the "paid by"/
+        // "split with" rows below only ever show once `group` is known
+        // (never for the split second beforehand where its absence would
+        // otherwise read as "not personal, go ahead and show them"), but a
+        // fetch that lagged behind the others still meant those rows
+        // flashed visible then vanished the instant it caught up. Fetching
+        // everything together removes that lag rather than just papering
+        // over it.
+        // fetchAllGroupMembers/fetchCategories already throw on failure
+        // (see lib/members.js, lib/categories.js) — the try/catch below is
+        // what actually catches that, rather than leaving an unhandled
+        // rejection that silently aborts this effect with the page stuck
+        // showing nothing and no error.
+        const [billResult, allMembersData, categoriesData, groupResult] = await Promise.all([
+          supabase.from('bills').select('*, bill_payers(member_id, amount)').eq('id', billId).single(),
+          fetchAllGroupMembers(groupId),
+          fetchCategories(groupId),
+          supabase.from('groups').select('is_personal').eq('id', groupId).single(),
+        ])
+        if (billResult.error) throw billResult.error
+        if (groupResult.error) throw groupResult.error
+        const billData = billResult.data
+        setBill(billData)
+        setBillPayers(billData?.bill_payers || [])
+        setNoteDraft(billData?.note || '')
+        setAllMembers(allMembersData)
+        setCategories(categoriesData)
+        setGroup(groupResult.data)
+      } catch (err) {
+        setError(err.message)
+      }
     }
     loadBillAndMembers()
     loadItems()
@@ -167,7 +191,7 @@ export default function BillView() {
   const payerMismatch = isMultiPayer && Math.abs(payerSum - total) > 0.01
 
   async function insertItemWithShares(name, unitPrice, quantity, buyerIds, categoryId = null) {
-    const { data: inserted } = await supabase
+    const { data: inserted, error: insertError } = await supabase
       .from('items')
       .insert({
         bill_id: billId,
@@ -179,11 +203,19 @@ export default function BillView() {
       })
       .select()
       .single()
+    if (insertError) {
+      setError(insertError.message)
+      return null
+    }
 
     if (inserted && buyerIds.length) {
-      await supabase
+      const { error: sharesError } = await supabase
         .from('item_shares')
         .insert(buyerIds.map((id) => ({ item_id: inserted.id, member_id: id, shares: 1 })))
+      // The item itself exists either way — a failure here just leaves it
+      // unassigned, fixable directly from its own row (toggleBuyer below),
+      // not worth losing the item over.
+      if (sharesError) setError(sharesError.message)
     }
     return inserted
   }
@@ -209,7 +241,8 @@ export default function BillView() {
     const quantity = parseNumber(newItem.quantity) || 1
     const unitPrice = parsedNewItemPrice()
 
-    await insertItemWithShares(newItem.name.trim(), unitPrice, quantity, defaultBuyerIds)
+    const inserted = await insertItemWithShares(newItem.name.trim(), unitPrice, quantity, defaultBuyerIds)
+    if (!inserted) return // insertItemWithShares already set the error
 
     setNewItem({ name: '', price: '', quantity: '1' })
     loadItems()
@@ -234,16 +267,22 @@ export default function BillView() {
 
   async function toggleBuyer(item, memberId) {
     const existing = item.item_shares.find((s) => s.member_id === memberId)
-    if (existing) {
-      await supabase.from('item_shares').delete().eq('item_id', item.id).eq('member_id', memberId)
-    } else {
-      await supabase.from('item_shares').insert({ item_id: item.id, member_id: memberId, shares: 1 })
+    const { error: toggleError } = existing
+      ? await supabase.from('item_shares').delete().eq('item_id', item.id).eq('member_id', memberId)
+      : await supabase.from('item_shares').insert({ item_id: item.id, member_id: memberId, shares: 1 })
+    if (toggleError) {
+      setError(toggleError.message)
+      return
     }
     loadItems()
   }
 
   async function deleteItem(itemId) {
-    await supabase.from('items').delete().eq('id', itemId)
+    const { error: deleteError } = await supabase.from('items').delete().eq('id', itemId)
+    if (deleteError) {
+      setError(deleteError.message)
+      return
+    }
     loadItems()
   }
 
@@ -328,7 +367,13 @@ export default function BillView() {
   }
 
   async function saveNote() {
-    await supabase.from('bills').update({ note: noteDraft || null }).eq('id', billId)
+    const { error: saveError } = await supabase.from('bills').update({ note: noteDraft || null }).eq('id', billId)
+    if (saveError) {
+      // Without this check, "Saved" showed unconditionally regardless of
+      // whether the update actually went through.
+      setError(saveError.message)
+      return
+    }
     setNoteSaved(true)
     setTimeout(() => setNoteSaved(false), 1200)
   }
@@ -338,8 +383,12 @@ export default function BillView() {
     const next = current.includes(memberId)
       ? current.filter((id) => id !== memberId)
       : [...current, memberId]
-    await supabase.from('bills').update({ default_buyer_ids: next }).eq('id', billId)
-    setBill((b) => ({ ...b, default_buyer_ids: next }))
+    setBill((b) => ({ ...b, default_buyer_ids: next })) // optimistic, same reasoning as GroupGeneralSection's saveAvatarIcon
+    const { error: updateError } = await supabase.from('bills').update({ default_buyer_ids: next }).eq('id', billId)
+    if (updateError) {
+      setBill((b) => ({ ...b, default_buyer_ids: current }))
+      setError(updateError.message)
+    }
   }
 
   // Backdates or postdates the bill — its own click-to-edit date, next to
@@ -374,18 +423,27 @@ export default function BillView() {
   }
 
   async function setBillCategory(categoryId) {
-    await supabase
+    const previous = bill?.category_id ?? null
+    setBill((b) => ({ ...b, category_id: categoryId || null })) // optimistic, same reasoning as toggleDefaultBuyer above
+    const { error: updateError } = await supabase
       .from('bills')
       .update({ category_id: categoryId || null })
       .eq('id', billId)
-    setBill((b) => ({ ...b, category_id: categoryId || null }))
+    if (updateError) {
+      setBill((b) => ({ ...b, category_id: previous }))
+      setError(updateError.message)
+    }
   }
 
   async function setItemCategory(itemId, categoryId) {
-    await supabase
+    const { error: updateError } = await supabase
       .from('items')
       .update({ category_id: categoryId || null })
       .eq('id', itemId)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
     loadItems()
   }
 

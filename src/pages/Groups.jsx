@@ -143,8 +143,8 @@ export default function Groups() {
     setOpeningPersonal(true)
     setError(null)
     const { data, error: rpcError } = await supabase.rpc('get_or_create_personal_group')
-    if (rpcError) {
-      setError(rpcError.message)
+    if (rpcError || !data) {
+      setError(rpcError?.message || 'Could not open your personal space — try again.')
       setOpeningPersonal(false)
       return
     }

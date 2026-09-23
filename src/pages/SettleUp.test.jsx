@@ -7,26 +7,27 @@ import { groupViewCache } from '../lib/groupViewCache'
 
 // Same vi.hoisted() reasoning as every other Supabase-coupled suite —
 // vi.mock() factories are hoisted above ordinary variable declarations.
-const { mockFrom, mockPaymentsInsert, mockFetchAllGroupMembers, mockChannel, mockRemoveChannel } = vi.hoisted(() => ({
-  mockFrom: vi.fn(),
-  mockPaymentsInsert: vi.fn(),
-  mockFetchAllGroupMembers: vi.fn(),
-  mockChannel: vi.fn(),
-  mockRemoveChannel: vi.fn(),
-}))
+const { mockFrom, mockRpc, mockPaymentsInsert, mockFetchAllGroupMembers, mockChannel, mockRemoveChannel } = vi.hoisted(
+  () => ({
+    mockFrom: vi.fn(),
+    mockRpc: vi.fn(),
+    mockPaymentsInsert: vi.fn(),
+    mockFetchAllGroupMembers: vi.fn(),
+    mockChannel: vi.fn(),
+    mockRemoveChannel: vi.fn(),
+  })
+)
 
-// This page combines a query chain it builds itself (groups, plus bills/
-// payments through fetchAllRows — see billsTable()/paymentsTable() below,
-// each ending in the .range() fetchAllRows.js itself calls on the query
-// builder it's handed) with a lib function for members
-// (fetchAllGroupMembers, same boundary RecordPayment.test.jsx already
-// mocks) — the same combined shape as that page, plus a realtime
-// subscription (supabase.channel()/removeChannel()) neither of the
-// earlier pages needed. CurrencyContext is wrapped for real, same
-// reasoning as ItemRow.test.jsx/MultiPayerModal.test.jsx — it never
-// touches Supabase or any browser API beyond localStorage.
+// This page combines a query chain it builds itself (groups, plus the
+// get_group_balances RPC — see groupsTable()/rpcResult below) with a lib
+// function for members (fetchAllGroupMembers, same boundary
+// RecordPayment.test.jsx already mocks) — the same combined shape as that
+// page, plus a realtime subscription (supabase.channel()/removeChannel())
+// neither of the earlier pages needed. CurrencyContext is wrapped for
+// real, same reasoning as ItemRow.test.jsx/MultiPayerModal.test.jsx — it
+// never touches Supabase or any browser API beyond localStorage.
 vi.mock('../supabaseClient', () => ({
-  supabase: { from: mockFrom, channel: mockChannel, removeChannel: mockRemoveChannel },
+  supabase: { from: mockFrom, rpc: mockRpc, channel: mockChannel, removeChannel: mockRemoveChannel },
 }))
 vi.mock('../lib/members', () => ({ fetchAllGroupMembers: mockFetchAllGroupMembers }))
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'user-me' } }) }))
@@ -42,11 +43,8 @@ vi.mock('react-router-dom', () => ({
 function groupsTable() {
   return { select: () => ({ eq: () => ({ single: () => Promise.resolve(groupsSelectResult) }) }) }
 }
-function rangedTable(getResult) {
-  return { select: () => ({ eq: () => ({ order: () => ({ range: () => Promise.resolve(getResult()) }) }) }) }
-}
 function paymentsTable() {
-  return { ...rangedTable(() => paymentsSelectResult), insert: mockPaymentsInsert }
+  return { insert: mockPaymentsInsert }
 }
 function makeChannel() {
   const channel = { on: vi.fn(() => channel), subscribe: vi.fn(() => channel) }
@@ -61,9 +59,10 @@ function renderPage() {
   )
 }
 
-// Both fixture bills route through Carol (she's the sole debtor either
-// way — owing Alice in "mine", owing Bob in "others"), so a plain
-// `getByText('Carol')` matches both lists at once whenever both render.
+// The fixture balances route every debt through Carol (she's the sole
+// debtor either way — owing Alice in "mine", owing Bob in "others"), so a
+// plain `getByText('Carol')` matches both lists at once whenever both
+// render.
 // Scoped to the "mine" list specifically, the same way `.creditor`
 // scoping already disambiguates the "others" side via Bob's name.
 function findMineDebtor() {
@@ -71,8 +70,7 @@ function findMineDebtor() {
 }
 
 let groupsSelectResult
-let billsSelectResult
-let paymentsSelectResult
+let rpcResult
 
 const MEMBERS = [
   { id: 'member-alice', userId: 'user-me', name: 'Alice', avatarIcon: null, isGuest: false, active: true },
@@ -80,63 +78,37 @@ const MEMBERS = [
   { id: 'member-carol', userId: 'user-carol', name: 'Carol', avatarIcon: null, isGuest: false, active: true },
 ]
 
-// Bill 1: Alice fronts €20, split evenly with Bob -> Alice +10, Bob -10.
-// Bill 2: Bob fronts €30, split evenly with Carol -> Bob +15, Carol -15.
-// Net: Alice +10, Bob +5, Carol -15 -> simplified: Carol owes Alice €10,
-// Carol owes Bob €5 (settlement.js's own greedy simplifyDebts pairing the
-// biggest creditor first) — real, unmocked settlement math, same as every
-// other page test in this suite that derives its own numbers rather than
-// asserting on a canned result.
-function billsFixture() {
+// Balances exactly as get_group_balances would return them for: Alice
+// fronts €20 split evenly with Bob (Alice +10, Bob -10), Bob fronts €30
+// split evenly with Carol (Bob +15, Carol -15) — net Alice +10, Bob +5,
+// Carol -15. Supplied as raw balance rows (not bills/items — this page no
+// longer fetches those at all) so simplifyDebts() itself, real and
+// unmocked, is what turns this into "Carol owes Alice €10, Carol owes Bob
+// €5" (its own greedy pairing, biggest creditor first) — same "real,
+// unmocked settlement math" testing philosophy this suite already used
+// before the balance moved server-side, just starting one step later in
+// the pipeline. Amounts are strings, matching how Supabase actually
+// returns a numeric column — exercises fetchGroupSettlement's own
+// Number(...) conversion rather than sidestepping it.
+function balancesFixture() {
   return [
-    {
-      id: 'bill-1',
-      paid_by: 'member-alice',
-      created_at: '2026-01-01T00:00:00Z',
-      category_id: null,
-      items: [
-        {
-          id: 'item-1',
-          total_price: 20,
-          category_id: null,
-          item_shares: [
-            { member_id: 'member-alice', shares: 1 },
-            { member_id: 'member-bob', shares: 1 },
-          ],
-        },
-      ],
-      bill_payers: [],
-    },
-    {
-      id: 'bill-2',
-      paid_by: 'member-bob',
-      created_at: '2026-01-02T00:00:00Z',
-      category_id: null,
-      items: [
-        {
-          id: 'item-2',
-          total_price: 30,
-          category_id: null,
-          item_shares: [
-            { member_id: 'member-bob', shares: 1 },
-            { member_id: 'member-carol', shares: 1 },
-          ],
-        },
-      ],
-      bill_payers: [],
-    },
+    { member_id: 'member-alice', balance: '10.00' },
+    { member_id: 'member-bob', balance: '5.00' },
+    { member_id: 'member-carol', balance: '-15.00' },
   ]
 }
 
 beforeEach(() => {
   groupsSelectResult = { data: { id: 'group-1', name: 'Beach Trip' }, error: null }
-  billsSelectResult = { data: billsFixture(), error: null, count: 2 }
-  paymentsSelectResult = { data: [], error: null, count: 0 }
+  rpcResult = { data: balancesFixture(), error: null }
   mockFrom.mockReset().mockImplementation((table) => {
     if (table === 'groups') return groupsTable()
-    if (table === 'bills') return rangedTable(() => billsSelectResult)
     if (table === 'payments') return paymentsTable()
     throw new Error(`unexpected table: ${table}`)
+  })
+  mockRpc.mockReset().mockImplementation((fn) => {
+    if (fn === 'get_group_balances') return Promise.resolve(rpcResult)
+    throw new Error(`unexpected rpc: ${fn}`)
   })
   mockPaymentsInsert.mockReset().mockResolvedValue({ error: null })
   mockFetchAllGroupMembers.mockReset().mockResolvedValue(MEMBERS)
@@ -179,15 +151,15 @@ describe('SettleUp — loading', () => {
   })
 
   it("shows an error when balances can't be loaded", async () => {
-    billsSelectResult = { data: null, error: { message: 'bills query failed' } }
+    rpcResult = { data: null, error: { message: 'balances query failed' } }
     renderPage()
-    expect(await screen.findByText(/Couldn't load balances: bills query failed/)).toBeInTheDocument()
+    expect(await screen.findByText(/Couldn't load balances: balances query failed/)).toBeInTheDocument()
   })
 })
 
 describe('SettleUp — settlement list', () => {
   it('shows the empty state once loaded with nothing to settle', async () => {
-    billsSelectResult = { data: [], error: null, count: 0 }
+    rpcResult = { data: [], error: null }
     renderPage()
     expect(await screen.findByText("Everyone's even — nothing to settle.")).toBeInTheDocument()
   })
@@ -212,8 +184,8 @@ describe('SettleUp — settlement list', () => {
   })
 
   it("shows a settled message instead of a debt list when you have nothing owing", async () => {
-    // Only bill 2 (Bob <-> Carol) — Alice (you) isn't involved in anything.
-    billsSelectResult = { data: [billsFixture()[1]], error: null, count: 1 }
+    // Only the Bob <-> Carol debt — Alice (you) isn't involved in anything.
+    rpcResult = { data: [{ member_id: 'member-bob', balance: '15.00' }, { member_id: 'member-carol', balance: '-15.00' }], error: null }
     renderPage()
 
     expect(await screen.findByText("You're all settled up in this group.")).toBeInTheDocument()

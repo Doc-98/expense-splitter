@@ -54,6 +54,16 @@ export default defineConfig({
         // makes the newly-active worker claim already-open tabs too, which
         // is what actually fires that event and lets the reload happen.
         clientsClaim: true,
+        // Default globPatterns only picks up .js, not .mjs — which is
+        // exactly what pdfText.js's `?url` import of pdfjs-dist's worker
+        // script emits as its own separate built asset (referenced only by
+        // URL string, so it's invisible to the default JS-module scan).
+        // Without this, that ~1.3MB worker file never gets precached: it
+        // still works the very first time (fetched live over the network
+        // the moment a PDF scan actually needs it), but going offline
+        // before ever scanning a PDF once would leave that one path broken
+        // — everything else in the app stays fully precached regardless.
+        globPatterns: ['**/*.{js,mjs,css,html,ico,png,svg,webmanifest}'],
       },
       manifest: {
         name: 'Spesa - Expense Splitter',

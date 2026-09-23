@@ -60,7 +60,14 @@ export default function GroupSettings() {
   const [isPersonal, setIsPersonal] = useState(false)
 
   const loadIsPersonal = useCallback(async () => {
-    const { data } = await supabase.from('groups').select('is_personal').eq('id', groupId).single()
+    const { data, error } = await supabase.from('groups').select('is_personal').eq('id', groupId).single()
+    if (error) {
+      // Keeps the existing safe default (show every tab) rather than
+      // inventing new fallback behavior for the error case — just makes a
+      // genuine failure (not just still-loading) visible somewhere.
+      console.error('Failed to load group type:', error.message)
+      return
+    }
     setIsPersonal(data?.is_personal || false)
   }, [groupId])
 

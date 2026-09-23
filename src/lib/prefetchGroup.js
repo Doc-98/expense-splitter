@@ -4,6 +4,7 @@ import { fetchAllGroupMembers } from './members'
 import { fetchCategories } from './categories'
 import { getStatsWindowStart } from './timeRange'
 import { GROUP_BILLS_SELECT, computeGroupViewSnapshot } from './groupViewSnapshot'
+import { fetchGroupSettlement } from './groupBalances'
 import { groupViewCache } from './groupViewCache'
 
 // Warms groupViewCache for a group before anyone's actually opened it —
@@ -22,9 +23,21 @@ import { groupViewCache } from './groupViewCache'
 // old, heavily-imported group, and isn't worth spending part of the
 // app-boot warm-up on. GroupView.jsx always re-fetches for real on mount
 // regardless of this cache, so an older bill missing from this prefetched
-// snapshot (and the settlement/totals derived from it) is corrected within
-// one fetch cycle the moment the real page loads — exactly as tolerated as
-// any other stale-cache paint already is.
+// snapshot (and the billPersonalTotals/week/monthTotal derived from it) is
+// corrected within one fetch cycle the moment the real page loads —
+// exactly as tolerated as any other stale-cache paint already is.
+//
+// The group's balance is NOT windowed the same way, deliberately — it
+// comes from fetchGroupSettlement/get_group_balances, computed server-side
+// from the group's complete history regardless of what's in `billsData`
+// here. This used to be a real, reported bug: an earlier version of this
+// function computed the balance client-side from these same windowed bills
+// but *every* payment ever made, so an old payment settling bills outside
+// the window looked, briefly, like a wildly wrong balance the instant this
+// prefetched snapshot painted — corrected a moment later once the real
+// load replaced it, but wrong on screen in the meantime. Fetching the
+// balance as its own server-computed number sidesteps that mismatch
+// entirely, rather than just windowing it more carefully.
 //
 // Best-effort throughout: this is a background optimization, not a
 // user-facing operation, so any failure here (a dropped connection, an RLS
@@ -36,7 +49,7 @@ export async function prefetchGroupView(groupId) {
 
   try {
     const windowStart = getStatsWindowStart()
-    const [groupResult, allMembers, categories, billsData, paymentsData] = await Promise.all([
+    const [groupResult, allMembers, categories, billsData, settlement] = await Promise.all([
       supabase.from('groups').select('*').eq('id', groupId).single(),
       fetchAllGroupMembers(groupId),
       fetchCategories(groupId),
@@ -48,17 +61,11 @@ export async function prefetchGroupView(groupId) {
           .gte('created_at', windowStart.toISOString())
           .order('created_at', { ascending: false })
       ),
-      fetchAllRows(() =>
-        supabase
-          .from('payments')
-          .select('id, from_member, to_member, amount, created_at', { count: 'exact' })
-          .eq('group_id', groupId)
-          .order('created_at', { ascending: false })
-      ),
+      fetchGroupSettlement(supabase, groupId),
     ])
     if (groupResult.error || !groupResult.data) return
 
-    const { billPersonalTotals, weekTotal, monthTotal, settlement } = computeGroupViewSnapshot(billsData, paymentsData)
+    const { billPersonalTotals, weekTotal, monthTotal } = computeGroupViewSnapshot(billsData)
     groupViewCache.set(groupId, {
       group: groupResult.data,
       allMembers,
@@ -66,7 +73,6 @@ export async function prefetchGroupView(groupId) {
       bills: billsData,
       billPersonalTotals,
       settlement,
-      payments: paymentsData,
       weekTotal,
       monthTotal,
     })

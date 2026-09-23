@@ -1147,6 +1147,77 @@ end;
 $$;
 
 -- ============================================================================
+-- get_group_balances: each member's net balance for a group, computed
+-- server-side — a straight SQL translation of computeBalances()/
+-- creditPayers() in src/lib/settlement.js (see
+-- supabase/migrations/20260923213308_group_balances_rpc.sql for the full
+-- reasoning, including how this was verified against that file's own test
+-- fixtures). Not security definer — every table this reads still goes
+-- through its own existing RLS policy as the calling user, same as a
+-- direct client-side select from any of them already does.
+-- ============================================================================
+create function public.get_group_balances(target_group_id uuid)
+returns table(member_id uuid, balance numeric)
+language sql
+stable
+as $$
+  with bill_totals as (
+    select b.id as bill_id, b.paid_by, coalesce(sum(i.total_price), 0) as total
+    from bills b
+    left join items i on i.bill_id = b.id
+    where b.group_id = target_group_id
+    group by b.id, b.paid_by
+  ),
+  payer_credits as (
+    select bp.member_id, bp.amount as amount
+    from bill_payers bp
+    join bills b on b.id = bp.bill_id
+    where b.group_id = target_group_id
+  ),
+  single_payer_credits as (
+    select bt.paid_by as member_id, bt.total as amount
+    from bill_totals bt
+    where bt.paid_by is not null
+      and not exists (select 1 from bill_payers bp where bp.bill_id = bt.bill_id)
+  ),
+  item_shares_totals as (
+    select i.id as item_id, i.total_price, coalesce(sum(s.shares), 0) as total_shares
+    from items i
+    join bills b on b.id = i.bill_id
+    left join item_shares s on s.item_id = i.id
+    where b.group_id = target_group_id
+    group by i.id, i.total_price
+  ),
+  debits as (
+    select s.member_id, (ist.total_price * s.shares / ist.total_shares) as amount
+    from item_shares s
+    join item_shares_totals ist on ist.item_id = s.item_id
+    where ist.total_shares > 0
+  ),
+  payment_credits as (
+    select from_member as member_id, amount as amount from payments where group_id = target_group_id
+  ),
+  payment_debits as (
+    select to_member as member_id, -amount as amount from payments where group_id = target_group_id
+  ),
+  all_movements as (
+    select member_id, amount from payer_credits
+    union all
+    select member_id, amount from single_payer_credits
+    union all
+    select member_id, -amount from debits
+    union all
+    select member_id, amount from payment_credits
+    union all
+    select member_id, amount from payment_debits
+  )
+  select member_id, round(sum(amount), 2) as balance
+  from all_movements
+  where member_id is not null
+  group by member_id;
+$$;
+
+-- ============================================================================
 -- Realtime: after running this file, go to
 -- Database -> Replication -> supabase_realtime in the Supabase dashboard and
 -- turn on replication for: bills, items, item_shares, bill_payers, payments,

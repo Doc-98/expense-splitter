@@ -15,7 +15,16 @@ export function AuthProvider({ children }) {
   const user = session?.user ?? null
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null))
+    // A network failure here (e.g. the refresh a near-expired token needs)
+    // already comes back as `{ data: { session: null }, error }`, never a
+    // thrown rejection — session ends up null either way, which is the
+    // SDK's own call to make, not something to second-guess here. Logging
+    // the error is just so that's visible somewhere rather than a
+    // completely silent "why am I signed out" with nothing to go on.
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) console.error('Failed to restore session:', error.message)
+      setSession(data.session ?? null)
+    })
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession ?? null)
@@ -28,8 +37,16 @@ export function AuthProvider({ children }) {
     let cancelled = false
     async function loadProfile() {
       if (!user) return
-      const { data } = await supabase.from('profiles').select('display_name').eq('id', user.id).single()
-      if (!cancelled) setDisplayName(data?.display_name || user.email?.split('@')[0] || 'Account')
+      const { data, error } = await supabase.from('profiles').select('display_name').eq('id', user.id).single()
+      if (cancelled) return
+      if (error) {
+        // Leaves whatever displayName is already showing alone rather than
+        // regressing it to the email-prefix fallback — a transient network
+        // failure here shouldn't make someone's real name disappear.
+        console.error('Failed to load display name:', error.message)
+        return
+      }
+      setDisplayName(data?.display_name || user.email?.split('@')[0] || 'Account')
     }
     loadProfile()
     return () => {

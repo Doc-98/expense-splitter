@@ -51,6 +51,7 @@ that used to be scattered across Profile and Groups.
 
 - [Latest update](#latest-update)
 - [How it's built](#how-its-built)
+  - [Project structure](#project-structure)
 - [Setup](#setup)
 - [Receipt scanning](#receipt-scanning)
 - [Editing items](#editing-items)
@@ -88,6 +89,87 @@ that used to be scattered across Profile and Groups.
   code required by default — see [Receipt scanning](#receipt-scanning)
 - **Settlement**: `src/lib/settlement.js` computes net balances per person
   and simplifies them into the minimum number of payments to settle up
+
+### Project structure
+
+```
+expense-splitter/
+├── public/                     # Static PWA assets — icons, favicon
+├── supabase/
+│   ├── functions/
+│   │   └── parse-receipt/      # The one server-side code path: proxies receipt-scan
+│   │                           #   requests to whichever AI provider is configured
+│   ├── migrations/             # Timestamped, additive SQL — see "Migrations & Supabase branching"
+│   └── schema.sql              # The full schema in one file, for a brand-new project
+├── src/
+│   ├── components/             # Reusable UI pieces, one per file — *.test.jsx colocated
+│   │                           #   right alongside whatever it tests, not a separate tests/ tree
+│   ├── context/                # App-wide React context: auth, theme, currency
+│   ├── lib/                    # Pure logic and Supabase calls — no JSX in here at all
+│   │   ├── settlement.js       #   the balance/debt-simplification math (see above)
+│   │   ├── billCategorization/ #   AI-assisted category guessing: index.js picks a strategy,
+│   │   │   └── strategies/     #     one file per provider (Claude/Gemini/Ollama) behind it
+│   │   ├── bank-statement-parsing/  # same "index.js + swappable strategies/" shape, for
+│   │   ├── bankStatementColumns/    #   reading bank-statement files, guessing their columns,
+│   │   └── receipt-parsing/         #   and reading a scanned/photographed receipt
+│   ├── pages/                  # One file per top-level route — see the <Route> table in App.jsx
+│   ├── App.jsx                 # The route table itself, plus top-level providers
+│   ├── main.jsx                # Entry point — mounts <App>, nothing else
+│   ├── supabaseClient.js       # The one Supabase client instance, imported wherever it's needed
+│   └── styles.css              # The entire app's CSS — one file, no CSS-in-JS, no per-component
+│                                #   stylesheets, no Tailwind
+├── vite.config.js              # Build config, plus deriving APP_VERSION from git history
+├── vitest.config.js            # Deliberately its own file, not merged into vite.config.js —
+│                                #   see "Running the tests"
+└── README.md
+```
+
+**Why it's flat, not feature-nested.** `components/`, `pages/`, and `lib/`
+are each one wide, flat directory rather than grouped into
+`features/groups/`, `features/settings/`, etc. — the "feature" a file
+belongs to is encoded in its own name instead of in folder nesting
+(`GroupCategoriesSection.jsx`, `SettingsLayoutSection.jsx`,
+`prefetchGroupSettings.js`). That trades "everything about groups lives
+under one folder" for "every file's name alone tells you what it is,
+and nothing is ever three folders deep" — a real tradeoff, not a free
+lunch, but one that's held up fine at this project's size; it's the kind
+of thing worth revisiting if `components/` or `lib/` ever gets
+unwieldy.
+
+**Why `lib/` and `components/`/`pages/` are separate.** `lib/` is where
+business logic, formatting, and every direct Supabase call live —
+plain functions, no JSX, so each one is unit-testable in isolation with
+nothing to mock beyond its own actual dependencies (see "Running the
+tests" for exactly how). `components/`/`pages/` are the JSX layer on
+top, reading from `lib/` rather than duplicating logic inline.
+
+**Why four different folders with the same `index.js` + `strategies/`
+shape.** `billCategorization/`, `bank-statement-parsing/`,
+`bankStatementColumns/`, and `receipt-parsing/` are this app's four
+places that call out to an AI provider (auto-tagging a bill, reading a
+bank statement, matching its columns, and reading a receipt). Each has
+the same shape on purpose: an `index.js` that picks a strategy based on
+what's configured in Scan Settings, and one `strategies/*.js` file per
+provider (Claude, Gemini, Ollama) implementing the same interface — so
+adding a fifth provider to any one of them, or a fifth AI-calling
+feature altogether, means adding a file in a known shape rather than
+inventing a new pattern.
+
+**Why one `styles.css` instead of CSS-in-JS or per-component
+stylesheets.** Same reasoning as this app's charts being hand-rolled
+SVG instead of a charting library (see `PieChart.jsx`/`LineChart.jsx`'s
+own comments) — no build-time CSS tooling beyond what Vite already
+does out of the box, and one file means one set of design tokens
+(`:root` custom properties for color/spacing/type) that every component
+already shares rather than re-declaring.
+
+**Why no top-level `tests/` directory.** Every test file sits directly
+next to what it tests — `Foo.jsx` → `Foo.test.jsx`,
+`bar.js` → `bar.test.js` — rather than mirrored into a parallel tree.
+Colocating them means a file and its test move, rename, or get deleted
+together as one unit instead of two directory trees needing to be kept
+in sync by hand. See "Running the tests" below for the actual testing
+conventions this repo follows.
 
 ## Setup
 

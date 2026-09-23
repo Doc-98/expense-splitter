@@ -25,5 +25,6 @@ export async function signOutAndClearCaches() {
   groupStatsCache.clear()
   accountStatsCache.clear()
   avatarIconCache.clear()
-  await supabase.auth.signOut()
+  const { error } = await supabase.auth.signOut()
+  if (error) throw error
 }

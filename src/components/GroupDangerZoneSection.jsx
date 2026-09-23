@@ -33,7 +33,11 @@ export default function GroupDangerZoneSection() {
   const [deletingGroup, setDeletingGroup] = useState(false)
 
   const loadRole = useCallback(async () => {
-    setRole(await fetchGroupRole(supabase, groupId, user.id))
+    try {
+      setRole(await fetchGroupRole(supabase, groupId, user.id))
+    } catch (err) {
+      setError(err.message)
+    }
   }, [groupId, user.id])
 
   useEffect(() => {

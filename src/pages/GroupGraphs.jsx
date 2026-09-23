@@ -72,13 +72,14 @@ export default function GroupGraphs() {
     try {
       const start = getStatsWindowStart()
       setWindowStart(start)
-      const [{ data: groupRow }, categoriesData, recentBillsData] = await Promise.all([
+      const [{ data: groupRow, error: groupError }, categoriesData, recentBillsData] = await Promise.all([
         supabase.from('groups').select('name').eq('id', groupId).single(),
         fetchCategories(groupId),
         fetchAllRows(() =>
           supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).eq('group_id', groupId).gte('created_at', start.toISOString())
         ),
       ])
+      if (groupError) throw groupError
       setGroupName(groupRow?.name || '')
       setCategories(categoriesData)
       applyRawBills(recentBillsData)
