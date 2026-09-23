@@ -125,6 +125,7 @@ export default function GroupStats() {
             .order('created_at', { ascending: true })
         ),
       ])
+      if (groupResult.error) throw groupResult.error
       setMembers(membersData)
       setCategories(categoriesData)
       if (groupResult.data) {

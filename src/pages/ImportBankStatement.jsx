@@ -466,7 +466,15 @@ Date,Description,Amount,Category`
     setPendingImport(null)
     setUnresolvedHints([])
     setCategoryChoices({})
-    await processParsedTransactions(parsedTransactions, notices, existingHistoryPromise, combined)
+    try {
+      await processParsedTransactions(parsedTransactions, notices, existingHistoryPromise, combined)
+    } catch (err) {
+      // Without this, a network failure here (createDraft, chiefly) was an
+      // unhandled rejection — no error shown, Continue just silently did
+      // nothing and left the step already cleared above with nowhere to go.
+      setError(err.message)
+      setStep('landing')
+    }
   }
 
   function cancelCategoryMapping() {
@@ -643,7 +651,22 @@ Date,Description,Amount,Category`
     const { error: shareError } = await supabase
       .from('item_shares')
       .insert({ item_id: item.id, member_id: myParticipantId, shares: 1 })
-    if (shareError) throw shareError
+    if (shareError) {
+      // The bill and item already committed — left as-is, this becomes an
+      // orphaned bill with no item_shares, and retrying (entry.billId
+      // stays unset, since this throws before ever returning it) would
+      // create a second, separate bill instead of resuming the first.
+      // Deleting the bill now (cascades to its item, same as
+      // deleteBillForEntry below relies on) undoes exactly what this one
+      // failed call left half-done, so a retry starts clean instead of
+      // doubling up. Best-effort only — if this cleanup call itself also
+      // fails, the original error is still what's surfaced; a bill left
+      // needing manual cleanup is a strictly smaller problem than losing
+      // the reason this failed in the first place.
+      const { error: cleanupError } = await supabase.from('bills').delete().eq('id', bill.id)
+      if (cleanupError) console.error('Failed to clean up orphaned bill:', cleanupError.message)
+      throw shareError
+    }
 
     return { billId: bill.id, itemId: item.id }
   }

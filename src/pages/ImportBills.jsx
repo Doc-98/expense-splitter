@@ -90,14 +90,23 @@ export default function ImportBills() {
   // Turns every "create new guest" mapping choice into a real participant
   // ID, so both the review step below and the final import loop only ever
   // deal in actual IDs, never a Splitwise name that might still map to
-  // "new." Idempotent from the caller's point of view — called once, right
-  // when leaving the "match people" screen, and its result kept in state.
+  // "new." Called once, right when leaving the "match people" screen, and
+  // its result kept in state — genuinely idempotent to *retry* now too:
+  // builds on whatever resolvedIds already has from a previous attempt
+  // (rather than starting over from mapping every time) and commits each
+  // newly-created guest into that state as it happens, not just once at
+  // the very end. Without this, a network failure partway through left
+  // some "new" mappings with a real guest already created for them but no
+  // record of it — retrying (continueFromMatch's own catch re-enables the
+  // button for exactly this) would create a second, duplicate guest for
+  // each of those instead of picking up where it left off.
   async function resolveMapping() {
-    const ids = { ...mapping }
+    const ids = { ...mapping, ...resolvedIds }
     for (const name of parsed.peopleNames) {
-      if (mapping[name] === 'new') {
+      if (mapping[name] === 'new' && !resolvedIds?.[name]) {
         const created = await addGuest(groupId, name)
         ids[name] = created.id
+        setResolvedIds({ ...ids })
       }
     }
     setResolvedIds(ids)
@@ -334,10 +343,15 @@ export default function ImportBills() {
       insertedPayments.push(payment)
     }
 
-    try {
-      let imported = 0
-      const totalCount = parsed.expenses.length + parsed.transfers.length + parsed.needsReview.length
+    // Hoisted above the try block (rather than declared inside it) so the
+    // catch below can still report how far this actually got — otherwise
+    // a network failure partway through reported as a bare error message
+    // with no indication that some/most bills had already been imported
+    // successfully before it happened.
+    let imported = 0
+    const totalCount = parsed.expenses.length + parsed.transfers.length + parsed.needsReview.length
 
+    try {
       // The ordinary, automatically-resolved expenses — same shape and
       // logic this always had, just now sharing insertBill() with the
       // review-resolved path below instead of duplicating it. expense.shares
@@ -451,24 +465,40 @@ export default function ImportBills() {
       // this run's own transfers loop just inserted, since it ran before
       // this point.
       let balanceCheck = null
+      let balanceCheckError = null
       if (Object.keys(parsed.finalBalances).length > 0) {
-        const existingPayments = await fetchAllRows(() =>
-          supabase.from('payments').select('from_member, to_member, amount', { count: 'exact' }).eq('group_id', groupId)
-        )
-        balanceCheck = checkImportBalances({
-          bills: insertedBills,
-          items: insertedItems,
-          itemShares: insertedShares,
-          payments: existingPayments.map((p) => ({ from_user: p.from_member, to_user: p.to_member, amount: p.amount })),
-          finalBalances: parsed.finalBalances,
-          nameToId: ids,
-        })
+        // Its own try/catch, separate from the import loops above — every
+        // bill/payment has already committed successfully by this point;
+        // this is a supplementary sanity check on top of that, and a
+        // failure in just this fetch (not the import itself) shouldn't
+        // make a fully-successful import get reported to the user as a
+        // failure.
+        try {
+          const existingPayments = await fetchAllRows(() =>
+            supabase.from('payments').select('from_member, to_member, amount', { count: 'exact' }).eq('group_id', groupId)
+          )
+          balanceCheck = checkImportBalances({
+            bills: insertedBills,
+            items: insertedItems,
+            itemShares: insertedShares,
+            payments: existingPayments.map((p) => ({ from_user: p.from_member, to_user: p.to_member, amount: p.amount })),
+            finalBalances: parsed.finalBalances,
+            nameToId: ids,
+          })
+        } catch (checkErr) {
+          balanceCheckError = checkErr.message
+        }
       }
 
-      setResult({ imported, total: totalCount, balanceCheck })
+      setResult({ imported, total: totalCount, balanceCheck, balanceCheckError })
       setProgress(null)
     } catch (err) {
-      setError(err.message)
+      // imported/totalCount are hoisted above this try block specifically
+      // so this can say how far it actually got, rather than a bare error
+      // message with no indication some (or most) bills already made it in
+      // — a partial import isn't the same failure as an import that did
+      // nothing at all, and looks like it from a generic message alone.
+      setError(imported > 0 ? `Imported ${imported} of ${totalCount} before this failed: ${err.message}` : err.message)
       setProgress(null)
     } finally {
       setImporting(false)
@@ -665,6 +695,12 @@ export default function ImportBills() {
               : ' bills'}
             .
           </p>
+          {result.balanceCheckError && (
+            <p className="muted">
+              Every bill above imported successfully — only the balance sanity-check itself
+              couldn't run: {result.balanceCheckError}
+            </p>
+          )}
           {result.balanceCheck && (
             <>
               {result.balanceCheck.allMatch ? (

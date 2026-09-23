@@ -107,12 +107,16 @@ export default function GroupSubscriptionsSection() {
   const formRef = useRef(null)
 
   const load = useCallback(async () => {
-    const data = await fetchGroupSubscriptionsData(groupId)
-    setMembers(data.members)
-    setCategories(data.categories)
-    setTemplates(data.templates)
-    setIsPersonal(data.isPersonal)
-    groupSubscriptionsCache.set(groupId, data)
+    try {
+      const data = await fetchGroupSubscriptionsData(groupId)
+      setMembers(data.members)
+      setCategories(data.categories)
+      setTemplates(data.templates)
+      setIsPersonal(data.isPersonal)
+      groupSubscriptionsCache.set(groupId, data)
+    } catch (err) {
+      setError(err.message)
+    }
   }, [groupId])
 
   useEffect(() => {

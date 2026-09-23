@@ -109,12 +109,10 @@ export async function processDueRecurringBills(supabase, groupId, userId) {
       .single()
     if (currentError) throw currentError
 
-    const { dueDates, newNextDueDate } = computeDueOccurrences(
-      current.next_due_date,
-      template.frequency,
-      template.day_of_month,
-      today
-    )
+    // newNextDueDate isn't used here — each occurrence below advances
+    // next_due_date past itself individually, landing on this same final
+    // value by the time the loop finishes (see that comment).
+    const { dueDates } = computeDueOccurrences(current.next_due_date, template.frequency, template.day_of_month, today)
     if (dueDates.length === 0) continue
 
     for (const occurrence of dueDates) {
@@ -156,14 +154,26 @@ export async function processDueRecurringBills(supabase, groupId, userId) {
         if (sharesError) throw sharesError
       }
 
+      // Advanced past this one occurrence immediately, not just once after
+      // the whole backlog finishes — a template with several missed
+      // occurrences in a row otherwise risks regenerating the earlier ones
+      // as duplicates if a later one in the same run fails: next_due_date
+      // wouldn't have moved past any of them yet, so the next run would see
+      // the same already-inserted occurrences as still due. Advancing right
+      // after each one commits means a failure partway through only ever
+      // leaves the *remaining* occurrences to pick up next time. On the
+      // last occurrence this lands on the exact same date
+      // computeDueOccurrences' own newNextDueDate already would have, so
+      // there's nothing left to do once the loop finishes.
+      const nextOccurrenceDate = advanceDate(occurrence, template.frequency, template.day_of_month)
+      const { error: advanceError } = await supabase
+        .from('recurring_bills')
+        .update({ next_due_date: toDateString(nextOccurrenceDate) })
+        .eq('id', template.id)
+      if (advanceError) throw advanceError
+
       created++
     }
-
-    const { error: advanceError } = await supabase
-      .from('recurring_bills')
-      .update({ next_due_date: toDateString(newNextDueDate) })
-      .eq('id', template.id)
-    if (advanceError) throw advanceError
   }
 
   return { created }

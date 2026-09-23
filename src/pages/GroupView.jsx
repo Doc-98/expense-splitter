@@ -666,34 +666,48 @@ export default function GroupView() {
 
     if (createError) {
       setError(createError.message)
-    } else {
-      // An amount typed into the Amount field (only reachable once a title's
-      // been typed — see the form below) creates the bill with one item
-      // already in place (name mirrors the bill title, so it stays hidden
-      // behind BillView's simple one-item view) — same shape
-      // insertItemWithShares in BillView.jsx creates by hand, just done
-      // here so the bill lands there already filled in. Leaving it blank
-      // creates the bill with no items yet, same as this app has always
-      // done — it then expects more than one item, i.e. today's ordinary
-      // itemized bill.
-      const amount = parseAmount(newBillAmount)
-      if (amount) {
-        const { data: item } = await supabase
-          .from('items')
-          .insert({ bill_id: data.id, name: title, unit_price: amount, quantity: 1, total_price: amount })
-          .select()
-          .single()
-        const buyerIds = allMembers.filter((m) => m.active).map((m) => m.id)
-        if (item && buyerIds.length) {
-          await supabase
-            .from('item_shares')
-            .insert(buyerIds.map((id) => ({ item_id: item.id, member_id: id, shares: 1 })))
-        }
-      }
-      setNewBillTitle('')
-      setNewBillAmount('')
-      window.location.href = `/groups/${groupId}/bills/${data.id}`
+      return
     }
+    // An amount typed into the Amount field (only reachable once a title's
+    // been typed — see the form below) creates the bill with one item
+    // already in place (name mirrors the bill title, so it stays hidden
+    // behind BillView's simple one-item view) — same shape
+    // insertItemWithShares in BillView.jsx creates by hand, just done
+    // here so the bill lands there already filled in. Leaving it blank
+    // creates the bill with no items yet, same as this app has always
+    // done — it then expects more than one item, i.e. today's ordinary
+    // itemized bill.
+    const amount = parseAmount(newBillAmount)
+    if (amount) {
+      const { data: item, error: itemError } = await supabase
+        .from('items')
+        .insert({ bill_id: data.id, name: title, unit_price: amount, quantity: 1, total_price: amount })
+        .select()
+        .single()
+      if (itemError) {
+        // The bill itself was created fine — only this fast-path item
+        // failed to attach. Surfaced as an error and left un-navigated,
+        // rather than silently landing on what'd look like an empty,
+        // amount-less bill with no explanation for where the typed amount
+        // went — the bill's still reachable normally from the list below.
+        setError(`Bill created, but the amount didn't save: ${itemError.message}`)
+        return
+      }
+      const buyerIds = allMembers.filter((m) => m.active).map((m) => m.id)
+      if (item && buyerIds.length) {
+        const { error: sharesError } = await supabase
+          .from('item_shares')
+          .insert(buyerIds.map((id) => ({ item_id: item.id, member_id: id, shares: 1 })))
+        // Bill and item both exist and are visible either way — a failure
+        // here just leaves that one item unassigned, fixable directly from
+        // its own row (see BillView's toggleBuyer), not worth blocking the
+        // navigation below over.
+        if (sharesError) console.error('Failed to assign new bill item to members:', sharesError.message)
+      }
+    }
+    setNewBillTitle('')
+    setNewBillAmount('')
+    window.location.href = `/groups/${groupId}/bills/${data.id}`
   }
 
   async function deleteBill(bill) {

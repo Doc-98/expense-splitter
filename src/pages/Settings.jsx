@@ -87,8 +87,14 @@ function ProfileSection() {
   useEffect(() => {
     let cancelled = false
     async function loadAvatar() {
-      const { data } = await supabase.from('profiles').select('default_avatar_icon').eq('id', user.id).single()
+      const { data, error } = await supabase.from('profiles').select('default_avatar_icon').eq('id', user.id).single()
       if (cancelled) return
+      if (error) {
+        // Leaves the cache-seeded avatarIcon alone rather than overwriting
+        // a previously-good icon with null on a transient network failure.
+        console.error('Failed to load avatar:', error.message)
+        return
+      }
       const icon = data?.default_avatar_icon || null
       setAvatarIcon(icon)
       avatarIconCache.set(ACCOUNT_AVATAR_ICON_CACHE_KEY, icon)
@@ -260,6 +266,7 @@ export default function Settings() {
   const [expanded, setExpanded] = useState(false)
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState(null)
 
   const activeSection = SECTIONS.find((s) => s.id === activeId)
   const Content = CONTENT[activeId]
@@ -267,11 +274,20 @@ export default function Settings() {
   async function doSignOut() {
     if (signingOut) return
     setSigningOut(true)
-    await signOutAndClearCaches()
-    // No navigate() here — the auth-state listener in AuthContext flips
-    // `session` to null the moment this resolves, and RequireAuth (see
-    // App.jsx) redirects to /login on its own the same way it does for any
-    // other session loss.
+    setSignOutError(null)
+    try {
+      await signOutAndClearCaches()
+      // No navigate() here — the auth-state listener in AuthContext flips
+      // `session` to null the moment this resolves, and RequireAuth (see
+      // App.jsx) redirects to /login on its own the same way it does for any
+      // other session loss.
+    } catch (err) {
+      // Without this, a network failure left signingOut stuck true forever
+      // — the confirm sheet's own Cancel button is gated on !signingOut, so
+      // there was no way out of "Signing out…" short of reloading the page.
+      setSigningOut(false)
+      setSignOutError(err.message || 'Could not sign out — check your connection and try again.')
+    }
   }
 
   return (
@@ -295,7 +311,10 @@ export default function Settings() {
           sections={SECTIONS}
           activeId={activeId}
           onSelect={setActiveId}
-          onSignOut={() => setConfirmingSignOut(true)}
+          onSignOut={() => {
+            setSignOutError(null)
+            setConfirmingSignOut(true)
+          }}
         />
         <div className="settings-content">
           {/* Only GuideSection actually reads `compact` (its own second
@@ -309,7 +328,7 @@ export default function Settings() {
       {confirmingSignOut && (
         <ConfirmSheet
           title="Sign out of Spesa?"
-          body="You'll need to sign back in to see your groups again."
+          body={signOutError || "You'll need to sign back in to see your groups again."}
           confirmLabel={signingOut ? 'Signing out…' : 'Sign out'}
           onConfirm={doSignOut}
           onCancel={() => !signingOut && setConfirmingSignOut(false)}

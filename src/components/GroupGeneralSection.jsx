@@ -42,18 +42,34 @@ export default function GroupGeneralSection() {
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
 
   const loadGroup = useCallback(async () => {
-    const { data } = await supabase.from('groups').select('name').eq('id', groupId).single()
+    const { data, error: loadError } = await supabase.from('groups').select('name').eq('id', groupId).single()
+    if (loadError) {
+      // Leaves name/nameDraft alone rather than blanking a real group name
+      // to empty string on a transient network failure — that would read
+      // as "this group got renamed to nothing" rather than "the fetch
+      // failed."
+      setError(loadError.message)
+      return
+    }
     setName(data?.name || '')
     setNameDraft(data?.name || '')
   }, [groupId])
 
   const loadMember = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error: loadError } = await supabase
       .from('group_members')
       .select('id, avatar_icon')
       .eq('group_id', groupId)
       .eq('user_id', user.id)
       .single()
+    if (loadError) {
+      // Leaves memberId/avatarIcon (and the cache) alone rather than
+      // wiping a previously-good state on a transient network failure —
+      // saveAvatarIcon's own `if (!memberId) return` guard would otherwise
+      // silently make the picker do nothing with no error shown.
+      setAvatarError(loadError.message)
+      return
+    }
     setMemberId(data?.id || null)
     const icon = data?.avatar_icon || null
     setAvatarIcon(icon)
