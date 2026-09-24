@@ -17,4 +17,5 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
   'Fixed a bug where deleting a bill right after scanning a receipt into it could leave it stuck — undeletable, then showing a confusing raw error when reopened. Scanned items now save in one go instead of one at a time, and a bill or group that turns out to already be gone by the time you open it now sends you back with a plain notice instead of an error',
+  "A scan that fails now says why, in plain language — \"Gemini is overloaded right now, try again in a moment\" instead of the provider's own raw error text",
 ]

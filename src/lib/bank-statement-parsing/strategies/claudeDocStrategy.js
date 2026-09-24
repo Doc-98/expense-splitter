@@ -1,5 +1,6 @@
 import { getReceiptSettings } from '../../receiptSettings'
 import { buildBankStatementPrompt, extractBankTransactions } from '../extractionPrompt'
+import { describeProviderError, describeNetworkError } from '../../aiProviderError'
 
 const DEFAULT_MODEL = 'claude-sonnet-5'
 const ANTHROPIC_VERSION = '2023-06-01'
@@ -12,39 +13,44 @@ const ANTHROPIC_VERSION = '2023-06-01'
 // block instead. Same reasoning claudeText.js already gives for not
 // sharing with it either.
 async function callClaude(pdfBase64, apiKey, model) {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': ANTHROPIC_VERSION,
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model,
-      // A full statement's worth of transactions is a much longer JSON
-      // response than a receipt's handful of items — 2000 (what receipt
-      // scanning uses) would truncate a busy month partway through. Even
-      // 8000 turned out tight for a genuinely busy statement (a full
-      // month of daily-card-use transactions can run well past that many
-      // tokens of JSON), so this is set with real headroom rather than
-      // just past the common case.
-      max_tokens: 16000,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 } },
-            { type: 'text', text: buildBankStatementPrompt() },
-          ],
-        },
-      ],
-    }),
-  })
+  let response
+  try {
+    response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': ANTHROPIC_VERSION,
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model,
+        // A full statement's worth of transactions is a much longer JSON
+        // response than a receipt's handful of items — 2000 (what receipt
+        // scanning uses) would truncate a busy month partway through. Even
+        // 8000 turned out tight for a genuinely busy statement (a full
+        // month of daily-card-use transactions can run well past that many
+        // tokens of JSON), so this is set with real headroom rather than
+        // just past the common case.
+        max_tokens: 16000,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 } },
+              { type: 'text', text: buildBankStatementPrompt() },
+            ],
+          },
+        ],
+      }),
+    })
+  } catch {
+    throw new Error(describeNetworkError('Claude'))
+  }
 
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`Claude API error (${response.status}): ${errText}`)
+    throw new Error(describeProviderError('Claude', response.status, errText))
   }
 
   const data = await response.json()

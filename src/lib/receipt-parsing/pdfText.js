@@ -27,7 +27,22 @@ async function loadPdfjs() {
 async function loadFirstPage(base64) {
   const pdfjsLib = await loadPdfjs()
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-  const doc = await pdfjsLib.getDocument({ data: bytes }).promise
+  let doc
+  try {
+    doc = await pdfjsLib.getDocument({ data: bytes }).promise
+  } catch (err) {
+    // pdf.js throws its own typed exceptions here (PasswordException,
+    // InvalidPDFException, …) whose raw .message ranges from readable
+    // ("Invalid PDF structure.") to internal-sounding — the two real
+    // cases someone's actually likely to hit (a password-protected export,
+    // or a file that isn't really a PDF despite its extension) get a
+    // specific, actionable message instead of whatever pdf.js happened to
+    // say.
+    if (err?.name === 'PasswordException') {
+      throw new Error('This PDF is password-protected — remove the password and try again, or take a photo of it instead.')
+    }
+    throw new Error("Couldn't read this PDF — it may be corrupted or not a real PDF file. Try a photo instead.")
+  }
   return doc.getPage(1)
 }
 

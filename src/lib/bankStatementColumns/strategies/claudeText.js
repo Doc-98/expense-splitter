@@ -1,5 +1,6 @@
 import { getReceiptSettings } from '../../receiptSettings'
 import { buildColumnPrompt, parseColumnResponse } from '../columnPrompt'
+import { describeProviderError, describeNetworkError } from '../../aiProviderError'
 
 const DEFAULT_MODEL = 'claude-sonnet-5'
 const ANTHROPIC_VERSION = '2023-06-01'
@@ -10,24 +11,29 @@ const ANTHROPIC_VERSION = '2023-06-01'
 // (a plain text prompt, no image or document) rather than reshaping a
 // strategy another feature already depends on.
 async function callClaudeText(prompt, apiKey, model) {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': ANTHROPIC_VERSION,
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
+  let response
+  try {
+    response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': ANTHROPIC_VERSION,
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    })
+  } catch {
+    throw new Error(describeNetworkError('Claude'))
+  }
 
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`Claude API error (${response.status}): ${errText}`)
+    throw new Error(describeProviderError('Claude', response.status, errText))
   }
 
   const data = await response.json()
