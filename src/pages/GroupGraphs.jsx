@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { fetchCategories } from '../lib/categories'
 import { fetchAllRows } from '../lib/fetchAllRows'
@@ -13,6 +13,7 @@ import GraphsPeriodSelector from '../components/GraphsPeriodSelector'
 import LineChart from '../components/LineChart'
 import PieChart from '../components/PieChart'
 import BackButton from '../components/BackButton'
+import { isNotFoundError } from '../lib/notFound'
 
 // tab -> the chart's own point granularity — a whole calendar month has
 // too many days to plot meaningfully next to a whole year's worth of
@@ -30,6 +31,7 @@ function rangeForTab(tab, offset) {
 
 export default function GroupGraphs() {
   const { groupId } = useParams()
+  const navigate = useNavigate()
   const { format } = useCurrency()
 
   const [groupName, setGroupName] = useState('')
@@ -79,6 +81,10 @@ export default function GroupGraphs() {
           supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).eq('group_id', groupId).gte('created_at', start.toISOString())
         ),
       ])
+      if (isNotFoundError(groupError)) {
+        navigate('/', { state: { notice: 'This group is no longer available.' } })
+        return
+      }
       if (groupError) throw groupError
       setGroupName(groupRow?.name || '')
       setCategories(categoriesData)
@@ -106,7 +112,7 @@ export default function GroupGraphs() {
       setError(loadErrorMessage(err))
       setLoading(false)
     }
-  }, [groupId])
+  }, [groupId, navigate])
 
   useEffect(() => {
     load()

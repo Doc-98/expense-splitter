@@ -19,6 +19,7 @@ import { useCurrency } from '../context/CurrencyContext'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
 import AvatarGlyph from '../components/AvatarGlyph'
 import { getGroupViewPreferences, avatarSizeSpec } from '../lib/groupViewPreferences'
+import { isNotFoundError } from '../lib/notFound'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
@@ -114,12 +115,23 @@ export default function BillView() {
       .eq('id', billId)
       .single()
     if (loadError) {
+      // This fires from the bills-table realtime subscription below, so a
+      // 0-row result specifically means the bill was just deleted — by you
+      // in another tab, or by someone else in the group — while this page
+      // was still open on it. Bouncing back to the group rather than
+      // leaving this page sitting on a bill that no longer exists (its
+      // note/payer fields still editable, an item list that'll only ever
+      // come back empty).
+      if (isNotFoundError(loadError)) {
+        navigate(`/groups/${groupId}`, { state: { notice: 'This bill was deleted.' } })
+        return
+      }
       setError(loadError.message)
       return
     }
     setBill(billData)
     setBillPayers(billData?.bill_payers || [])
-  }, [billId])
+  }, [billId, groupId, navigate])
 
   useEffect(() => {
     async function loadBillAndMembers() {
@@ -145,6 +157,21 @@ export default function BillView() {
           fetchCategories(groupId),
           supabase.from('groups').select('is_personal').eq('id', groupId).single(),
         ])
+        // A bill (or, far more rarely, the group itself) that's already
+        // gone by the time this page loads — a stale link, a delete that
+        // landed just before this one opened it, someone else in the group
+        // deleting it — used to surface PostgREST's own raw "JSON object
+        // requested, multiple (or no) rows returned" wording here instead
+        // of anything a person could make sense of. Bounce back instead,
+        // same as the realtime path in loadBill above.
+        if (isNotFoundError(billResult.error)) {
+          navigate(`/groups/${groupId}`, { state: { notice: 'This bill was deleted.' } })
+          return
+        }
+        if (isNotFoundError(groupResult.error)) {
+          navigate('/', { state: { notice: "This group is no longer available." } })
+          return
+        }
         if (billResult.error) throw billResult.error
         if (groupResult.error) throw groupResult.error
         const billData = billResult.data
@@ -183,7 +210,7 @@ export default function BillView() {
       .subscribe()
 
     return () => supabase.removeChannel(channel)
-  }, [billId, groupId, loadItems, loadBill])
+  }, [billId, groupId, loadItems, loadBill, navigate])
 
   const total = items.reduce((sum, it) => sum + Number(it.total_price), 0)
   const isMultiPayer = billPayers.length > 0
@@ -455,7 +482,16 @@ export default function BillView() {
     // just covers the odd capitalization drift the same way
     // parseClassifyResponse() does for the bill-categorization wizard.
     const categoryIdByName = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]))
-    for (const p of parsedItems) {
+    // One bulk insert for every item, then one bulk insert for every item's
+    // shares — not a sequential per-item await loop (that used to mean up
+    // to two round trips *per scanned item*, so a 20+ item receipt could
+    // take several seconds to fully save, wide open the whole time to
+    // navigating away or deleting the bill mid-save; see BillView's own
+    // not-found handling below for what used to happen when that race was
+    // lost). Every scanned item shares the exact same defaultBuyerIds, so
+    // batching doesn't change what gets assigned to whom, just how many
+    // requests it takes to get there.
+    const itemRows = parsedItems.map((p) => {
       const unitPrice = Number(p.unit_price) || 0
       const quantity = Number(p.quantity) || 1
       const matchedCategoryId = typeof p.category === 'string' ? categoryIdByName.get(p.category.toLowerCase()) : null
@@ -467,7 +503,34 @@ export default function BillView() {
       // thing. Only when the bill has no category either does the item end
       // up genuinely uncategorized, same as before.
       const categoryId = matchedCategoryId || bill?.category_id || null
-      await insertItemWithShares(p.name || 'Item', unitPrice, quantity, defaultBuyerIds, categoryId)
+      return {
+        bill_id: billId,
+        name: p.name || 'Item',
+        unit_price: unitPrice,
+        quantity,
+        total_price: Math.round(unitPrice * quantity * 100) / 100,
+        category_id: categoryId,
+      }
+    })
+    if (!itemRows.length) return
+
+    const { data: inserted, error: insertError } = await supabase.from('items').insert(itemRows).select()
+    if (insertError) {
+      setError(insertError.message)
+      return
+    }
+
+    if (defaultBuyerIds.length) {
+      const shareRows = (inserted || []).flatMap((item) =>
+        defaultBuyerIds.map((id) => ({ item_id: item.id, member_id: id, shares: 1 }))
+      )
+      // The items themselves exist either way — a failure here just leaves
+      // them unassigned, fixable directly from each row (toggleBuyer
+      // below), not worth losing the scanned items over.
+      if (shareRows.length) {
+        const { error: sharesError } = await supabase.from('item_shares').insert(shareRows)
+        if (sharesError) setError(sharesError.message)
+      }
     }
     loadItems()
   }

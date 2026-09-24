@@ -6,6 +6,7 @@ import { fetchAllGroupMembers } from '../lib/members'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { parseNumber } from '../lib/parseNumber'
 import { getGroupViewPreferences } from '../lib/groupViewPreferences'
+import { isNotFoundError } from '../lib/notFound'
 import AvatarGlyph from '../components/AvatarGlyph'
 import BackButton from '../components/BackButton'
 
@@ -33,11 +34,18 @@ export default function RecordPayment() {
   const loadGroup = useCallback(async () => {
     const { data, error: groupError } = await supabase.from('groups').select('*').eq('id', groupId).single()
     if (groupError) {
+      // Already gone (deleted from its own Danger Zone, elsewhere, while
+      // this page was open) — bounce back rather than leave this form
+      // sitting open against a group that no longer exists.
+      if (isNotFoundError(groupError)) {
+        navigate('/', { state: { notice: 'This group is no longer available.' } })
+        return
+      }
       setError(`Couldn't load this group: ${loadErrorMessage(groupError)}`)
       return
     }
     setGroup(data)
-  }, [groupId])
+  }, [groupId, navigate])
 
   const loadMembers = useCallback(async () => {
     try {

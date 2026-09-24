@@ -16,11 +16,5 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
-  "Fixed a group's balance sometimes flashing a wildly wrong number for a moment before correcting itself — it's now computed on the server, from the group's complete history, every time",
-  "Fixed several places where a network hiccup could leave the app stuck instead of showing an error you could retry — Sign Out getting stuck on \"Signing out…\" forever was the most visible one",
-  'Free OCR can now read a PDF receipt directly — no AI key needed. Reads a digital PDF\'s real text straight away, or falls back to scanning it like a photo if it turns out to be a scan',
-  'Budgets can now be weekly or monthly (Settings > Budgets) — existing amounts adjust automatically when you switch',
-  'Settings > Layout: tap a setting to see a live preview of what it actually changes, right there on the page',
-  'Budgets position on Your Stats gained a third option, Hidden, alongside Top and Bottom',
-  "Fixed Settle up sometimes silently hiding an error about the group itself failing to load, if your balances happened to finish loading right after",
+  'Fixed a bug where deleting a bill right after scanning a receipt into it could leave it stuck — undeletable, then showing a confusing raw error when reopened. Scanned items now save in one go instead of one at a time, and a bill or group that turns out to already be gone by the time you open it now sends you back with a plain notice instead of an error',
 ]

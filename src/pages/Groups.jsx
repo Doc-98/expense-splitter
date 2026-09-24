@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import Pagination from '../components/Pagination'
@@ -17,6 +17,7 @@ const GROUPS_PAGE_SIZE = 10
 export default function Groups() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   // Seeded straight from groupsListCache when there's anything there — a
   // refresh (or a revisit to "/" later this session) then has real data to
   // paint from its very first render, same as GroupView.jsx/GroupStats.jsx
@@ -28,6 +29,15 @@ export default function Groups() {
   const [newGroupName, setNewGroupName] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState(null)
+  // Carried over router state from a page that just bounced back here
+  // because the group it was showing had already been deleted — see
+  // BillView's not-found handling. Read once, lazily, then cleared from
+  // history immediately below so refreshing or going back doesn't
+  // resurface it.
+  const [notice] = useState(() => location.state?.notice || null)
+  useEffect(() => {
+    if (location.state?.notice) navigate(location.pathname, { replace: true, state: {} })
+  }, [location.state, location.pathname, navigate])
   // Not a real view of its own — clicking "Personal" fetches (or, the very
   // first time, silently creates) the one-per-account personal group via
   // get_or_create_personal_group() and drops straight into it, the same
@@ -196,6 +206,7 @@ export default function Groups() {
         </button>
       </div>
 
+      {notice && <p className="status-success">{notice}</p>}
       {error && <p className="status-error">{error}</p>}
 
       {groups?.length === 0 && (

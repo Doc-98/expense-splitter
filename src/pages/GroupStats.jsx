@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
@@ -20,6 +20,7 @@ import ShareButton from '../components/ShareButton'
 import { PrintableGroupStatsRecap } from '../components/PrintableRecap'
 import BackButton from '../components/BackButton'
 import { LineChartIcon } from '../components/icons'
+import { isNotFoundError } from '../lib/notFound'
 
 function monthKey(dateStr) {
   const d = new Date(dateStr)
@@ -34,6 +35,7 @@ function monthLabel(key) {
 
 export default function GroupStats() {
   const { groupId } = useParams()
+  const navigate = useNavigate()
   const { format } = useCurrency()
 
   // Only ever used for the printable/text recap's own title ("Stats —
@@ -125,6 +127,13 @@ export default function GroupStats() {
             .order('created_at', { ascending: true })
         ),
       ])
+      // Already gone (deleted elsewhere while this page was open) — bounce
+      // back rather than sink the rest of this load into a page with
+      // nothing left to show stats for.
+      if (isNotFoundError(groupResult.error)) {
+        navigate('/', { state: { notice: 'This group is no longer available.' } })
+        return
+      }
       if (groupResult.error) throw groupResult.error
       setMembers(membersData)
       setCategories(categoriesData)
@@ -157,7 +166,7 @@ export default function GroupStats() {
     } catch (err) {
       setError(loadErrorMessage(err))
     }
-  }, [groupId])
+  }, [groupId, navigate])
 
   // Same cache-then-revalidate pattern as GroupView.jsx: paint instantly
   // from whatever this group's stats looked like last time this page was
