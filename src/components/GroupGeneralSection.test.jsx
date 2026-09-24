@@ -11,19 +11,21 @@ import { avatarIconCache } from '../lib/avatarIconCache'
 // hoists its *creation* right along with the mocks that reference it,
 // which is what lets `mockFrom` below be both configured per-test and
 // handed to the mocked supabase client.
-const { mockFrom } = vi.hoisted(() => ({ mockFrom: vi.fn() }))
+const { mockFrom, mockNavigate } = vi.hoisted(() => ({ mockFrom: vi.fn(), mockNavigate: vi.fn() }))
 
 vi.mock('../supabaseClient', () => ({
   supabase: { from: mockFrom },
 }))
 
-// This component only ever calls useParams() (for groupId) and useAuth()
-// (for user.id/displayName) — neither a real Router nor a real AuthProvider
-// is needed (AuthProvider itself talks to supabase.auth on mount, which
-// would just be more to mock for no benefit here), so both are replaced
-// outright rather than wrapped.
+// This component only ever calls useParams() (for groupId), useNavigate()
+// (to bounce back if the group's gone — see loadGroup) and useAuth() (for
+// user.id/displayName) — neither a real Router nor a real AuthProvider is
+// needed (AuthProvider itself talks to supabase.auth on mount, which would
+// just be more to mock for no benefit here), so both are replaced outright
+// rather than wrapped.
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ groupId: 'group-1' }),
+  useNavigate: () => mockNavigate,
 }))
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' }, displayName: 'Marco' }),
@@ -61,6 +63,7 @@ beforeEach(() => {
   membersSelectResult = { data: { id: 'member-1', avatar_icon: null } }
   membersUpdateResult = { error: null }
   mockFrom.mockImplementation((table) => (table === 'groups' ? groupsTable() : membersTable()))
+  mockNavigate.mockReset()
   // A previous test's saveAvatarIcon success would otherwise leave this
   // group's icon cached in the shared, module-level avatarIconCache —
   // GroupGeneralSection seeds its initial avatarIcon state straight from
@@ -73,6 +76,17 @@ describe('GroupGeneralSection', () => {
   it('loads and shows the current group name once the fetch resolves', async () => {
     render(<GroupGeneralSection />)
     expect(await screen.findByPlaceholderText('Group name')).toHaveValue('Beach Trip')
+  })
+
+  it('bounces back to the groups list, with a notice, when the group has been deleted', async () => {
+    groupsSelectResult = {
+      data: null,
+      error: { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' },
+    }
+    render(<GroupGeneralSection />)
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('/', { state: { notice: 'This group is no longer available.' } })
+    )
   })
 
   it('keeps Save disabled until the name actually changes', async () => {

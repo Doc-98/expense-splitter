@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { fetchGroupRole } from '../lib/groupRole'
+import { isNotFoundError } from '../lib/notFound'
 import { fetchCategories } from '../lib/categories'
 import { snapshotAndRemoveMember } from '../lib/leaveGroup'
 import ConfirmSheet from './ConfirmSheet'
@@ -36,9 +37,16 @@ export default function GroupDangerZoneSection() {
     try {
       setRole(await fetchGroupRole(supabase, groupId, user.id))
     } catch (err) {
+      // Already gone — bounce back rather than show Danger Zone actions
+      // (Leave, Delete all bills, Delete group) for a group that no longer
+      // exists to act on.
+      if (isNotFoundError(err)) {
+        navigate('/', { state: { notice: 'This group is no longer available.' } })
+        return
+      }
       setError(err.message)
     }
-  }, [groupId, user.id])
+  }, [groupId, user.id, navigate])
 
   useEffect(() => {
     loadRole()

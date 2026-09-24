@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import GroupDangerZoneSection from './GroupDangerZoneSection'
 
@@ -69,6 +69,17 @@ describe('GroupDangerZoneSection', () => {
     mockFetchGroupRole.mockReturnValue(new Promise(() => {})) // never resolves this test
     const { container } = render(<GroupDangerZoneSection />)
     expect(container).toBeEmptyDOMElement()
+  })
+
+  it('bounces back to the groups list, with a notice, when the group has been deleted', async () => {
+    mockFetchGroupRole.mockRejectedValue({
+      code: 'PGRST116',
+      message: 'JSON object requested, multiple (or no) rows returned',
+    })
+    render(<GroupDangerZoneSection />)
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('/', { state: { notice: 'This group is no longer available.' } })
+    )
   })
 
   it('shows all three actions for a group admin', async () => {
