@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
@@ -8,6 +8,7 @@ import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupItemsByDate } from '../lib/dateGroups'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
+import { isNotFoundError } from '../lib/notFound'
 import BackButton from '../components/BackButton'
 import Pagination from '../components/Pagination'
 
@@ -23,6 +24,7 @@ const PAGE_SIZE = 15
 // "You lent"/"You borrowed" already uses — instead of a bill's own note.
 export default function History() {
   const { groupId } = useParams()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { format } = useCurrency()
 
@@ -38,11 +40,15 @@ export default function History() {
   const loadGroup = useCallback(async () => {
     const { data, error: groupError } = await supabase.from('groups').select('*').eq('id', groupId).single()
     if (groupError) {
+      if (isNotFoundError(groupError)) {
+        navigate('/', { state: { notice: 'This group is no longer available.' } })
+        return
+      }
       setError(`Couldn't load this group: ${loadErrorMessage(groupError)}`)
       return
     }
     setGroup(data)
-  }, [groupId])
+  }, [groupId, navigate])
 
   const loadMembers = useCallback(async () => {
     try {

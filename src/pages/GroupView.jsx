@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { fetchAllGroupMembers } from '../lib/members'
@@ -7,6 +7,7 @@ import { fetchCategories } from '../lib/categories'
 import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
+import { isNotFoundError } from '../lib/notFound'
 import { GROUP_BILLS_SELECT, computeGroupViewSnapshot } from '../lib/groupViewSnapshot'
 import { fetchGroupSettlement } from '../lib/groupBalances'
 import { getStatsWindowStart } from '../lib/timeRange'
@@ -40,6 +41,7 @@ const BILLS_PAGE_SIZE = 15
 export default function GroupView() {
   const { groupId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAuth()
   const { format } = useCurrency()
   const { showQuickStats, showLentBorrowedStatus, stickyFilters, highlightFullBalanceLine } = getGroupViewPreferences()
@@ -87,6 +89,16 @@ export default function GroupView() {
   const [weekTotal, setWeekTotal] = useState(0)
   const [monthTotal, setMonthTotal] = useState(0)
   const [error, setError] = useState(null)
+  // Carried over router state from a page that just bounced back here
+  // because whatever it was showing (a bill, in practice) had already been
+  // deleted — see BillView's own not-found handling. Read once, lazily, so
+  // this only ever reflects the navigation that just landed here, then
+  // cleared from history immediately below so refreshing or going back
+  // doesn't resurface it.
+  const [notice] = useState(() => location.state?.notice || null)
+  useEffect(() => {
+    if (location.state?.notice) navigate(location.pathname, { replace: true, state: {} })
+  }, [location.state, location.pathname, navigate])
   // Which bill (if any) is mid-rename via the ⋮ menu's own "Rename" —
   // same two-state shape (an id + a draft string) as GroupCategoriesSection/
   // GroupGuestsSection's own editing*Id/editing*Name pairs, and the same
@@ -227,13 +239,23 @@ export default function GroupView() {
   const loadGroup = useCallback(async () => {
     try {
       const { data, error: groupError } = await supabase.from('groups').select('*').eq('id', groupId).single()
+      // A group that's already gone by the time this loads — deleted from
+      // its own Danger Zone by an admin, in another tab or by someone else
+      // in it, while this page was still open — used to just sit here
+      // showing PostgREST's own raw "no rows" wording forever, on a page
+      // with nothing left to load. Bounce back to the groups list instead,
+      // same as BillView does for a deleted bill.
+      if (isNotFoundError(groupError)) {
+        navigate('/', { state: { notice: 'This group is no longer available.' } })
+        return
+      }
       if (groupError) throw groupError
       setGroup(data)
       setError(null)
     } catch (err) {
       setError(`Couldn't load this group: ${loadErrorMessage(err)}`)
     }
-  }, [groupId])
+  }, [groupId, navigate])
 
   const loadMembers = useCallback(async () => {
     try {
@@ -942,6 +964,7 @@ export default function GroupView() {
         </Link>
       </header>
 
+      {notice && <p className="status-success">{notice}</p>}
       {error && <p className="status-error">{error}</p>}
 
       {bills && bills.length > 0 && searchOpen && (

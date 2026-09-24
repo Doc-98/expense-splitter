@@ -1,6 +1,7 @@
 import { getReceiptSettings } from '../../receiptSettings'
 import { buildExtractionPrompt, extractJsonItems } from '../extractionPrompt'
 import { mediaKindFor } from '../mediaKind'
+import { describeProviderError } from '../../aiProviderError'
 
 const DEFAULT_URL = 'http://localhost:11434'
 const DEFAULT_MODEL = 'qwen2.5vl'
@@ -31,7 +32,7 @@ async function callOllama(imageBase64, mediaType, baseUrl, model, categoryNames)
 
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`Ollama error (${response.status}): ${errText}`)
+    throw new Error(describeProviderError('Ollama', response.status, errText))
   }
 
   const data = await response.json()

@@ -7,16 +7,23 @@ import { groupViewCache } from '../lib/groupViewCache'
 
 // Same vi.hoisted() reasoning as every other Supabase-coupled suite —
 // vi.mock() factories are hoisted above ordinary variable declarations.
-const { mockFrom, mockRpc, mockPaymentsInsert, mockFetchAllGroupMembers, mockChannel, mockRemoveChannel } = vi.hoisted(
-  () => ({
-    mockFrom: vi.fn(),
-    mockRpc: vi.fn(),
-    mockPaymentsInsert: vi.fn(),
-    mockFetchAllGroupMembers: vi.fn(),
-    mockChannel: vi.fn(),
-    mockRemoveChannel: vi.fn(),
-  })
-)
+const {
+  mockFrom,
+  mockRpc,
+  mockPaymentsInsert,
+  mockFetchAllGroupMembers,
+  mockChannel,
+  mockRemoveChannel,
+  mockNavigate,
+} = vi.hoisted(() => ({
+  mockFrom: vi.fn(),
+  mockRpc: vi.fn(),
+  mockPaymentsInsert: vi.fn(),
+  mockFetchAllGroupMembers: vi.fn(),
+  mockChannel: vi.fn(),
+  mockRemoveChannel: vi.fn(),
+  mockNavigate: vi.fn(),
+}))
 
 // This page combines a query chain it builds itself (groups, plus the
 // get_group_balances RPC — see groupsTable()/rpcResult below) with a lib
@@ -33,6 +40,7 @@ vi.mock('../lib/members', () => ({ fetchAllGroupMembers: mockFetchAllGroupMember
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'user-me' } }) }))
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ groupId: 'group-1' }),
+  useNavigate: () => mockNavigate,
   Link: ({ to, children, ...props }) => (
     <a href={to} {...props}>
       {children}
@@ -114,6 +122,7 @@ beforeEach(() => {
   mockFetchAllGroupMembers.mockReset().mockResolvedValue(MEMBERS)
   mockChannel.mockReset().mockImplementation(() => makeChannel())
   mockRemoveChannel.mockReset()
+  mockNavigate.mockReset()
   // This page seeds its initial group/members/settlement state straight
   // from groupViewCache (the same cache GroupView.jsx itself paints
   // from) — cleared here so a previous test's load() can't leak into the
@@ -148,6 +157,17 @@ describe('SettleUp — loading', () => {
     groupsSelectResult = { data: null, error: { message: 'network error' } }
     renderPage()
     expect(await screen.findByText(/Couldn't load this group: network error/)).toBeInTheDocument()
+  })
+
+  it('bounces back to the groups list, with a notice, when the group has been deleted', async () => {
+    groupsSelectResult = {
+      data: null,
+      error: { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' },
+    }
+    renderPage()
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('/', { state: { notice: 'This group is no longer available.' } })
+    )
   })
 
   it("shows an error when balances can't be loaded", async () => {

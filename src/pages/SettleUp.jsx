@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
@@ -7,6 +7,7 @@ import { fetchAllGroupMembers } from '../lib/members'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
 import { fetchGroupSettlement } from '../lib/groupBalances'
+import { isNotFoundError } from '../lib/notFound'
 import BackButton from '../components/BackButton'
 
 // Every debt in the group, full stop — GroupView.jsx's own balance summary
@@ -21,6 +22,7 @@ import BackButton from '../components/BackButton'
 // debts that are actually yours.
 export default function SettleUp() {
   const { groupId } = useParams()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { format } = useCurrency()
 
@@ -47,12 +49,16 @@ export default function SettleUp() {
   const loadGroup = useCallback(async () => {
     const { data, error: groupErr } = await supabase.from('groups').select('*').eq('id', groupId).single()
     if (groupErr) {
+      if (isNotFoundError(groupErr)) {
+        navigate('/', { state: { notice: 'This group is no longer available.' } })
+        return
+      }
       setGroupError(`Couldn't load this group: ${loadErrorMessage(groupErr)}`)
       return
     }
     setGroupError(null)
     setGroup(data)
-  }, [groupId])
+  }, [groupId, navigate])
 
   // The group's simplified debt list, computed server-side (see
   // fetchGroupSettlement/get_group_balances) — same source GroupView.jsx's

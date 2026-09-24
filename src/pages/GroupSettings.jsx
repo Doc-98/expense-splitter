@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import GroupGeneralSection from '../components/GroupGeneralSection'
 import GroupMembersSection from '../components/GroupMembersSection'
@@ -20,6 +20,7 @@ import {
   ImportIcon,
   DangerIcon,
 } from '../components/icons'
+import { isNotFoundError } from '../lib/notFound'
 
 // Same left-rail shell as the account Settings page (SettingsNav.jsx) —
 // this is Group Settings' turn to get it, replacing what used to be one
@@ -51,6 +52,7 @@ const CONTENT = {
 
 export default function GroupSettings() {
   const { groupId } = useParams()
+  const navigate = useNavigate()
   const [activeId, setActiveId] = useState('general')
   const [expanded, setExpanded] = useState(false)
   // Defaults to false (show every tab) rather than null/"loading" — a
@@ -62,6 +64,15 @@ export default function GroupSettings() {
   const loadIsPersonal = useCallback(async () => {
     const { data, error } = await supabase.from('groups').select('is_personal').eq('id', groupId).single()
     if (error) {
+      // Already gone (deleted from its own Danger Zone in another tab, or
+      // by someone else in it, before this page ever got a chance to
+      // render) — bounce back rather than let every section underneath
+      // independently discover the same thing and show its own inline
+      // error.
+      if (isNotFoundError(error)) {
+        navigate('/', { state: { notice: 'This group is no longer available.' } })
+        return
+      }
       // Keeps the existing safe default (show every tab) rather than
       // inventing new fallback behavior for the error case — just makes a
       // genuine failure (not just still-loading) visible somewhere.
@@ -69,7 +80,7 @@ export default function GroupSettings() {
       return
     }
     setIsPersonal(data?.is_personal || false)
-  }, [groupId])
+  }, [groupId, navigate])
 
   useEffect(() => {
     loadIsPersonal()

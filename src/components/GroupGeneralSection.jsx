@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { ArrowRightIcon, ChevronIcon } from './icons'
 import AvatarPicker from './AvatarPicker'
 import AvatarGlyph from './AvatarGlyph'
 import { avatarIconCache } from '../lib/avatarIconCache'
+import { isNotFoundError } from '../lib/notFound'
 
 // Lifted as-is from what used to be GroupSettings.jsx's own top section —
 // self-contained (own fetch, own save) same as every other Group Settings
@@ -18,6 +19,7 @@ import { avatarIconCache } from '../lib/avatarIconCache'
 // there's nothing to keep in sync here beyond this one field.
 export default function GroupGeneralSection() {
   const { groupId } = useParams()
+  const navigate = useNavigate()
   const { user, displayName } = useAuth()
   const [name, setName] = useState('')
   const [nameDraft, setNameDraft] = useState('')
@@ -44,6 +46,12 @@ export default function GroupGeneralSection() {
   const loadGroup = useCallback(async () => {
     const { data, error: loadError } = await supabase.from('groups').select('name').eq('id', groupId).single()
     if (loadError) {
+      // Already gone — bounce back to the groups list rather than sit here
+      // showing a name field for a group that no longer exists.
+      if (isNotFoundError(loadError)) {
+        navigate('/', { state: { notice: 'This group is no longer available.' } })
+        return
+      }
       // Leaves name/nameDraft alone rather than blanking a real group name
       // to empty string on a transient network failure — that would read
       // as "this group got renamed to nothing" rather than "the fetch
@@ -53,7 +61,7 @@ export default function GroupGeneralSection() {
     }
     setName(data?.name || '')
     setNameDraft(data?.name || '')
-  }, [groupId])
+  }, [groupId, navigate])
 
   const loadMember = useCallback(async () => {
     const { data, error: loadError } = await supabase

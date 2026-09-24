@@ -1,5 +1,6 @@
 import { getReceiptSettings } from '../../receiptSettings'
 import { buildBankStatementPrompt, extractBankTransactions } from '../extractionPrompt'
+import { describeProviderError, describeNetworkError } from '../../aiProviderError'
 
 const DEFAULT_MODEL = 'gemini-2.5-flash'
 
@@ -10,35 +11,40 @@ const DEFAULT_MODEL = 'gemini-2.5-flash'
 // gives: that strategy's prompt and response shape are built around a
 // receipt's item list, this one's around a statement's transaction list.
 async function callGemini(pdfBase64, apiKey, model) {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { inline_data: { mime_type: 'application/pdf', data: pdfBase64 } },
-              { text: buildBankStatementPrompt() },
-            ],
-          },
-        ],
-        // Matches claudeDocStrategy.js's own generous ceiling — Gemini's
-        // implicit per-model default isn't guaranteed to be enough for a
-        // full statement's worth of transactions, so this sets one
-        // explicitly rather than trusting that default to keep up.
-        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 16000 },
-      }),
-    }
-  )
+  let response
+  try {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { inline_data: { mime_type: 'application/pdf', data: pdfBase64 } },
+                { text: buildBankStatementPrompt() },
+              ],
+            },
+          ],
+          // Matches claudeDocStrategy.js's own generous ceiling — Gemini's
+          // implicit per-model default isn't guaranteed to be enough for a
+          // full statement's worth of transactions, so this sets one
+          // explicitly rather than trusting that default to keep up.
+          generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 16000 },
+        }),
+      }
+    )
+  } catch {
+    throw new Error(describeNetworkError('Gemini'))
+  }
 
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`Gemini API error (${response.status}): ${errText}`)
+    throw new Error(describeProviderError('Gemini', response.status, errText))
   }
 
   const data = await response.json()

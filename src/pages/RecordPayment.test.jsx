@@ -136,6 +136,17 @@ describe('RecordPayment — dropdowns layout', () => {
     expect(await screen.findByText(/Couldn't load this group: network error/)).toBeInTheDocument()
   })
 
+  it('bounces back to the groups list, with a notice, when the group has been deleted', async () => {
+    groupsSelectResult = {
+      data: null,
+      error: { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' },
+    }
+    render(<RecordPayment />)
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('/', { state: { notice: 'This group is no longer available.' } })
+    )
+  })
+
   it("shows an error when the group's members can't be loaded", async () => {
     mockFetchAllGroupMembers.mockRejectedValue(new Error('members query failed'))
     render(<RecordPayment />)

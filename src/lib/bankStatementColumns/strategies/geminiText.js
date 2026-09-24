@@ -1,29 +1,35 @@
 import { getReceiptSettings } from '../../receiptSettings'
 import { buildColumnPrompt, parseColumnResponse } from '../columnPrompt'
+import { describeProviderError, describeNetworkError } from '../../aiProviderError'
 
 const DEFAULT_MODEL = 'gemini-2.5-flash'
 
 // Same reasoning as claudeText.js in this directory — independent of every
 // other geminiText/geminiDocStrategy call this app makes.
 async function callGeminiText(prompt, apiKey, model) {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 1000 },
-      }),
-    }
-  )
+  let response
+  try {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 1000 },
+        }),
+      }
+    )
+  } catch {
+    throw new Error(describeNetworkError('Gemini'))
+  }
 
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`Gemini API error (${response.status}): ${errText}`)
+    throw new Error(describeProviderError('Gemini', response.status, errText))
   }
 
   const data = await response.json()
