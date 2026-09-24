@@ -6,12 +6,14 @@ live, real-time settle-up with everyone in your group — no app store
 required.
 
 **A note on what this project actually is.** Beyond being an app I wanted,
-this is a personal experiment: I don't know JavaScript, and I built this
-mostly by staying at the decision-making level — describing what I wanted,
-reviewing what came back, steering — rather than writing the code myself.
-Working in a language I hadn't learned yet was deliberate on two fronts: to
-see how far Claude Code could carry a project on instructions alone, and to
-start picking the language up along the way.
+this is a personal experiment: my background is mostly Java, and React was
+completely new to me — I've picked up enough of it to follow along, but not
+enough to write it unassisted without studying the framework properly first.
+I built this mostly by staying at the decision-making level — describing
+what I wanted, reviewing what came back, steering — rather than writing the
+code myself. Working in a framework I hadn't learned yet was deliberate on
+two fronts: to see how far Claude Code could carry a project on instructions
+alone, and to start picking it up along the way.
 
 **What it does:**
 
