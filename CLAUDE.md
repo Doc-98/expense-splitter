@@ -33,6 +33,20 @@ expectations, etc.) — read that first, every session.
   more commits landed on the same branch before anyone noticed, and the
   next PR needed a rebase to reconcile. Subscribing closes that gap.
 
+## Permissions
+
+- Everything is pre-approved in `.claude/settings.json` — shell, file
+  edits, and the Supabase, GitHub and session tools, including applying
+  migrations to production, deploying edge functions and merging PRs. Go
+  ahead with these without asking first — standing preference, confirmed
+  2026-09-25.
+- The one exception is SQL that deletes something (`DELETE FROM`,
+  `TRUNCATE`, or `DROP` of a table, column, policy, function, …): that
+  still needs the user's one-click confirmation. The PreToolUse hook
+  `.claude/hooks/ask-before-destructive-sql.sh` enforces it on
+  `execute_sql`/`apply_migration`; when a migration drops something, say
+  in plain words what goes away before the prompt appears.
+
 ## Release hygiene
 
 - `src/lib/appVersion.js`'s `WHATS_NEW` array is hand-maintained and does
