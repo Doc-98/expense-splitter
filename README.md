@@ -106,9 +106,6 @@ that used to be scattered across Profile and Groups.
 expense-splitter/
 ├── public/                     # Static PWA assets — icons, favicon
 ├── supabase/
-│   ├── functions/
-│   │   └── parse-receipt/      # The one server-side code path: proxies receipt-scan
-│   │                           #   requests to whichever AI provider is configured
 │   ├── migrations/             # Timestamped, additive SQL — see "Migrations & Supabase branching"
 │   └── schema.sql              # The full schema in one file, for a brand-new project
 ├── src/
@@ -770,9 +767,9 @@ categoryNames)`), listed in `src/lib/receipt-parsing/index.js`.
 `spatialStrategy` (Free OCR) always stays available as the no-config
 fallback.
 
-The old server-side approach (`supabase/functions/parse-receipt/`, one
-shared hardcoded key) still exists but isn't wired up to anything — kept as
-a reference if you'd rather run a centralized paid option than BYOK.
+An earlier server-side approach (a `parse-receipt` edge function calling
+Claude on one shared key) has been retired: it wasn't wired up to anything,
+yet any signed-in user could still call it on the project's key.
 
 The same Scan settings/BYOK setup also powers a second, independent feature:
 [categorizing bills after an import](#categorizing-bills-after-an-import),
