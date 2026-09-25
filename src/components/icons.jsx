@@ -418,6 +418,22 @@ export function CheckIcon({ size = 20, ...props }) {
   )
 }
 
+// A classic trash can — an item's own remove button (see ItemRow.jsx).
+export function TrashIcon({ size = 20, ...props }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M4 7h16M9.5 7V4.5h5V7M6 7l1 13h10l1-13"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M10 11v5.5M14 11v5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 // The "+ Add another item" ghost row on a bill's simple one-item view —
 // see BillView.jsx.
 export function PlusIcon({ size = 20, ...props }) {

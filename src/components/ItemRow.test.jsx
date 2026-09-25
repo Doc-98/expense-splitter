@@ -18,6 +18,7 @@ function renderItemRow(props) {
         categories={CATEGORIES}
         billCategoryId="cat-food"
         onToggleBuyer={vi.fn()}
+        onOnlyBuyer={vi.fn()}
         onDelete={vi.fn()}
         onCategoryChange={vi.fn()}
         onUpdate={vi.fn()}
@@ -223,6 +224,33 @@ describe('ItemRow — split with', () => {
     expect(onToggleBuyer).toHaveBeenCalledWith('member-alice')
   })
 
+  it('makes a buyer the only one on a double tap (after the first tap toggled as usual)', async () => {
+    const user = userEvent.setup()
+    const onToggleBuyer = vi.fn()
+    const onOnlyBuyer = vi.fn()
+    renderItemRow({ item: makeItem(), onToggleBuyer, onOnlyBuyer })
+    await openRow(user)
+
+    await user.dblClick(screen.getByRole('button', { name: 'Bob' }))
+    expect(onToggleBuyer).toHaveBeenCalledOnce()
+    expect(onToggleBuyer).toHaveBeenCalledWith('member-bob')
+    expect(onOnlyBuyer).toHaveBeenCalledOnce()
+    expect(onOnlyBuyer).toHaveBeenCalledWith('member-bob')
+  })
+
+  it('does not treat quick taps on two different buyers as a double tap', async () => {
+    const user = userEvent.setup()
+    const onToggleBuyer = vi.fn()
+    const onOnlyBuyer = vi.fn()
+    renderItemRow({ item: makeItem(), onToggleBuyer, onOnlyBuyer })
+    await openRow(user)
+
+    await user.click(screen.getByRole('button', { name: 'Alice' }))
+    await user.click(screen.getByRole('button', { name: 'Bob' }))
+    expect(onToggleBuyer).toHaveBeenCalledTimes(2)
+    expect(onOnlyBuyer).not.toHaveBeenCalled()
+  })
+
   it('marks an assigned buyer active', async () => {
     const user = userEvent.setup()
     renderItemRow({ item: makeItem({ item_shares: [{ member_id: 'member-alice' }] }) })
@@ -278,7 +306,11 @@ describe('ItemRow — category and delete', () => {
     renderItemRow({ item: makeItem(), onDelete })
     await openRow(user)
 
-    await user.click(screen.getByRole('button', { name: 'Remove item' }))
+    const remove = screen.getByRole('button', { name: 'Remove item' })
+    // An icon button now — the name comes from its label, not visible text.
+    expect(remove).toHaveTextContent('')
+    expect(remove.querySelector('svg')).not.toBeNull()
+    await user.click(remove)
     expect(onDelete).toHaveBeenCalledOnce()
   })
 

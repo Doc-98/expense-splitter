@@ -3,7 +3,8 @@ import { useCurrency } from '../context/CurrencyContext'
 import { parseNumber, parseAmount } from '../lib/parseNumber'
 import AvatarGlyph from './AvatarGlyph'
 import InlineEditable from './InlineEditable'
-import { ChevronIcon } from './icons'
+import { ChevronIcon, TrashIcon } from './icons'
+import { useDoubleTap } from '../lib/doubleTap'
 import { avatarSizeSpec } from '../lib/groupViewPreferences'
 
 // onUpdate(field, value) is called with one of 'name' | 'unit_price' |
@@ -30,6 +31,7 @@ export default function ItemRow({
   billCategoryId,
   hideBuyers,
   onToggleBuyer,
+  onOnlyBuyer,
   onDelete,
   onCategoryChange,
   onUpdate,
@@ -38,6 +40,8 @@ export default function ItemRow({
 }) {
   const { format } = useCurrency()
   const [open, setOpen] = useState(false)
+  // Tap an avatar to toggle that buyer; double-tap to make them the only one.
+  const tapBuyer = useDoubleTap()
   const { iconPx: avatarIconPx, className: avatarSizeClass } = avatarSizeSpec(avatarSize)
   const buyerIds = new Set(item.item_shares.map((s) => s.member_id))
   // Always show current members (whether checked or not), plus anyone no
@@ -177,7 +181,7 @@ export default function ItemRow({
                         className={`avatar ${avatarSizeClass} ${buyerIds.has(m.id) ? 'active' : ''} ${m.active ? '' : 'former'}`}
                         title={label}
                         aria-label={label}
-                        onClick={() => onToggleBuyer(m.id)}
+                        onClick={() => tapBuyer(m.id, () => onToggleBuyer(m.id), () => onOnlyBuyer(m.id))}
                       >
                         <AvatarGlyph iconId={m.avatarIcon} name={m.name} size={avatarIconPx} />
                       </button>
@@ -202,8 +206,8 @@ export default function ItemRow({
             {unassigned && (
               <p className="item-warning">No one's assigned yet — this item won't be counted in the settle-up.</p>
             )}
-            <button type="button" className="item-remove-btn" onClick={onDelete}>
-              Remove item
+            <button type="button" className="item-remove-btn" onClick={onDelete} aria-label="Remove item" title="Remove item">
+              <TrashIcon size={18} />
             </button>
           </div>
         </div>
