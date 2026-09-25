@@ -16,7 +16,7 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
-  "Swipe-to-remove is fixed: rows follow your finger smoothly, a quick flick is enough to reveal Remove, a row never gets stuck half-open, and the first tap after a swipe always registers",
+  "Swipe-to-remove is fixed: bills on the group page now slide all the way (they barely moved before), rows follow your finger smoothly, a quick flick is enough to reveal Remove, a row never gets stuck half-open, and the first tap after a swipe always registers",
   'Removing an item is now a trash-can button on the right of the item\'s details',
   'A bill\'s details (including who new items are split with) now start open',
   'Double-tap someone in a "Split with" row to make them the only one splitting — on each item and on the bill\'s default for new items',

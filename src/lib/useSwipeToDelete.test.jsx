@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { useSwipeToDelete } from './useSwipeToDelete'
@@ -190,4 +192,27 @@ describe('useSwipeToDelete — taps after a swipe', () => {
     expect(onDelete).toHaveBeenCalledWith('a')
     expect(row('a').dataset.open).toBe('false')
   })
+})
+
+// jsdom doesn't lay out or scroll, so the one thing a real browser needs
+// most is checked against the stylesheet itself: without touch-action: pan-y
+// on a swipe row, the browser claims the horizontal drag after a few px
+// (pointercancel) and the row barely moves — which is exactly how the group
+// page's bill rows shipped once. Every element that spreads `swipe.row`
+// (ItemRow, GroupGuestsSection, GroupView, History) matches one of these.
+describe('useSwipeToDelete — stylesheet', () => {
+  // Read from disk: Vitest stubs out CSS imports (even ?raw) as empty.
+  const css = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8')
+  const ruleBody = (selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const match = css.match(new RegExp(`(^|\\n)${escaped}\\s*\\{([^}]*)\\}`))
+    return match ? match[2] : ''
+  }
+
+  it.each(['.item-row-head', '.guest-row-name', '.bill-row-shell .card-list-item'])(
+    '%s leaves horizontal drags to the swipe (touch-action: pan-y)',
+    (selector) => {
+      expect(ruleBody(selector)).toMatch(/touch-action:\s*pan-y/)
+    }
+  )
 })
