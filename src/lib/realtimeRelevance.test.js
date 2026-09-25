@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createRealtimeRelevance } from './realtimeRelevance'
+import { createRealtimeRelevance, ALL_BILLS } from './realtimeRelevance'
 
 const insert = (row) => ({ eventType: 'INSERT', new: row, old: {} })
 const update = (row) => ({ eventType: 'UPDATE', new: row, old: {} })
@@ -59,5 +59,38 @@ describe('createRealtimeRelevance', () => {
     const r = loaded()
     r.learn([{ id: 'bill-1', items: [] }])
     expect(r.isRelevant('bills', del({ id: 'bill-2' }))).toBe(true)
+  })
+})
+
+describe('affectedBills', () => {
+  it('asks for a full reload for anything before the first load', () => {
+    const r = createRealtimeRelevance()
+    expect(r.affectedBills('items', update({ id: 'item-1', bill_id: 'bill-1' }))).toBe(ALL_BILLS)
+    expect(r.affectedBills('bills', insert({ id: 'bill-9' }))).toBe(ALL_BILLS)
+  })
+
+  it('traces each kind of change to the one bill it touches', () => {
+    const r = loaded()
+    expect(r.affectedBills('bills', update({ id: 'bill-1' }))).toEqual(['bill-1'])
+    expect(r.affectedBills('bills', del({ id: 'bill-2' }))).toEqual(['bill-2'])
+    expect(r.affectedBills('items', update({ id: 'item-1', bill_id: 'bill-1' }))).toEqual(['bill-1'])
+    expect(r.affectedBills('items', del({ id: 'item-2' }))).toEqual(['bill-1'])
+    expect(r.affectedBills('item_shares', insert({ item_id: 'item-2', member_id: 'm' }))).toEqual(['bill-1'])
+    expect(r.affectedBills('item_shares', del({ item_id: 'item-1', member_id: 'm' }))).toEqual(['bill-1'])
+  })
+
+  it('traces a new bill and its new items back to it', () => {
+    const r = loaded()
+    expect(r.affectedBills('bills', insert({ id: 'bill-new' }))).toEqual(['bill-new'])
+    expect(r.affectedBills('items', insert({ id: 'item-new', bill_id: 'bill-new' }))).toEqual(['bill-new'])
+    expect(r.affectedBills('item_shares', insert({ item_id: 'item-new', member_id: 'm' }))).toEqual(['bill-new'])
+    expect(r.affectedBills('items', del({ id: 'item-new' }))).toEqual(['bill-new'])
+  })
+
+  it('returns null for other groups, never a wrong bill', () => {
+    const r = loaded()
+    expect(r.affectedBills('items', insert({ id: 'x', bill_id: 'foreign' }))).toBeNull()
+    expect(r.affectedBills('item_shares', del({ item_id: 'x', member_id: 'm' }))).toBeNull()
+    expect(r.affectedBills('bills', del({ id: 'foreign' }))).toBeNull()
   })
 })

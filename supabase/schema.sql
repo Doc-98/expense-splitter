@@ -1230,9 +1230,14 @@ $$;
 -- get_group_bills: the group page's bill list (bill rows with nested items/
 -- item_shares and bill_payers, newest first) in one call. Security definer
 -- with one is_group_member() check up front, same as get_group_balances —
--- see supabase/migrations/20260925020000_group_bills_rpc.sql.
+-- see supabase/migrations/20260925020000_group_bills_rpc.sql. Optional
+-- bill_ids refreshes just those bills (20260925030000_group_bills_by_id.sql).
 -- ============================================================================
-create function public.get_group_bills(target_group_id uuid, since timestamptz default null)
+create function public.get_group_bills(
+  target_group_id uuid,
+  since timestamptz default null,
+  bill_ids uuid[] default null
+)
 returns jsonb
 language plpgsql
 stable
@@ -1249,6 +1254,7 @@ begin
       select b.* from bills b
       where b.group_id = target_group_id
         and (since is null or b.created_at >= since)
+        and (bill_ids is null or b.id = any(bill_ids))
     ),
     shares as (
       select s.item_id,

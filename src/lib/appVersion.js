@@ -18,6 +18,7 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 export const WHATS_NEW = [
   `Fixed the app slowing to a crawl — deletes not working, bills opening empty, "connection pool" errors — right after scanning a receipt, especially with the app open on more than one device. Each open page now reloads once per batch of changes instead of once per changed row, balances are computed about 30× faster, and a group's bill list loads in one quick request instead of several slow ones`,
   'Pages now catch up by themselves after your phone was asleep or the connection dropped, instead of showing stale data until something else changed — and a group page no longer reloads when bills change in one of your other groups',
+  `When a bill changes, the group page now refreshes just that bill instead of re-downloading the whole group — far less mobile data on big groups, and totals recalculate much faster on the phone`,
   'Removing an item is now instant: it disappears on the first tap (and comes back with a message if the removal fails), instead of seeming to do nothing while the server catches up',
   'A bill whose items are still loading now says "Loading items…" instead of looking empty',
 ]

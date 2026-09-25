@@ -20,6 +20,12 @@ describe('fetchGroupBills', () => {
     expect(rpc).toHaveBeenCalledWith('get_group_bills', { target_group_id: 'group-1', since: '2025-01-01T00:00:00.000Z' })
   })
 
+  it('passes specific bill ids through for a per-bill update', async () => {
+    const { supabase, rpc } = fakeSupabase({ data: [], error: null })
+    await fetchGroupBills(supabase, 'group-1', { billIds: ['b1', 'b2'] })
+    expect(rpc).toHaveBeenCalledWith('get_group_bills', { target_group_id: 'group-1', bill_ids: ['b1', 'b2'] })
+  })
+
   it('treats a null response as an empty list', async () => {
     const { supabase } = fakeSupabase({ data: null, error: null })
     expect(await fetchGroupBills(supabase, 'group-1')).toEqual([])
@@ -56,6 +62,35 @@ describe('computeGroupViewSnapshot', () => {
     const { billPersonalTotals } = computeGroupViewSnapshot(bills)
     expect(billPersonalTotals['b1'].alice).toEqual({ paid: 20, consumed: 10 })
     expect(billPersonalTotals['b1'].bob).toEqual({ paid: 0, consumed: 10 })
+  })
+
+  it('keeps each bill\'s totals to its own items and shares, across many bills', () => {
+    const bills = [
+      {
+        id: 'b1',
+        paid_by: 'alice',
+        created_at: '2026-01-02T00:00:00Z',
+        items: [
+          { id: 'i1', total_price: 30, item_shares: [{ member_id: 'alice', shares: 1 }, { member_id: 'bob', shares: 2 }] },
+          { id: 'i2', total_price: 6, item_shares: [{ member_id: 'bob', shares: 1 }] },
+        ],
+        bill_payers: [],
+      },
+      {
+        id: 'b2',
+        paid_by: 'bob',
+        created_at: '2026-01-01T00:00:00Z',
+        items: [{ id: 'i3', total_price: 8, item_shares: [{ member_id: 'alice', shares: 1 }] }],
+        bill_payers: [],
+      },
+      { id: 'b3', paid_by: 'alice', created_at: '2026-01-01T00:00:00Z', items: [], bill_payers: [] },
+    ]
+    const { billPersonalTotals } = computeGroupViewSnapshot(bills)
+    expect(billPersonalTotals['b1'].alice).toEqual({ paid: 36, consumed: 10 })
+    expect(billPersonalTotals['b1'].bob).toEqual({ paid: 0, consumed: 26 })
+    expect(billPersonalTotals['b2'].alice).toEqual({ paid: 0, consumed: 8 })
+    expect(billPersonalTotals['b2'].bob).toEqual({ paid: 8, consumed: 0 })
+    expect(billPersonalTotals['b3']).toBeDefined()
   })
 
   it('sums week/month totals only from bills actually inside each window', () => {
