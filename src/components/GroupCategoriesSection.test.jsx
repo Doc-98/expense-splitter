@@ -95,11 +95,20 @@ describe('GroupCategoriesSection — loading', () => {
     expect(mockFetchCategories).toHaveBeenCalledWith('group-1')
     expect(groupCategoriesCache.get('group-1')).toEqual(categoriesFixture())
   })
+
+  it('shows an error, keeping the cached list, when loading fails', async () => {
+    groupCategoriesCache.set('group-1', categoriesFixture())
+    mockFetchCategories.mockRejectedValue({ message: 'Failed to fetch' })
+    render(<GroupCategoriesSection />)
+
+    expect(await screen.findByText(/Couldn't load categories/)).toBeInTheDocument()
+    expect(screen.getByText('Groceries', { selector: '.category-label' })).toBeInTheDocument()
+  })
 })
 
 describe('GroupCategoriesSection — add category', () => {
   it('disables submit until a name is entered', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
 
@@ -109,7 +118,7 @@ describe('GroupCategoriesSection — add category', () => {
   })
 
   it('adds a category with the default preset color, then reloads', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
 
@@ -122,7 +131,7 @@ describe('GroupCategoriesSection — add category', () => {
   })
 
   it('adds a category with a chosen preset color', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
 
@@ -134,7 +143,7 @@ describe('GroupCategoriesSection — add category', () => {
   })
 
   it('shows an error and keeps the typed name when adding fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockAddCategory.mockRejectedValue(new Error('could not add category'))
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
@@ -149,7 +158,7 @@ describe('GroupCategoriesSection — add category', () => {
 
 describe('GroupCategoriesSection — rename', () => {
   it('renames a category on submit, then reloads', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
     const row = rowFor('Groceries')
@@ -167,7 +176,7 @@ describe('GroupCategoriesSection — rename', () => {
   })
 
   it('cancels a rename without calling renameCategory', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
     const row = rowFor('Groceries')
@@ -181,7 +190,7 @@ describe('GroupCategoriesSection — rename', () => {
   })
 
   it('shows an error when renaming fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockRenameCategory.mockRejectedValue(new Error('could not rename category'))
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
@@ -197,7 +206,7 @@ describe('GroupCategoriesSection — rename', () => {
 
 describe('GroupCategoriesSection — color change', () => {
   it('applies a color change optimistically, before the write resolves', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockUpdateCategoryColor.mockReturnValue(new Promise(() => {})) // never resolves this test
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
@@ -216,7 +225,7 @@ describe('GroupCategoriesSection — color change', () => {
   })
 
   it('reverts the color and shows an error when the write fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockUpdateCategoryColor.mockRejectedValue(new Error('could not change color'))
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
@@ -232,7 +241,7 @@ describe('GroupCategoriesSection — color change', () => {
 
 describe('GroupCategoriesSection — delete', () => {
   it('deletes a category on confirm, then reloads', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
     const row = rowFor('Groceries')
@@ -245,7 +254,7 @@ describe('GroupCategoriesSection — delete', () => {
   })
 
   it('does not delete when the confirm is cancelled', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     window.confirm.mockReturnValue(false)
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
@@ -258,7 +267,7 @@ describe('GroupCategoriesSection — delete', () => {
   })
 
   it('shows an error when deleting fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockDeleteCategory.mockRejectedValue(new Error('could not delete category'))
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })

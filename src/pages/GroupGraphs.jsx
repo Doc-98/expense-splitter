@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { fetchCategories } from '../lib/categories'
-import { fetchAllRows } from '../lib/fetchAllRows'
+import { fetchGroupBills } from '../lib/groupViewSnapshot'
+import { groupStatsCache } from '../lib/groupStatsCache'
+import { statsRawFromBills, toWindowStart } from '../lib/groupStatsSnapshot'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
-import { deriveBillsItemsShares } from '../lib/deriveBillData'
 import { computeCategoryTotals, computeDailyTotalsForGroup } from '../lib/categoryStats'
 import { getPeriodRange, getMultiMonthRange, filterByDateRange, getStatsWindowStart } from '../lib/timeRange'
 import { buildSeries } from '../lib/timeSeries'
@@ -57,30 +58,28 @@ export default function GroupGraphs() {
   // so it plugs directly into a <select>'s value without a translation step.
   const [categoryFilter, setCategoryFilter] = useState('')
 
-  const BILLS_SELECT = 'id, created_at, category_id, items(id, total_price, category_id)'
-
   function applyRawBills(rawBillsData) {
-    const { list, items: derivedItems } = deriveBillsItemsShares(rawBillsData)
-    setBills(list)
-    setItems(derivedItems)
+    const { rawBills, rawItems } = statsRawFromBills(rawBillsData)
+    setBills(rawBills)
+    setItems(rawItems)
   }
 
-  // Same two-phase load as GroupStats.jsx: the recent window (this year
-  // plus last) fetches first so the page renders real, correct numbers
-  // immediately for This month/Last 4 months/most of This year, then the
-  // rest of this group's history backfills in the background. Only once
-  // that finishes can paging further back than the window be trusted.
+  // Bills come from get_group_bills, the group page's own fast call. With
+  // complete history already cached (see the hydration effect below), the
+  // background refresh re-fetches the complete list in one go; otherwise a
+  // recent window first (so the page renders right away), then the rest.
   const load = useCallback(async () => {
     try {
       const start = getStatsWindowStart()
-      setWindowStart(start)
-      const [{ data: groupRow, error: groupError }, categoriesData, recentBillsData] = await Promise.all([
+      const hadCompleteHistory = groupStatsCache.get(groupId)?.historyStatus === 'complete'
+      if (!hadCompleteHistory) setWindowStart(start)
+      const [{ data: groupRow, error: groupError }, categoriesData, billsData] = await Promise.all([
         supabase.from('groups').select('name').eq('id', groupId).single(),
         fetchCategories(groupId),
-        fetchAllRows(() =>
-          supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).eq('group_id', groupId).gte('created_at', start.toISOString())
-        ),
+        fetchGroupBills(supabase, groupId, hadCompleteHistory ? {} : { since: start }),
       ])
+      // Already gone (deleted elsewhere while this page was open) — bounce
+      // back rather than render a chart for a group that no longer exists.
       if (isNotFoundError(groupError)) {
         navigate('/', { state: { notice: 'This group is no longer available.' } })
         return
@@ -88,20 +87,18 @@ export default function GroupGraphs() {
       if (groupError) throw groupError
       setGroupName(groupRow?.name || '')
       setCategories(categoriesData)
-      applyRawBills(recentBillsData)
+      applyRawBills(billsData)
       setError(null)
-      // First paint happens now, with real (if possibly incomplete)
-      // numbers — the backfill below runs after, in the background, not
-      // blocking this. A `finally` here would defeat the entire point of
-      // the two-phase fetch by keeping the loading spinner up until the
-      // backfill (which can mean paging through years of bills) finishes.
+      // Charts render as soon as the first batch lands — the backfill
+      // below (when there is one) doesn't block that.
       setLoading(false)
+      if (hadCompleteHistory) {
+        setHistoryStatus('complete')
+        return
+      }
 
       try {
-        const olderBillsData = await fetchAllRows(() =>
-          supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).eq('group_id', groupId).lt('created_at', start.toISOString())
-        )
-        applyRawBills([...olderBillsData, ...recentBillsData])
+        applyRawBills(await fetchGroupBills(supabase, groupId))
         setHistoryStatus('complete')
       } catch {
         // The recent window above is still shown, correctly, for anything
@@ -114,9 +111,22 @@ export default function GroupGraphs() {
     }
   }, [groupId, navigate])
 
+  // Paints straight from the stats cache — the group page fills it as soon
+  // as its own bill list has loaded (see groupStatsSnapshot.js), and Stats
+  // keeps it current — then refreshes in the background.
   useEffect(() => {
+    const cached = groupStatsCache.get(groupId)
+    if (cached) {
+      setGroupName(cached.groupName || '')
+      setCategories(cached.categories)
+      setBills(cached.rawBills)
+      setItems(cached.rawItems)
+      setHistoryStatus(cached.historyStatus)
+      setWindowStart(toWindowStart(cached.historyWindowStart))
+      setLoading(false)
+    }
     load()
-  }, [load])
+  }, [groupId, load])
 
   // Independent of tab/offset — every day this group has ever spent
   // anything in (within the fetched window), bucketed once. buildSeries()

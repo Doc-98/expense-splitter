@@ -71,7 +71,7 @@ describe('PieChart — with data', () => {
   })
 
   it('calls onSelectCategory with the slice key on wedge click', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onSelectCategory = vi.fn()
     render(<PieChart slices={SLICES} format={format} onSelectCategory={onSelectCategory} />)
 
@@ -87,7 +87,7 @@ describe('PieChart — with data', () => {
   })
 
   it('calls onSelectCategory with the slice key on legend row click', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onSelectCategory = vi.fn()
     render(<PieChart slices={SLICES} format={format} onSelectCategory={onSelectCategory} />)
 

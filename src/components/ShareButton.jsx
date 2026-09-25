@@ -32,9 +32,9 @@ export default function ShareButton({
   async function shareAsText() {
     setOpen(false)
     const result = await shareOrCopyText(getText(), title)
-    if (result === 'copied') {
-      setStatus('Copied to clipboard!')
-      setTimeout(() => setStatus(null), 2000)
+    if (result === 'copied' || result === 'failed') {
+      setStatus(result === 'copied' ? 'Copied to clipboard!' : "Couldn't share or copy this — your browser blocked it.")
+      setTimeout(() => setStatus(null), result === 'copied' ? 2000 : 4000)
     }
   }
 

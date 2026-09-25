@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
 import { computeDailyTotalsForUser } from '../lib/settlement'
 import { mergeCategoriesByName } from '../lib/categories'
-import { fetchAllRows } from '../lib/fetchAllRows'
+import { fetchBillsForGroups } from '../lib/groupViewSnapshot'
+import { splitByGroup } from '../lib/accountStatsMath'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { deriveBillsItemsShares } from '../lib/deriveBillData'
 import { getPeriodRange, getMultiMonthRange, getStatsWindowStart } from '../lib/timeRange'
@@ -94,24 +95,13 @@ export default function AccountGraphs() {
   // every category combined.
   const [categoryFilter, setCategoryFilter] = useState('')
 
-  const BILLS_SELECT =
-    'id, group_id, created_at, category_id, items(id, total_price, category_id, item_shares(member_id, shares))'
-
   function deriveByGroup(rawBills, groupIds, participantByGroup) {
-    const { list, items, itemShares } = deriveBillsItemsShares(rawBills)
-    return groupIds.map((groupId) => {
-      const myId = participantByGroup.get(groupId)
-      const groupBills = list.filter((b) => b.group_id === groupId)
-      const groupItems = items.filter((it) => groupBills.some((b) => b.id === it.bill_id))
-      const groupShares = itemShares.filter((s) => groupItems.some((it) => it.id === s.item_id))
-      return { myId, bills: groupBills, items: groupItems, itemShares: groupShares }
-    })
+    return splitByGroup(deriveBillsItemsShares(rawBills), groupIds).map((slice, i) => ({
+      myId: participantByGroup.get(groupIds[i]),
+      ...slice,
+    }))
   }
 
-  // Same two-phase load as GroupGraphs.jsx/GroupStats.jsx: the recent
-  // window (this year plus last) fetches first, across every active
-  // group, so the page renders real numbers immediately; the rest of
-  // every group's history backfills in the background afterward.
   const load = useCallback(async () => {
     try {
       const start = getStatsWindowStart()
@@ -141,25 +131,19 @@ export default function AccountGraphs() {
 
       const [categoriesResult, recentBillsData] = await Promise.all([
         supabase.from('categories').select('id, name, color, group_id').in('group_id', groupIds),
-        fetchAllRows(() =>
-          supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).in('group_id', groupIds).gte('created_at', start.toISOString())
-        ),
+        fetchBillsForGroups(supabase, groupIds, { since: start }),
       ])
       if (categoriesResult.error) throw categoriesResult.error
       const categoriesData = categoriesResult.data || []
       setRawCategories(categoriesData)
       setPerGroupData(deriveByGroup(recentBillsData, groupIds, participantByGroup))
       setError(null)
-      // First paint happens now — see the matching comment in
-      // GroupGraphs.jsx for why this can't be a `finally` after the
-      // backfill below.
+      // First paint happens now, not after the backfill below — the
+      // charts are already correct for the recent window.
       setLoading(false)
 
       try {
-        const olderBillsData = await fetchAllRows(() =>
-          supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).in('group_id', groupIds).lt('created_at', start.toISOString())
-        )
-        setPerGroupData(deriveByGroup([...olderBillsData, ...recentBillsData], groupIds, participantByGroup))
+        setPerGroupData(deriveByGroup(await fetchBillsForGroups(supabase, groupIds), groupIds, participantByGroup))
         setHistoryStatus('complete')
       } catch {
         setHistoryStatus('failed')

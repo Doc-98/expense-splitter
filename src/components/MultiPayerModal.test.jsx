@@ -93,7 +93,7 @@ describe('MultiPayerModal', () => {
   })
 
   it("enables a person's amount field only once they're checked", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderModal()
 
     const aliceAmount = screen.getByLabelText("Alice's amount")
@@ -107,7 +107,7 @@ describe('MultiPayerModal', () => {
   })
 
   it('shows "select at least one person" until someone is checked', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderModal()
     expect(screen.getByText('Select at least one person.')).toBeInTheDocument()
 
@@ -116,7 +116,7 @@ describe('MultiPayerModal', () => {
   })
 
   it("flags a mismatch until the entered amounts add up to the bill total", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderModal({ billTotal: 10 })
 
     await user.click(screen.getByRole('checkbox', { name: 'Alice' }))
@@ -131,7 +131,7 @@ describe('MultiPayerModal', () => {
   })
 
   it('confirms with the parsed amounts for exactly the checked members', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onConfirm = vi.fn()
     renderModal({ billTotal: 10, onConfirm })
 
@@ -148,7 +148,7 @@ describe('MultiPayerModal', () => {
   })
 
   it('cancels via the Cancel button', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onCancel = vi.fn()
     renderModal({ onCancel })
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -156,7 +156,7 @@ describe('MultiPayerModal', () => {
   })
 
   it('cancels on a backdrop click, but not on a click inside the panel', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onCancel = vi.fn()
     const { container } = renderModal({ onCancel })
 

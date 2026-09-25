@@ -24,7 +24,7 @@ describe('BillActionsMenu', () => {
   })
 
   it('opens the popover with Rename, Select, Share, Delete in that order', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderMenu()
 
     await user.click(screen.getByLabelText('Actions for Lidl - Tuesday'))
@@ -34,7 +34,7 @@ describe('BillActionsMenu', () => {
   })
 
   it('calls onRename and closes the menu', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const { props } = renderMenu()
 
     await user.click(screen.getByLabelText('Actions for Lidl - Tuesday'))
@@ -45,7 +45,7 @@ describe('BillActionsMenu', () => {
   })
 
   it('calls onDelete and closes the menu', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const { props } = renderMenu()
 
     await user.click(screen.getByLabelText('Actions for Lidl - Tuesday'))
@@ -56,7 +56,7 @@ describe('BillActionsMenu', () => {
   })
 
   it('closes when clicking outside, without calling any action', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const { props } = renderMenu()
 
     await user.click(screen.getByLabelText('Actions for Lidl - Tuesday'))
@@ -69,7 +69,7 @@ describe('BillActionsMenu', () => {
   })
 
   it('closes on Escape', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderMenu()
 
     await user.click(screen.getByLabelText('Actions for Lidl - Tuesday'))
@@ -81,7 +81,7 @@ describe('BillActionsMenu', () => {
   })
 
   it('toggles closed when clicking the trigger again', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderMenu()
 
     const trigger = screen.getByLabelText('Actions for Lidl - Tuesday')

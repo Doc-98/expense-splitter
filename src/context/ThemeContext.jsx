@@ -8,9 +8,16 @@ const STORAGE_KEY = 'spesa-theme'
 // says, live." Falls back to 'system' for anything unrecognized (a
 // pre-this-feature 'light'/'dark' string from localStorage is still valid
 // as-is, so an existing explicit choice survives this change untouched).
+// Storage access can throw (blocked site data, some private modes) — and
+// this runs before anything renders, so an uncaught throw here would leave
+// the whole app blank.
 function getStoredMode() {
-  const stored = localStorage.getItem(STORAGE_KEY)
-  return stored === 'light' || stored === 'dark' ? stored : 'system'
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    return stored === 'light' || stored === 'dark' ? stored : 'system'
+  } catch {
+    return 'system'
+  }
 }
 
 function systemPrefersDark() {
@@ -29,7 +36,11 @@ export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => (mode === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : mode))
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, mode)
+    try {
+      localStorage.setItem(STORAGE_KEY, mode)
+    } catch {
+      // Not remembered for next time; still applied now.
+    }
     if (mode !== 'system') {
       setTheme(mode)
       return

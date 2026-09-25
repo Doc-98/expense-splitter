@@ -22,6 +22,8 @@ import { getGroupViewPreferences, avatarSizeSpec } from '../lib/groupViewPrefere
 import { isNotFoundError } from '../lib/notFound'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { useCoalescedRunner } from '../lib/coalescedRunner'
+import { useDoubleTap } from '../lib/doubleTap'
+import { createKeyedQueue } from '../lib/keyedQueue'
 import { createRealtimeRelevance } from '../lib/realtimeRelevance'
 import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
 
@@ -45,6 +47,14 @@ export default function BillView() {
   const [itemsStatus, setItemsStatus] = useState('loading')
   // Ids removed optimistically; a deleted UUID never legitimately comes back.
   const deletingIdsRef = useRef(new Set())
+  // Per-item queue of pending buyer writes, and how many are still pending
+  // per item — see queueBuyerWrite.
+  const [enqueueBuyerWrite] = useState(createKeyedQueue)
+  const buyerWritesPendingRef = useRef(new Map())
+  // Default "split with" saves, one after another — see saveDefaultBuyers.
+  const defaultBuyersWriteRef = useRef(Promise.resolve())
+  // Tap an avatar to toggle; double-tap to make that member the only one.
+  const tapDefaultBuyer = useDoubleTap()
   // Which realtime events concern this bill — see realtimeRelevance.js.
   const relevanceRef = useRef(createRealtimeRelevance())
   const [newItem, setNewItem] = useState({ name: '', price: '', quantity: '1' })
@@ -53,10 +63,12 @@ export default function BillView() {
   const [noteDraft, setNoteDraft] = useState('')
   const [noteSaved, setNoteSaved] = useState(false)
   const [error, setError] = useState(null)
-  // Collapsed by default — see .bill-summary below. Everything it hides
-  // (note, paid by, category, default split, date) is still reachable in
-  // one tap, just not competing with the receipt for space on every visit.
-  const [detailsOpen, setDetailsOpen] = useState(false)
+  // Open by default — see .bill-summary below. Its "Split with" is the
+  // default for every item added next, so it should be in plain sight
+  // before the first item goes in; one tap folds it down to a summary line
+  // (note, paid by, category, default split, date) to give the receipt
+  // the room.
+  const [detailsOpen, setDetailsOpen] = useState(true)
   // No stored "mode" — a bill with exactly one item shows the simple
   // amount-card view below instead of the itemized receipt, purely
   // because items.length === 1 (see the "+ Add another item" ghost row
@@ -115,8 +127,19 @@ export default function BillView() {
       return
     }
     // A load that started before an optimistic delete landed would otherwise
-    // put the just-removed row back on screen.
-    setItems((data || []).filter((it) => !deletingIdsRef.current.has(it.id)))
+    // put the just-removed row back on screen. Likewise, an item whose buyer
+    // writes are still queued keeps the buyers shown on screen — the server
+    // is mid-way through catching up (see queueBuyerWrite, which reloads
+    // once they're done).
+    setItems((current) =>
+      (data || [])
+        .filter((it) => !deletingIdsRef.current.has(it.id))
+        .map((it) => {
+          if (!buyerWritesPendingRef.current.has(it.id)) return it
+          const shown = current.find((c) => c.id === it.id)
+          return shown ? { ...it, item_shares: shown.item_shares } : it
+        })
+    )
     setItemsStatus('ready')
     relevanceRef.current.learn([{ id: billId, items: data || [] }])
   }, [billId])
@@ -325,16 +348,59 @@ export default function BillView() {
     }
   }
 
-  async function toggleBuyer(item, memberId) {
-    const existing = item.item_shares.find((s) => s.member_id === memberId)
-    const { error: toggleError } = existing
-      ? await supabase.from('item_shares').delete().eq('item_id', item.id).eq('member_id', memberId)
-      : await supabase.from('item_shares').insert({ item_id: item.id, member_id: memberId, shares: 1 })
-    if (toggleError) {
-      setError(toggleError.message)
-      return
-    }
-    refreshItems()
+  // Buyer changes show at once (optimistic), and each item's writes run one
+  // after another: a double tap sends a toggle and then "only this buyer"
+  // within a fraction of a second, and those must reach the server in that
+  // order. The items reload once an item's last queued write is done —
+  // it confirms what's shown, or puts back the truth if a write failed.
+  function setItemShares(itemId, update) {
+    setItems((current) => current.map((it) => (it.id === itemId ? { ...it, item_shares: update(it.item_shares) } : it)))
+  }
+
+  function queueBuyerWrite(itemId, write) {
+    const pending = buyerWritesPendingRef.current
+    pending.set(itemId, (pending.get(itemId) || 0) + 1)
+    enqueueBuyerWrite(itemId, write).then(({ idle, error: writeError }) => {
+      const left = pending.get(itemId) - 1
+      if (left > 0) pending.set(itemId, left)
+      else pending.delete(itemId)
+      if (writeError) setError(`Couldn't update who's splitting this item: ${loadErrorMessage(writeError)}`)
+      if (idle) refreshItems()
+    })
+  }
+
+  function toggleBuyer(item, memberId) {
+    const has = item.item_shares.some((s) => s.member_id === memberId)
+    setItemShares(item.id, (shares) =>
+      has ? shares.filter((s) => s.member_id !== memberId) : [...shares, { member_id: memberId, shares: 1 }]
+    )
+    queueBuyerWrite(item.id, async () => {
+      const { error: toggleError } = has
+        ? await supabase.from('item_shares').delete().eq('item_id', item.id).eq('member_id', memberId)
+        : await supabase.from('item_shares').insert({ item_id: item.id, member_id: memberId, shares: 1 })
+      if (toggleError) throw toggleError
+    })
+  }
+
+  // Double tap on an avatar: that member becomes the item's only buyer
+  // (keeping their existing share count, if they already had one).
+  function setOnlyBuyer(item, memberId) {
+    setItemShares(item.id, (shares) => [shares.find((s) => s.member_id === memberId) || { member_id: memberId, shares: 1 }])
+    queueBuyerWrite(item.id, async () => {
+      const { error: deleteError } = await supabase
+        .from('item_shares')
+        .delete()
+        .eq('item_id', item.id)
+        .neq('member_id', memberId)
+      if (deleteError) throw deleteError
+      const { error: insertError } = await supabase
+        .from('item_shares')
+        .upsert(
+          { item_id: item.id, member_id: memberId, shares: 1 },
+          { onConflict: 'item_id,member_id', ignoreDuplicates: true }
+        )
+      if (insertError) throw insertError
+    })
   }
 
   // Optimistic: the row disappears on the first tap, so a slow server never
@@ -456,17 +522,30 @@ export default function BillView() {
     setTimeout(() => setNoteSaved(false), 1200)
   }
 
-  async function toggleDefaultBuyer(memberId) {
+  function toggleDefaultBuyer(memberId) {
     const current = defaultBuyerIds
-    const next = current.includes(memberId)
-      ? current.filter((id) => id !== memberId)
-      : [...current, memberId]
-    setBill((b) => ({ ...b, default_buyer_ids: next })) // optimistic, same reasoning as GroupGeneralSection's saveAvatarIcon
-    const { error: updateError } = await supabase.from('bills').update({ default_buyer_ids: next }).eq('id', billId)
-    if (updateError) {
-      setBill((b) => ({ ...b, default_buyer_ids: current }))
-      setError(updateError.message)
-    }
+    saveDefaultBuyers(current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId])
+  }
+
+  // Double tap: new items default to just this member.
+  function setOnlyDefaultBuyer(memberId) {
+    saveDefaultBuyers([memberId])
+  }
+
+  // Optimistic, same reasoning as GroupGeneralSection's saveAvatarIcon —
+  // and chained, so a toggle and the double tap right behind it are saved
+  // in the order they happened. A failure puts back what was there before
+  // this change.
+  function saveDefaultBuyers(next) {
+    const previous = defaultBuyerIds
+    setBill((b) => ({ ...b, default_buyer_ids: next }))
+    defaultBuyersWriteRef.current = defaultBuyersWriteRef.current.then(async () => {
+      const { error: updateError } = await supabase.from('bills').update({ default_buyer_ids: next }).eq('id', billId)
+      if (updateError) {
+        setBill((b) => ({ ...b, default_buyer_ids: previous }))
+        setError(updateError.message)
+      }
+    })
   }
 
   // Backdates or postdates the bill — its own click-to-edit date, next to
@@ -655,11 +734,10 @@ export default function BillView() {
         />
       </header>
 
-      {/* Collapsed to one summary line by default — Note/Paid by/Category/
-          default split/Date used to be five separate always-visible rows
-          above the receipt; now they're one tap away instead of five
-          things to scroll past on every visit. Same CSS-only grid-rows
-          expand already used elsewhere (Scan Settings' provider picker). */}
+      {/* Note/Paid by/Category/default split/Date, open by default (see
+          detailsOpen) and collapsible to one summary line. Same CSS-only
+          grid-rows expand already used elsewhere (Scan Settings' provider
+          picker). */}
       <div className={`bill-summary ${detailsOpen ? 'is-open' : ''}`}>
         <button type="button" className="bill-summary-head" onClick={() => setDetailsOpen((o) => !o)}>
           <span className="bill-summary-text">{summaryText}</span>
@@ -728,7 +806,7 @@ export default function BillView() {
                         type="button"
                         className={`avatar ${avatarSizeClass} ${defaultBuyerIds.includes(m.id) ? 'active' : ''}`}
                         title={m.name}
-                        onClick={() => toggleDefaultBuyer(m.id)}
+                        onClick={() => tapDefaultBuyer(m.id, () => toggleDefaultBuyer(m.id), () => setOnlyDefaultBuyer(m.id))}
                       >
                         <AvatarGlyph iconId={m.avatarIcon} name={m.name} size={avatarIconPx} />
                       </button>
@@ -809,6 +887,7 @@ export default function BillView() {
                 hideBuyers={!group || group.is_personal}
                 avatarSize={avatarSize}
                 onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
+                onOnlyBuyer={(memberId) => setOnlyBuyer(item, memberId)}
                 onDelete={() => deleteItem(item.id)}
                 onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}
                 onUpdate={(field, value) => updateItemField(item, field, value)}

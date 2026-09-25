@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { fetchCategories, addCategory, renameCategory, deleteCategory, updateCategoryColor, CATEGORY_COLORS } from '../lib/categories'
+import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupCategoriesCache } from '../lib/groupCategoriesCache'
 import { useClickOutside } from '../lib/useClickOutside'
 import ColorSwatchPicker from './ColorSwatchPicker'
@@ -60,9 +61,15 @@ export default function GroupCategoriesSection() {
   const [editingCategoryName, setEditingCategoryName] = useState('')
 
   const loadCategories = useCallback(async () => {
-    const data = await fetchCategories(groupId)
-    setCategories(data)
-    groupCategoriesCache.set(groupId, data)
+    try {
+      const data = await fetchCategories(groupId)
+      setCategories(data)
+      groupCategoriesCache.set(groupId, data)
+    } catch (err) {
+      // Keeps whatever's on screen (the cached list, if any) rather than
+      // looking like the group has no categories.
+      setError(`Couldn't load categories: ${loadErrorMessage(err)}`)
+    }
   }, [groupId])
 
   useEffect(() => {

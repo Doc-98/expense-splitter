@@ -99,7 +99,7 @@ describe('SettingsGroupsSection', () => {
   })
 
   it('leaves a group on confirm — fetches categories, snapshots, then updates the list and cache', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const categories = [{ id: 'cat-1', name: 'Groceries' }]
     mockFrom.mockImplementation((table) => {
       if (table === 'categories') return categoriesTable({ data: categories, error: null })
@@ -125,7 +125,7 @@ describe('SettingsGroupsSection', () => {
   })
 
   it('does not leave the group when the confirm sheet is cancelled', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<SettingsGroupsSection />)
 
     const beachRow = (await screen.findByText('Beach Trip')).closest('li')
@@ -139,7 +139,7 @@ describe('SettingsGroupsSection', () => {
   })
 
   it('shows an error and keeps the group in the list when the categories lookup fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockFrom.mockImplementation((table) => {
       if (table === 'categories') return categoriesTable({ data: null, error: { message: 'could not load categories' } })
       throw new Error(`unexpected table: ${table}`)
@@ -157,7 +157,7 @@ describe('SettingsGroupsSection', () => {
   })
 
   it('shows an error when snapshotAndRemoveMember fails, keeping the group in the list', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockSnapshotAndRemoveMember.mockRejectedValue(new Error('could not leave group'))
     render(<SettingsGroupsSection />)
 
@@ -171,7 +171,7 @@ describe('SettingsGroupsSection', () => {
   })
 
   it('reads and writes the Sticky filters toggle via the real preferences module', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<SettingsGroupsSection />)
 
     const toggle = screen.getByLabelText("Keep a group page's search and filters active after opening a bill")

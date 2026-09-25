@@ -43,7 +43,7 @@ describe('RangeSlider — dragging', () => {
 
 describe('RangeSlider — typing an exact amount', () => {
   it('saves a typed min via its own InlineEditable label, clamped to [min, valueMax]', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onChangeMin = vi.fn()
     renderSlider({ onChangeMin })
 
@@ -55,7 +55,7 @@ describe('RangeSlider — typing an exact amount', () => {
   })
 
   it('clamps a typed min below the slider floor up to min', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onChangeMin = vi.fn()
     renderSlider({ onChangeMin })
 
@@ -67,7 +67,7 @@ describe('RangeSlider — typing an exact amount', () => {
   })
 
   it('clamps a typed min above the current max down to valueMax', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onChangeMin = vi.fn()
     renderSlider({ onChangeMin })
 
@@ -79,7 +79,7 @@ describe('RangeSlider — typing an exact amount', () => {
   })
 
   it('saves a typed max, clamped to [valueMin, max]', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onChangeMax = vi.fn()
     renderSlider({ onChangeMax })
 
@@ -97,7 +97,7 @@ describe('RangeSlider — typing an exact amount', () => {
   })
 
   it('ignores an unparseable typed value', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onChangeMin = vi.fn()
     renderSlider({ onChangeMin })
 

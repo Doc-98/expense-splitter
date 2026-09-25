@@ -420,6 +420,8 @@ input.bill-title-editable-input {
   text-align: center;
 }
 
+/* The app-wide crash screen (ErrorBoundary.jsx). */
+.error-boundary-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-md); }
 .status-error {
   color: var(--warn);
   background: var(--warn-light);
@@ -813,7 +815,15 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    generally) so the select-mode checkbox row — .card-list-item
    .bill-select-row, never inside a shell — keeps its own border
    exactly as it already did. */
-.bill-row-shell .card-list-item { border: none; border-radius: 0; }
+.bill-row-shell .card-list-item {
+  border: none;
+  border-radius: 0;
+  /* The swipe-to-delete foreground (bills here, payments in History):
+     vertical scrolling stays with the browser, horizontal drags are
+     left to the swipe — without this the browser claims the drag part-way
+     and the row stops following the finger. Same as .item-row-head. */
+  touch-action: pan-y;
+}
 
 /* The ⋮ menu's own "Rename" (GroupView.jsx) swaps a bill row for this
    form entirely rather than editing in place — same choice
@@ -1119,6 +1129,9 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   font-size: 11px; font-weight: 600;
   border: 1px solid var(--border); color: var(--ink-soft); background: var(--surface);
   cursor: pointer;
+  /* Double-tap means "only this buyer" on the split-with pickers — without
+     this, iOS Safari would take it as double-tap-to-zoom instead. */
+  touch-action: manipulation;
 }
 .avatar.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .avatar.former { border-style: dashed; opacity: 0.7; }
@@ -1337,7 +1350,16 @@ input.amount-card-value-input {
 .item-body-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .item-body-label { font-size: 11.5px; color: var(--ink-soft); flex: none; }
 .item-body-row select { font-size: 12px; padding: 4px 6px; }
-.item-remove-btn { font-size: 12px; color: var(--warn); background: none; border: none; cursor: pointer; padding: 0; align-self: flex-start; }
+/* Icon-only, bottom-right of the expanded item — the swipe's own delete
+   strip is on the right too, so both ways to remove an item live on the
+   same side. */
+.item-remove-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  align-self: flex-end;
+  color: var(--warn); background: none; border: none; cursor: pointer;
+  padding: 8px; margin: -6px -8px -8px 0; border-radius: 8px;
+}
+.item-remove-btn:hover { background: var(--warn-light); }
 
 /* Every click-to-edit value (name, unit price, quantity, total price) gets
    the same dotted-underline treatment — deliberately the same visual
@@ -2282,6 +2304,16 @@ input.item-editable-input, textarea.item-editable-input {
   cursor: pointer;
 }
 .delete-all-payments-option input { flex-shrink: 0; }
+/* Record a payment's "Show people who've left" — a plain inline tick box,
+   not a stacked field label. */
+.show-past-members {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.show-past-members input { flex-shrink: 0; margin: 0; }
 
 /* ---------- Settings page ---------- */
 /* A plain label + control row — Appearance's dark-mode switch, Currency's

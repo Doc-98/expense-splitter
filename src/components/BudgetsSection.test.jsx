@@ -83,7 +83,7 @@ describe('BudgetsSection — period control', () => {
   })
 
   it('switching to Week shows the weekly comparison copy and the rounding note', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<BudgetsSection />)
     await screen.findByText('Groceries')
 
@@ -95,7 +95,7 @@ describe('BudgetsSection — period control', () => {
   })
 
   it('persists the chosen period to the real statsPreferences module', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<BudgetsSection />)
     await screen.findByText('Groceries')
 
@@ -114,7 +114,7 @@ describe('BudgetsSection — displaying an existing budget', () => {
   })
 
   it('shows the amount divided by 4 (and rounded) once switched to week', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     // 250 isn't evenly divisible by 4 to the cent — 62.5 exactly, in this
     // case, but still exercises the same monthlyToDisplayAmount() path
     // budgetPeriod.test.js covers directly.
@@ -129,7 +129,7 @@ describe('BudgetsSection — displaying an existing budget', () => {
 
 describe('BudgetsSection — saving an edit', () => {
   it('saves a typed amount unchanged while in month mode', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<BudgetsSection />)
     await screen.findByText('Groceries')
 
@@ -142,7 +142,7 @@ describe('BudgetsSection — saving an edit', () => {
   })
 
   it('multiplies a typed weekly amount by 4 before saving the monthly figure', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<BudgetsSection />)
     await screen.findByText('Groceries')
     await user.click(screen.getByRole('button', { name: 'Week' }))
@@ -162,7 +162,7 @@ describe('BudgetsSection — saving an edit', () => {
     mockFetchBudgetsData.mockResolvedValue(
       dataFixture({ thresholdByKey: new Map([['groceries', { category_name: 'Groceries', amount: 10.1 }]]) })
     )
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<BudgetsSection />)
     await screen.findByText('Groceries')
     await user.click(screen.getByRole('button', { name: 'Week' }))
@@ -182,7 +182,7 @@ describe('BudgetsSection — saving an edit', () => {
   })
 
   it('deletes the budget when cleared, regardless of period', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<BudgetsSection />)
     await screen.findByText('Groceries')
     await user.click(screen.getByRole('button', { name: 'Week' }))
@@ -196,7 +196,7 @@ describe('BudgetsSection — saving an edit', () => {
   })
 
   it('rejects a zero or negative typed amount the same way in either period', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<BudgetsSection />)
     await screen.findByText('Groceries')
 

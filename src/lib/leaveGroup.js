@@ -1,5 +1,8 @@
 import { supabase } from '../supabaseClient'
-import { computeBalances, computeDailyTotalsForUser } from './settlement'
+import { computeDailyTotalsForUser } from './settlement'
+import { deriveBillsItemsShares } from './deriveBillData'
+import { fetchGroupBills } from './groupViewSnapshot'
+import { fetchGroupBalances } from './groupBalances'
 
 // Shared by GroupSettings' member-list "Leave"/"Remove" and the Settings
 // page's Groups section "Leave group" — both need to freeze a balance and
@@ -13,45 +16,16 @@ import { computeBalances, computeDailyTotalsForUser } from './settlement'
 // guest. `categories` only needs `id`/`name`, just enough to resolve each
 // bill/item's effective category down to a name for the frozen snapshot.
 export async function snapshotAndRemoveMember({ groupId, groupName, member, categories }) {
-  const { data: billsData, error: billsError } = await supabase
-    .from('bills')
-    .select(
-      'id, paid_by, created_at, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
-    )
-    .eq('group_id', groupId)
-  if (billsError) throw new Error(billsError.message)
-
-  const bills = (billsData || []).map((b) => ({
-    id: b.id,
-    paid_by: b.paid_by,
-    created_at: b.created_at,
-    category_id: b.category_id,
-    payers: b.bill_payers || [],
-  }))
-  const items = []
-  const itemShares = []
-  for (const bill of billsData || []) {
-    for (const item of bill.items || []) {
-      items.push({ id: item.id, bill_id: bill.id, total_price: item.total_price, category_id: item.category_id })
-      for (const share of item.item_shares || []) {
-        itemShares.push({ item_id: item.id, user_id: share.member_id, shares: share.shares })
-      }
-    }
-  }
-
-  const { data: paymentsData, error: paymentsError } = await supabase
-    .from('payments')
-    .select('from_member, to_member, amount')
-    .eq('group_id', groupId)
-  if (paymentsError) throw new Error(paymentsError.message)
-
-  const paymentsForBalances = (paymentsData || []).map((p) => ({
-    from_user: p.from_member,
-    to_user: p.to_member,
-    amount: p.amount,
-  }))
-
-  const balances = computeBalances({ bills, items, itemShares, payments: paymentsForBalances })
+  // Both through the group page's own fast calls: the complete bill list in
+  // one go (a plain select used to stop silently at the API's 1000-row cap,
+  // freezing a snapshot from a partial history), and the balance computed
+  // server-side, the same number the group page shows. remove_group_member
+  // recomputes the balance itself too; it's passed for older databases.
+  const [billsData, balances] = await Promise.all([
+    fetchGroupBills(supabase, groupId),
+    fetchGroupBalances(supabase, groupId),
+  ])
+  const { list: bills, items, itemShares } = deriveBillsItemsShares(billsData)
   const categoryNameById = new Map(categories.map((c) => [c.id, c.name]))
   const dailyTotals = computeDailyTotalsForUser(member.id, { bills, items, itemShares, categoryNameById })
 

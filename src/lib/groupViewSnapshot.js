@@ -19,6 +19,13 @@ export async function fetchGroupBills(supabase, groupId, { since, billIds } = {}
   return data || []
 }
 
+// The same for several groups at once (Your Stats/Graphs) — one call per
+// group, all in parallel; each bill carries its own group_id.
+export async function fetchBillsForGroups(supabase, groupIds, options) {
+  const perGroup = await Promise.all(groupIds.map((groupId) => fetchGroupBills(supabase, groupId, options)))
+  return perGroup.flat()
+}
+
 // Pulled out of GroupView.jsx's own computeAndSetSettlement (per-bill
 // personal totals and the week/month preview totals) so the exact same
 // derivation can run twice: once for real on mount, and once ahead of time

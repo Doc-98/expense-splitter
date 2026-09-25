@@ -17,6 +17,12 @@ import BackButton from '../components/BackButton'
 // fresh on mount (a plain useState(getter), same as every other per-device
 // preference in this app; nothing here needs it to update live while this
 // page is already open).
+// An avatar's name, marked when they've left — the dashed "former" circle
+// alone doesn't say why it looks different.
+function pastLabel(m) {
+  return m.active ? m.name : `${m.name} (left)`
+}
+
 export default function RecordPayment() {
   const { groupId } = useParams()
   const navigate = useNavigate()
@@ -30,6 +36,12 @@ export default function RecordPayment() {
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [layout] = useState(() => getGroupViewPreferences().paymentFormLayout)
+  // Current members only by default; people who've left (members and
+  // archived guests alike) are one tick away, for settling up with someone
+  // after they've gone.
+  const [showPast, setShowPast] = useState(false)
+  const hasPast = allMembers.some((m) => !m.active)
+  const people = showPast ? allMembers : allMembers.filter((m) => m.active)
 
   const loadGroup = useCallback(async () => {
     const { data, error: groupError } = await supabase.from('groups').select('*').eq('id', groupId).single()
@@ -76,6 +88,16 @@ export default function RecordPayment() {
     }
   }
 
+  // Hiding them again also drops a past member already picked, rather than
+  // leaving someone selected who's no longer on screen.
+  function toggleShowPast(show) {
+    setShowPast(show)
+    if (show) return
+    const isPast = (id) => allMembers.some((m) => m.id === id && !m.active)
+    if (isPast(from)) setFrom('')
+    if (isPast(to)) setTo('')
+  }
+
   async function submit(e) {
     e.preventDefault()
     const amt = parseNumber(amount)
@@ -113,15 +135,15 @@ export default function RecordPayment() {
           <>
             <span className="detail-row-label">Who paid</span>
             <div className="avatar-row">
-              {allMembers.map((m) => (
+              {people.map((m) => (
                 <button
                   key={m.id}
                   type="button"
-                  className={`avatar avatar-lg ${from === m.id ? 'active' : ''}`}
+                  className={`avatar avatar-lg ${from === m.id ? 'active' : ''} ${m.active ? '' : 'former'}`}
                   onClick={() => pick('from', m.id)}
                   disabled={to === m.id}
-                  title={m.name}
-                  aria-label={m.name}
+                  title={pastLabel(m)}
+                  aria-label={pastLabel(m)}
                   aria-pressed={from === m.id}
                 >
                   <AvatarGlyph iconId={m.avatarIcon} name={m.name} size={17} />
@@ -130,15 +152,15 @@ export default function RecordPayment() {
             </div>
             <span className="detail-row-label">Paid to</span>
             <div className="avatar-row">
-              {allMembers.map((m) => (
+              {people.map((m) => (
                 <button
                   key={m.id}
                   type="button"
-                  className={`avatar avatar-lg ${to === m.id ? 'active' : ''}`}
+                  className={`avatar avatar-lg ${to === m.id ? 'active' : ''} ${m.active ? '' : 'former'}`}
                   onClick={() => pick('to', m.id)}
                   disabled={from === m.id}
-                  title={m.name}
-                  aria-label={m.name}
+                  title={pastLabel(m)}
+                  aria-label={pastLabel(m)}
                   aria-pressed={to === m.id}
                 >
                   <AvatarGlyph iconId={m.avatarIcon} name={m.name} size={17} />
@@ -152,10 +174,11 @@ export default function RecordPayment() {
               Who paid
               <select value={from} onChange={(e) => pick('from', e.target.value)} aria-label="Who paid">
                 <option value="">Who paid…</option>
-                {allMembers.map((m) => (
+                {people.map((m) => (
                   <option key={m.id} value={m.id} disabled={m.id === to}>
                     {m.name}
                     {m.isGuest ? ' (guest)' : ''}
+                    {m.active ? '' : ' (left)'}
                   </option>
                 ))}
               </select>
@@ -164,15 +187,23 @@ export default function RecordPayment() {
               Paid to
               <select value={to} onChange={(e) => pick('to', e.target.value)} aria-label="Who received it">
                 <option value="">Paid to…</option>
-                {allMembers.map((m) => (
+                {people.map((m) => (
                   <option key={m.id} value={m.id} disabled={m.id === from}>
                     {m.name}
                     {m.isGuest ? ' (guest)' : ''}
+                    {m.active ? '' : ' (left)'}
                   </option>
                 ))}
               </select>
             </label>
           </>
+        )}
+
+        {hasPast && (
+          <label className="show-past-members">
+            <input type="checkbox" checked={showPast} onChange={(e) => toggleShowPast(e.target.checked)} />
+            <span>Show people who've left</span>
+          </label>
         )}
 
         <label>

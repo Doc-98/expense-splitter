@@ -18,6 +18,7 @@ function renderItemRow(props) {
         categories={CATEGORIES}
         billCategoryId="cat-food"
         onToggleBuyer={vi.fn()}
+        onOnlyBuyer={vi.fn()}
         onDelete={vi.fn()}
         onCategoryChange={vi.fn()}
         onUpdate={vi.fn()}
@@ -121,7 +122,7 @@ describe('ItemRow — collapsed view', () => {
 
 describe('ItemRow — expanding and editing', () => {
   it('expands the row on click', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const { container } = renderItemRow({ item: makeItem() })
     expect(container.querySelector('.item-row')).not.toHaveClass('is-open')
 
@@ -130,7 +131,7 @@ describe('ItemRow — expanding and editing', () => {
   })
 
   it('renames the item on commit', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onUpdate = vi.fn()
     renderItemRow({ item: makeItem(), onUpdate })
     await openRow(user)
@@ -144,14 +145,14 @@ describe('ItemRow — expanding and editing', () => {
   })
 
   it('only shows the unit price field when quantity is not 1', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderItemRow({ item: makeItem({ quantity: '1' }) })
     await openRow(user)
     expect(screen.queryByRole('button', { name: 'Unit price of Pizza' })).not.toBeInTheDocument()
   })
 
   it('saves a valid unit price, including a typed expression', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onUpdate = vi.fn()
     renderItemRow({ item: makeItem({ quantity: '2' }), onUpdate })
     await openRow(user)
@@ -165,7 +166,7 @@ describe('ItemRow — expanding and editing', () => {
   })
 
   it('ignores an unparseable unit price', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onUpdate = vi.fn()
     renderItemRow({ item: makeItem({ quantity: '2' }), onUpdate })
     await openRow(user)
@@ -179,7 +180,7 @@ describe('ItemRow — expanding and editing', () => {
   })
 
   it('saves a valid quantity and ignores a zero or negative one', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onUpdate = vi.fn()
     renderItemRow({ item: makeItem(), onUpdate })
     await openRow(user)
@@ -198,7 +199,7 @@ describe('ItemRow — expanding and editing', () => {
   })
 
   it('saves a valid total price', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onUpdate = vi.fn()
     renderItemRow({ item: makeItem(), onUpdate })
     await openRow(user)
@@ -214,7 +215,7 @@ describe('ItemRow — expanding and editing', () => {
 
 describe('ItemRow — split with', () => {
   it('toggles a buyer on click', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onToggleBuyer = vi.fn()
     renderItemRow({ item: makeItem(), onToggleBuyer })
     await openRow(user)
@@ -223,8 +224,35 @@ describe('ItemRow — split with', () => {
     expect(onToggleBuyer).toHaveBeenCalledWith('member-alice')
   })
 
+  it('makes a buyer the only one on a double tap (after the first tap toggled as usual)', async () => {
+    const user = userEvent.setup({ delay: null })
+    const onToggleBuyer = vi.fn()
+    const onOnlyBuyer = vi.fn()
+    renderItemRow({ item: makeItem(), onToggleBuyer, onOnlyBuyer })
+    await openRow(user)
+
+    await user.dblClick(screen.getByRole('button', { name: 'Bob' }))
+    expect(onToggleBuyer).toHaveBeenCalledOnce()
+    expect(onToggleBuyer).toHaveBeenCalledWith('member-bob')
+    expect(onOnlyBuyer).toHaveBeenCalledOnce()
+    expect(onOnlyBuyer).toHaveBeenCalledWith('member-bob')
+  })
+
+  it('does not treat quick taps on two different buyers as a double tap', async () => {
+    const user = userEvent.setup({ delay: null })
+    const onToggleBuyer = vi.fn()
+    const onOnlyBuyer = vi.fn()
+    renderItemRow({ item: makeItem(), onToggleBuyer, onOnlyBuyer })
+    await openRow(user)
+
+    await user.click(screen.getByRole('button', { name: 'Alice' }))
+    await user.click(screen.getByRole('button', { name: 'Bob' }))
+    expect(onToggleBuyer).toHaveBeenCalledTimes(2)
+    expect(onOnlyBuyer).not.toHaveBeenCalled()
+  })
+
   it('marks an assigned buyer active', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderItemRow({ item: makeItem({ item_shares: [{ member_id: 'member-alice' }] }) })
     await openRow(user)
     expect(screen.getByRole('button', { name: 'Alice' })).toHaveClass('active')
@@ -232,21 +260,21 @@ describe('ItemRow — split with', () => {
   })
 
   it('keeps a former member visible (marked "former") if already assigned, but hides other former members', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderItemRow({ item: makeItem({ item_shares: [{ member_id: 'member-carol' }] }) })
     await openRow(user)
     expect(screen.getByRole('button', { name: 'Carol (left)' })).toHaveClass('former')
   })
 
   it('hides an inactive member entirely when not already assigned', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderItemRow({ item: makeItem({ item_shares: [] }) })
     await openRow(user)
     expect(screen.queryByRole('button', { name: /Carol/ })).not.toBeInTheDocument()
   })
 
   it('hides the split-with section entirely when hideBuyers is set', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderItemRow({ item: makeItem(), hideBuyers: true })
     await openRow(user)
     expect(screen.queryByText('Split with')).not.toBeInTheDocument()
@@ -255,7 +283,7 @@ describe('ItemRow — split with', () => {
 
 describe('ItemRow — category and delete', () => {
   it('labels the default option "Same as bill (<name>)" and switches on selection', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onCategoryChange = vi.fn()
     renderItemRow({ item: makeItem({ category_id: null }), onCategoryChange })
     await openRow(user)
@@ -266,19 +294,23 @@ describe('ItemRow — category and delete', () => {
   })
 
   it('hides the category picker when there are no categories', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderItemRow({ item: makeItem(), categories: [] })
     await openRow(user)
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
   })
 
   it('deletes the item via the Remove item button', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onDelete = vi.fn()
     renderItemRow({ item: makeItem(), onDelete })
     await openRow(user)
 
-    await user.click(screen.getByRole('button', { name: 'Remove item' }))
+    const remove = screen.getByRole('button', { name: 'Remove item' })
+    // An icon button now — the name comes from its label, not visible text.
+    expect(remove).toHaveTextContent('')
+    expect(remove.querySelector('svg')).not.toBeNull()
+    await user.click(remove)
     expect(onDelete).toHaveBeenCalledOnce()
   })
 

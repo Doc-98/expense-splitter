@@ -16,17 +16,23 @@ export default function InviteMenu({ inviteUrl, groupName }) {
     // Generated lazily, on first open, and cached — no point building a QR
     // code for an invite menu nobody opens this session.
     if (next && !qrDataUrl) {
-      const QRCode = await import('qrcode')
-      const dataUrl = await QRCode.toDataURL(inviteUrl, { width: 220, margin: 1 })
-      setQrDataUrl(dataUrl)
+      // Loaded on demand, so it can fail offline (or after a new version
+      // replaced the file) — the menu still opens with the Share button,
+      // just without the QR code.
+      try {
+        const QRCode = await import('qrcode')
+        setQrDataUrl(await QRCode.toDataURL(inviteUrl, { width: 220, margin: 1 }))
+      } catch {
+        setStatus("Couldn't load the QR code — the Share button still works.")
+      }
     }
   }
 
   async function share() {
     const result = await shareOrCopyText(inviteUrl, `Join ${groupName} on Spesa`)
-    if (result === 'copied') {
-      setStatus('Copied to clipboard!')
-      setTimeout(() => setStatus(null), 2000)
+    if (result === 'copied' || result === 'failed') {
+      setStatus(result === 'copied' ? 'Copied to clipboard!' : "Couldn't share or copy the link — your browser blocked it.")
+      setTimeout(() => setStatus(null), result === 'copied' ? 2000 : 4000)
     }
   }
 

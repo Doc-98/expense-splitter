@@ -111,7 +111,7 @@ describe('GroupDangerZoneSection', () => {
   })
 
   it('leaves the group on confirm: fetches categories, snapshots, then navigates home', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupDangerZoneSection />)
 
     await user.click(await screen.findByText('Leave group'))
@@ -128,7 +128,7 @@ describe('GroupDangerZoneSection', () => {
   })
 
   it('cancelling the Leave group sheet does nothing', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupDangerZoneSection />)
 
     await user.click(await screen.findByText('Leave group'))
@@ -139,7 +139,7 @@ describe('GroupDangerZoneSection', () => {
   })
 
   it('shows an error and keeps the sheet open when leaving fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockSnapshotAndRemoveMember.mockRejectedValue(new Error('could not leave'))
     render(<GroupDangerZoneSection />)
 
@@ -152,7 +152,7 @@ describe('GroupDangerZoneSection', () => {
   })
 
   it("gates Delete all bills behind typing the group's exact name", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupDangerZoneSection />)
 
     await user.click(await screen.findByText('Delete all bills', { selector: 'button' }))
@@ -168,7 +168,7 @@ describe('GroupDangerZoneSection', () => {
   })
 
   it('deletes all bills on confirm, without payments by default', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupDangerZoneSection />)
 
     await user.click(await screen.findByText('Delete all bills', { selector: 'button' }))
@@ -183,7 +183,7 @@ describe('GroupDangerZoneSection', () => {
   })
 
   it('deletes all bills including payments when the checkbox is ticked', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupDangerZoneSection />)
 
     await user.click(await screen.findByText('Delete all bills', { selector: 'button' }))
@@ -198,7 +198,7 @@ describe('GroupDangerZoneSection', () => {
   })
 
   it('shows an error and keeps the sheet open when deleting all bills fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockRpc.mockResolvedValue({ error: { message: 'could not delete bills' } })
     render(<GroupDangerZoneSection />)
 
@@ -211,7 +211,7 @@ describe('GroupDangerZoneSection', () => {
   })
 
   it('cancelling Delete all bills resets the payments checkbox too', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupDangerZoneSection />)
 
     await user.click(await screen.findByText('Delete all bills', { selector: 'button' }))
@@ -223,7 +223,7 @@ describe('GroupDangerZoneSection', () => {
   })
 
   it('deletes the group on confirm and navigates home', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupDangerZoneSection />)
 
     await user.click(await screen.findByText('Delete group', { selector: 'button' }))
@@ -235,7 +235,7 @@ describe('GroupDangerZoneSection', () => {
   })
 
   it('shows an error and keeps the sheet open when deleting the group fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockRpc.mockResolvedValue({ error: { message: 'could not delete group' } })
     render(<GroupDangerZoneSection />)
 

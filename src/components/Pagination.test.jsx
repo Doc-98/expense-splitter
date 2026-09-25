@@ -43,7 +43,7 @@ describe('Pagination', () => {
   })
 
   it('advances the page on Next and disables Next on the last page', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<PaginationHarness totalItems={25} pageSize={10} />)
 
     await user.click(screen.getByLabelText('Next page'))
@@ -55,7 +55,7 @@ describe('Pagination', () => {
   })
 
   it('goes back on Prev', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<PaginationHarness totalItems={25} pageSize={10} />)
 
     await user.click(screen.getByLabelText('Next page'))

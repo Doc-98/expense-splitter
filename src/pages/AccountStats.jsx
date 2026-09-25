@@ -3,11 +3,14 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
-import { computeBalances, computeSpendingTotals } from '../lib/settlement'
+import { computeSpendingTotals } from '../lib/settlement'
 import { computeMyCategorySpend, mergeCategorySpend } from '../lib/categoryStats'
 import { mergeCategoriesByName } from '../lib/categories'
 import { fetchThresholds } from '../lib/thresholds'
-import { fetchAllRows } from '../lib/fetchAllRows'
+import { fetchBillsForGroups } from '../lib/groupViewSnapshot'
+import { fetchGroupBalances } from '../lib/groupBalances'
+import { toWindowStart } from '../lib/groupStatsSnapshot'
+import { overallBalanceFrom, totalsByBill } from '../lib/accountStatsMath'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { accountStatsCache } from '../lib/accountStatsCache'
 import { getStatsPreferences } from '../lib/statsPreferences'
@@ -72,21 +75,12 @@ export default function AccountStats() {
   const [error, setError] = useState(null)
   // 'loading' until the background backfill (see load() below) finishes,
   // 'complete' once every one of my groups' full history is in rawBills,
-  // 'failed' if the backfill errored. Unlike GroupStats.jsx, this page
-  // doesn't only show the notice when the *selected period* needs older
-  // data — overallBalance below is a "right now, regardless of period"
-  // figure that always needs full history to be correct, so the notice
-  // here is gated on historyStatus alone, not on isViewCovered.
+  // 'failed' if the backfill errored. The notice is gated on historyStatus
+  // alone, not on isViewCovered like GroupStats.jsx — this page mixes
+  // several groups' histories, and keeps the simpler rule.
   const [historyStatus, setHistoryStatus] = useState('loading')
   const [historyWindowStart, setHistoryWindowStart] = useState(null)
 
-  const BILLS_SELECT =
-    'id, group_id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
-
-  // Returns the derived { list, items, itemShares } alongside setting
-  // rawBills/rawItems/rawShares from it — the caller (load(), below) needs
-  // that derived shape immediately, to compute overallBalance from,
-  // without waiting on a re-render to read the new state back out.
   function applyRawBills(rawBillsData) {
     const { list, items, itemShares } = deriveBillsItemsShares(rawBillsData)
     setRawBills(
@@ -102,54 +96,32 @@ export default function AccountStats() {
     )
     setRawItems(items)
     setRawShares(itemShares)
-    return { list, items, itemShares }
   }
 
-  // The live balance from every group still active in, on top of any
-  // not-yet-settled balance frozen from a group left — a "right now"
-  // figure, not scoped to whatever period is selected below, so it's the
-  // one number on this page that always needs *every* bill and payment to
-  // be correct. That's why it's only ever computed from the fully
-  // backfilled data in load() below, never from just the recent window.
-  function computeOverallBalance(list, items, itemShares, groupIds, participantByGroup, paymentsData, snapshotData) {
-    let balanceSum = 0
-    for (const groupId of groupIds) {
-      const myId = participantByGroup.get(groupId)
-      const groupBills = list.filter((b) => b.group_id === groupId)
-      const groupItems = items.filter((it) => groupBills.some((b) => b.id === it.bill_id))
-      const groupShares = itemShares.filter((s) => groupItems.some((it) => it.id === s.item_id))
-      const groupPayments = paymentsData
-        .filter((p) => p.group_id === groupId)
-        .map((p) => ({ from_user: p.from_member, to_user: p.to_member, amount: p.amount }))
-      const balances = computeBalances({ bills: groupBills, items: groupItems, itemShares: groupShares, payments: groupPayments })
-      balanceSum += balances[myId] || 0
-    }
-    for (const snap of snapshotData.filter((s) => !groupIds.includes(s.group_id))) {
-      if (!snap.balance_settled) balanceSum += Number(snap.balance)
-    }
-    return Math.round(balanceSum * 100) / 100
-  }
-
-  // The bills fetch is split into two phases, same as GroupStats.jsx: a
+  // Bills come from get_group_bills (one call per group, in parallel), the
+  // group page's own fast call, in two phases like GroupStats.jsx: a
   // "recent window" (this year plus last year — see getStatsWindowStart)
-  // fetched up front so the page renders immediately with genuinely
-  // correct numbers for any of today's default views, then the rest of
-  // every group's history backfilled afterward in the background. Only
-  // once that backfill finishes does this recompute overallBalance — see
-  // the comment on computeOverallBalance above for why that figure
-  // specifically can't be computed from a partial window.
+  // up front so the page renders immediately with correct numbers for any
+  // of today's default views, then every group's complete history in the
+  // background. With complete history already cached from a previous
+  // visit, the complete lists are fetched in one go instead, so older
+  // periods never briefly drop out.
+  //
+  // The overall balance doesn't wait on any of that: it's each group's
+  // server-computed balance (get_group_balances, the same figure the group
+  // page shows) plus any unsettled balance frozen from a group left.
   const load = useCallback(async () => {
     setError(null)
     try {
       const windowStart = getStatsWindowStart()
-      setHistoryWindowStart(windowStart)
+      const hadCompleteHistory = accountStatsCache.get(user.id)?.historyStatus === 'complete'
+      if (!hadCompleteHistory) setHistoryWindowStart(windowStart)
 
       // None of these three depend on each other — group_members only needs
       // user.id, and thresholds/departure snapshots are scoped to the
       // account, not to any particular group — so all three fire at once
-      // instead of stacking three round-trips before anything else can even
-      // start (everything below this needs groupIds, which only comes from
-      // the first of these).
+      // (everything below this needs groupIds, which only comes from the
+      // first of these).
       const [memberResult, thresholdsData, snapshotResult] = await Promise.all([
         supabase.from('group_members').select('id, group_id').eq('user_id', user.id).eq('active', true),
         fetchThresholds(user.id),
@@ -166,27 +138,17 @@ export default function AccountStats() {
 
       // Departed groups' frozen records — a group you're back in shouldn't
       // also show a stale snapshot, live data already covers it fully.
-      const snapshotData = snapshotResult.data || []
-      setSnapshots(snapshotData.filter((s) => !groupIds.includes(s.group_id)))
+      const snapshotData = (snapshotResult.data || []).filter((s) => !groupIds.includes(s.group_id))
+      setSnapshots(snapshotData)
 
-      // Everything below only needs groupIds (known now) and none of it
-      // depends on any of the others' results either, so all four fetch at
-      // once rather than one after another. Payments aren't windowed like
-      // bills are — the table is small (people settle up far less often
-      // than they add bills) and overallBalance needs every payment
-      // regardless, so there's nothing to gain by deferring it.
-      const [groupsResult, recentBillsData, categoriesResult, paymentsResult] = await Promise.all([
+      const [groupsResult, billsData, categoriesResult, balancesByGroup] = await Promise.all([
         groupIds.length
           ? supabase.from('groups').select('id, name').in('id', groupIds)
           : Promise.resolve({ data: [], error: null }),
-        groupIds.length
-          ? fetchAllRows(() =>
-              supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).in('group_id', groupIds).gte('created_at', windowStart.toISOString())
-            )
-          : Promise.resolve([]),
-        // For the "Budgets" section below — every category
-        // across every group I'm in (so same-named tags from different
-        // groups can be merged, see mergeCategoriesByName).
+        fetchBillsForGroups(supabase, groupIds, hadCompleteHistory ? {} : { since: windowStart }),
+        // For the "Budgets" section below — every category across every
+        // group I'm in (so same-named tags from different groups can be
+        // merged, see mergeCategoriesByName).
         groupIds.length
           ? supabase
               .from('categories')
@@ -194,35 +156,26 @@ export default function AccountStats() {
               .in('group_id', groupIds)
               .order('created_at', { ascending: true })
           : Promise.resolve({ data: [], error: null }),
-        groupIds.length
-          ? supabase.from('payments').select('id, group_id, from_member, to_member, amount').in('group_id', groupIds)
-          : Promise.resolve({ data: [], error: null }),
+        Promise.all(groupIds.map((groupId) => fetchGroupBalances(supabase, groupId))),
       ])
       if (groupsResult.error) throw groupsResult.error
       if (categoriesResult.error) throw categoriesResult.error
-      if (paymentsResult.error) throw paymentsResult.error
 
       setGroups(groupsResult.data || [])
-      // Deliberately doesn't touch historyStatus/overallBalance here — see
-      // the comment above applyRawBills's call site in the backfill below.
-      applyRawBills(recentBillsData)
+      applyRawBills(billsData)
       setRawCategories(categoriesResult.data || [])
-
-      const paymentsData = paymentsResult.data || []
+      setOverallBalance(overallBalanceFrom(groupIds, participantByGroup, balancesByGroup, snapshotData))
+      if (hadCompleteHistory) {
+        setHistoryStatus('complete')
+        return
+      }
 
       try {
-        const olderBillsData = groupIds.length
-          ? await fetchAllRows(() =>
-              supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).in('group_id', groupIds).lt('created_at', windowStart.toISOString())
-            )
-          : []
-        const { list, items, itemShares } = applyRawBills([...olderBillsData, ...recentBillsData])
-        setOverallBalance(computeOverallBalance(list, items, itemShares, groupIds, participantByGroup, paymentsData, snapshotData))
+        applyRawBills(await fetchBillsForGroups(supabase, groupIds))
         setHistoryStatus('complete')
       } catch {
         // The recent window above is still shown, correctly, for anything
-        // within it — this only means older history (and therefore
-        // overallBalance, which needs all of it) couldn't be reached, so
+        // within it — this only means older history couldn't be reached, so
         // the "still loading" notice below stays up rather than
         // disappearing, but nothing already on screen is wrong.
         setHistoryStatus('failed')
@@ -259,7 +212,7 @@ export default function AccountStats() {
       setSnapshots(cached.snapshots)
       setOverallBalance(cached.overallBalance)
       setHistoryStatus(cached.historyStatus)
-      setHistoryWindowStart(cached.historyWindowStart)
+      setHistoryWindowStart(toWindowStart(cached.historyWindowStart))
     }
     load()
   }, [user.id, load])
@@ -357,6 +310,7 @@ export default function AccountStats() {
 
   const showMonthly = granularity === 'all' || granularity === 'year'
   const monthly = {}
+  const billTotalById = totalsByBill(items)
   for (const b of bills) {
     // Only counts bills *you* fronted — has to match what a departed
     // group's snapshot can supply below (just your own portion, by design),
@@ -371,7 +325,7 @@ export default function AccountStats() {
       const mine = b.payers.find((p) => p.member_id === myId)
       if (mine) myContribution = Number(mine.amount)
     } else if (b.paid_by === myId) {
-      myContribution = items.filter((it) => it.bill_id === b.id).reduce((sum, it) => sum + Number(it.total_price), 0)
+      myContribution = billTotalById.get(b.id) || 0
     }
     if (myContribution <= 0) continue
     const key = monthKey(b.created_at)

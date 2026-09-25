@@ -7,6 +7,8 @@ import { fetchCategories } from '../lib/categories'
 import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
+import { groupStatsCache } from '../lib/groupStatsCache'
+import { groupStatsSnapshotFromGroupView } from '../lib/groupStatsSnapshot'
 import { isNotFoundError } from '../lib/notFound'
 import { useCoalescedRunner } from '../lib/coalescedRunner'
 import { createRealtimeRelevance } from '../lib/realtimeRelevance'
@@ -660,6 +662,12 @@ export default function GroupView() {
   // never mistaken for the real thing and persisted as if it were.
   useEffect(() => {
     if (!group || !bills || !historyComplete) return
+    // Stats (and Graphs) read the very same complete data, so they're
+    // filled from here too — opening them from this page is instant, with
+    // no loading of their own (see groupStatsSnapshot.js).
+    if (allMembers.length) {
+      groupStatsCache.set(groupId, groupStatsSnapshotFromGroupView({ group, allMembers, categories, bills }))
+    }
     groupViewCache.set(groupId, {
       group,
       allMembers,
@@ -966,6 +974,8 @@ export default function GroupView() {
       if (result === 'copied') {
         setShareStatus('Copied to clipboard!')
         setTimeout(() => setShareStatus(null), 2000)
+      } else if (result === 'failed') {
+        setError("Couldn't share or copy — your browser blocked it.")
       }
     } catch (err) {
       setError(err.message)

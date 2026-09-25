@@ -19,7 +19,7 @@ describe('ConfirmSheet', () => {
   })
 
   it('calls onConfirm when the confirm button is clicked', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onConfirm = vi.fn()
     renderSheet({ onConfirm })
     await user.click(screen.getByRole('button', { name: 'Leave' }))
@@ -27,7 +27,7 @@ describe('ConfirmSheet', () => {
   })
 
   it('calls onCancel when the Cancel button is clicked', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onCancel = vi.fn()
     renderSheet({ onCancel })
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -35,7 +35,7 @@ describe('ConfirmSheet', () => {
   })
 
   it('calls onCancel on a backdrop click, but not on a click inside the panel', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onCancel = vi.fn()
     renderSheet({ onCancel })
 
@@ -47,7 +47,7 @@ describe('ConfirmSheet', () => {
   })
 
   it('calls onCancel on Escape', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onCancel = vi.fn()
     renderSheet({ onCancel })
     await user.keyboard('{Escape}')

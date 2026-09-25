@@ -6,6 +6,7 @@ import { shareOrCopyText } from '../lib/shareText'
 import { fetchGroupRosterData } from '../lib/prefetchGroupSettings'
 import { groupRosterCache } from '../lib/groupRosterCache'
 import { useClickOutside } from '../lib/useClickOutside'
+import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
 import TypedConfirmSheet from './TypedConfirmSheet'
 
@@ -163,9 +164,15 @@ export default function GroupGuestsSection() {
   // button already is for the group invite link.
   async function ensureClaimToken(memberId) {
     if (claimTokens[memberId]) return claimTokens[memberId]
-    const token = await requestClaimLink(memberId)
-    setClaimTokens((t) => ({ ...t, [memberId]: token }))
-    return token
+    try {
+      const token = await requestClaimLink(memberId)
+      setClaimTokens((t) => ({ ...t, [memberId]: token }))
+      return token
+    } catch (err) {
+      // Otherwise "Claim link" just stays greyed out with no reason given.
+      setError(`Couldn't prepare a claim link: ${loadErrorMessage(err)}`)
+      return null
+    }
   }
 
   function getClaimLink(member) {
@@ -177,8 +184,10 @@ export default function GroupGuestsSection() {
       if (result === 'copied') {
         setClaimStatus(`Claim link for ${member.name} copied — send it to them directly.`)
         setTimeout(() => setClaimStatus(null), 3000)
+      } else if (result === 'failed') {
+        setError(`Couldn't share or copy the claim link — your browser blocked it. The link is: ${url}`)
       }
-    }, (err) => setError(err.message))
+    })
   }
 
   // The actual safety check (zero bills, payments, or subscriptions still

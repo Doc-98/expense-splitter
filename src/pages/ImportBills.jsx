@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
 import { fetchGroupMembers, addGuest } from '../lib/members'
 import { fetchAllRows } from '../lib/fetchAllRows'
+import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { parseSplitwiseCsv, checkImportBalances } from '../lib/splitwiseImport'
 import { splitEvenly } from '../lib/splitEvenly'
 import MultiPayerModal from '../components/MultiPayerModal'
@@ -49,38 +50,45 @@ export default function ImportBills() {
     setError(null)
     setResult(null)
 
-    const text = await file.text()
-    const parseResult = parseSplitwiseCsv(text)
+    // Reading the file, parsing it and fetching the roster can each fail (an
+    // unreadable file, a dropped connection) — shown, not left as a page
+    // that silently never moves past the file picker.
+    try {
+      const text = await file.text()
+      const parseResult = parseSplitwiseCsv(text)
 
-    if (
-      parseResult.expenses.length === 0 &&
-      parseResult.needsReview.length === 0 &&
-      parseResult.warnings.length > 0 &&
-      parseResult.peopleNames.length === 0
-    ) {
-      setError(parseResult.warnings[0])
-      return
+      if (
+        parseResult.expenses.length === 0 &&
+        parseResult.needsReview.length === 0 &&
+        parseResult.warnings.length > 0 &&
+        parseResult.peopleNames.length === 0
+      ) {
+        setError(parseResult.warnings[0])
+        return
+      }
+
+      const currentMembers = await fetchGroupMembers(groupId)
+      setMembers(currentMembers)
+
+      // Default each detected name to an existing member with a matching
+      // name if there's an unambiguous one, otherwise default to creating a
+      // new guest for them — saves remapping everyone by hand for the common
+      // case where people's names already match.
+      const initialMapping = {}
+      for (const name of parseResult.peopleNames) {
+        const match = currentMembers.find((m) => m.name.toLowerCase() === name.toLowerCase())
+        initialMapping[name] = match ? match.id : 'new'
+      }
+
+      setMapping(initialMapping)
+      setStep('match')
+      setReviewIndex(0)
+      setReviewResolutions(parseResult.needsReview.map(() => null))
+      setResolvedIds(null)
+      setParsed(parseResult)
+    } catch (err) {
+      setError(`Couldn't read that file: ${loadErrorMessage(err)}`)
     }
-
-    const currentMembers = await fetchGroupMembers(groupId)
-    setMembers(currentMembers)
-
-    // Default each detected name to an existing member with a matching
-    // name if there's an unambiguous one, otherwise default to creating a
-    // new guest for them — saves remapping everyone by hand for the common
-    // case where people's names already match.
-    const initialMapping = {}
-    for (const name of parseResult.peopleNames) {
-      const match = currentMembers.find((m) => m.name.toLowerCase() === name.toLowerCase())
-      initialMapping[name] = match ? match.id : 'new'
-    }
-
-    setMapping(initialMapping)
-    setStep('match')
-    setReviewIndex(0)
-    setReviewResolutions(parseResult.needsReview.map(() => null))
-    setResolvedIds(null)
-    setParsed(parseResult)
   }
 
   function updateMapping(name, value) {

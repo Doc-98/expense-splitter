@@ -46,10 +46,12 @@ function paymentsTable() {
 let groupsSelectResult
 let paymentsInsertResult
 
+// Dave has left the group — hidden unless "Show people who've left" is ticked.
 const MEMBERS = [
-  { id: 'member-alice', name: 'Alice', avatarIcon: null, isGuest: false },
-  { id: 'member-bob', name: 'Bob', avatarIcon: null, isGuest: false },
-  { id: 'member-carol', name: 'Carol', avatarIcon: null, isGuest: false },
+  { id: 'member-alice', name: 'Alice', avatarIcon: null, isGuest: false, active: true },
+  { id: 'member-bob', name: 'Bob', avatarIcon: null, isGuest: false, active: true },
+  { id: 'member-carol', name: 'Carol', avatarIcon: null, isGuest: false, active: true },
+  { id: 'member-dave', name: 'Dave', avatarIcon: null, isGuest: false, active: false },
 ]
 
 beforeEach(() => {
@@ -73,7 +75,7 @@ describe('RecordPayment — dropdowns layout', () => {
   })
 
   it('keeps Record payment disabled until both people and a valid amount are set', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
 
@@ -91,7 +93,7 @@ describe('RecordPayment — dropdowns layout', () => {
   })
 
   it("disables a person on one side once they're picked on the other", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
 
@@ -102,7 +104,7 @@ describe('RecordPayment — dropdowns layout', () => {
   })
 
   it('records the payment with the right ids and amount, then navigates back to the group', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
 
@@ -116,7 +118,7 @@ describe('RecordPayment — dropdowns layout', () => {
   })
 
   it('shows an error and stays put when recording the payment fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     paymentsInsertResult = { error: { message: 'could not record payment' } }
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
@@ -160,7 +162,7 @@ describe('RecordPayment — avatars layout', () => {
   })
 
   it('picks a payer and recipient by tapping their avatar', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
 
@@ -177,7 +179,7 @@ describe('RecordPayment — avatars layout', () => {
   })
 
   it('disables a person on the opposite row once picked on this one, in both directions', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
 
@@ -196,5 +198,71 @@ describe('RecordPayment — avatars layout', () => {
     const [whoPaidBob, paidToBob] = screen.getAllByRole('button', { name: 'Bob' })
     await user.click(paidToBob)
     expect(whoPaidBob).toBeDisabled()
+  })
+})
+
+describe('RecordPayment — people who have left', () => {
+  const pastOption = () => screen.queryAllByRole('option', { name: 'Dave (left)' })
+
+  it('only offers current members by default', async () => {
+    render(<RecordPayment />)
+    await screen.findByRole('link', { name: 'Beach Trip' })
+    await screen.findAllByRole('option', { name: 'Alice' })
+
+    expect(pastOption()).toHaveLength(0)
+    expect(screen.getByRole('checkbox', { name: "Show people who've left" })).not.toBeChecked()
+  })
+
+  it('offers them, marked as having left, once the option is ticked — and records a payment with them', async () => {
+    const user = userEvent.setup({ delay: null })
+    render(<RecordPayment />)
+    await screen.findByRole('link', { name: 'Beach Trip' })
+
+    await user.click(await screen.findByRole('checkbox', { name: "Show people who've left" }))
+    expect(pastOption()).toHaveLength(2) // once per dropdown
+
+    await user.selectOptions(screen.getByLabelText('Who paid'), 'member-dave')
+    await user.selectOptions(screen.getByLabelText('Who received it'), 'member-alice')
+    await user.type(screen.getByPlaceholderText('0.00'), '8')
+    await user.click(screen.getByRole('button', { name: 'Record payment' }))
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/groups/group-1'))
+  })
+
+  it('drops a picked past member when the option is unticked again', async () => {
+    const user = userEvent.setup({ delay: null })
+    render(<RecordPayment />)
+    await screen.findByRole('link', { name: 'Beach Trip' })
+    const toggle = await screen.findByRole('checkbox', { name: "Show people who've left" })
+
+    await user.click(toggle)
+    await user.selectOptions(screen.getByLabelText('Who paid'), 'member-dave')
+    await user.selectOptions(screen.getByLabelText('Who received it'), 'member-alice')
+    await user.click(toggle)
+
+    expect(screen.getByLabelText('Who paid')).toHaveValue('')
+    expect(screen.getByLabelText('Who received it')).toHaveValue('member-alice')
+  })
+
+  it("doesn't show the option at all when nobody has left", async () => {
+    mockFetchAllGroupMembers.mockResolvedValue(MEMBERS.filter((m) => m.active))
+    render(<RecordPayment />)
+    await screen.findByRole('link', { name: 'Beach Trip' })
+    await screen.findAllByRole('option', { name: 'Alice' })
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  })
+
+  it('works the same in the avatars layout', async () => {
+    setGroupViewPreferences({ paymentFormLayout: 'avatars' })
+    const user = userEvent.setup({ delay: null })
+    render(<RecordPayment />)
+    await screen.findByRole('link', { name: 'Beach Trip' })
+    await screen.findAllByRole('button', { name: 'Alice' })
+    expect(screen.queryAllByRole('button', { name: 'Dave (left)' })).toHaveLength(0)
+
+    await user.click(screen.getByRole('checkbox', { name: "Show people who've left" }))
+    const daves = screen.getAllByRole('button', { name: 'Dave (left)' })
+    expect(daves).toHaveLength(2)
+    expect(daves[0]).toHaveClass('former')
   })
 })

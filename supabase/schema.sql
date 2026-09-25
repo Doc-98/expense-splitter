@@ -410,6 +410,13 @@ create index categories_group_id_idx on categories (group_id);
 create index recurring_bills_group_id_idx on recurring_bills (group_id);
 create index group_members_user_id_idx on group_members (user_id);
 create index departure_snapshots_user_id_idx on departure_snapshots (user_id);
+-- Member-reference columns that deleting a guest (delete_guest_permanently's
+-- "still on any bill/payment?" check) and cascading a member deletion scan.
+create index item_shares_member_id_idx on item_shares (member_id);
+create index bill_payers_member_id_idx on bill_payers (member_id);
+create index bills_paid_by_idx on bills (paid_by);
+create index payments_from_member_idx on payments (from_member);
+create index payments_to_member_idx on payments (to_member);
 
 -- ============================================================================
 -- Row Level Security — every table is locked to "active [real-account]
@@ -464,16 +471,16 @@ $$;
 -- remain in the group.
 create policy "profiles are visible to groupmates" on profiles
   for select using (
-    id = auth.uid()
+    id = (select auth.uid())
     or exists (
       select 1 from group_members gm1
       join group_members gm2 on gm1.group_id = gm2.group_id
-      where gm1.user_id = auth.uid() and gm2.user_id = profiles.id
+      where gm1.user_id = (select auth.uid()) and gm2.user_id = profiles.id
     )
   );
 
 create policy "users can update their own profile" on profiles
-  for update using (id = auth.uid()) with check (id = auth.uid());
+  for update using (id = (select auth.uid())) with check (id = (select auth.uid()));
 
 -- groups: only visible to active members. Joining a new group happens
 -- through the join_group_by_code() function below (so the invite_code
@@ -482,30 +489,32 @@ create policy "members can view their groups" on groups
   for select using (
     exists (
       select 1 from group_members gm
-      where gm.group_id = groups.id and gm.user_id = auth.uid() and gm.active = true
+      where gm.group_id = groups.id and gm.user_id = (select auth.uid()) and gm.active = true
     )
   );
 
-create policy "authenticated users can create groups" on groups
-  for insert with check (created_by = auth.uid());
-
+-- Groups are only ever created through create_group() /
+-- get_or_create_personal_group(), which also make the creator a member and
+-- admin — so there's no insert policy. Members may rename their group and
+-- nothing else: the column grants at the end of this file limit a direct
+-- UPDATE to `name` (admin_id, invite_code, is_personal only change through
+-- the admin-checked functions below).
 create policy "members can rename their group" on groups
   for update using (public.is_group_member(id)) with check (public.is_group_member(id));
 
 -- group_members: see membership rows for groups you're (still) an active
 -- member of, or your own row regardless (so a removed person can still see
 -- that they were removed, rather than the row just vanishing on them).
--- Active members can update rosters — used for removing someone (flip
--- active to false), self-removal ("leave group"), and archiving/renaming a
--- guest, all the same way.
+-- Joining (join_group_by_code), leaving or removing someone
+-- (remove_group_member) and claiming a guest (claim_guest_profile) all go
+-- through functions — there's deliberately no policy letting a user insert
+-- themselves, which would skip the invite code for any group whose id they
+-- knew.
 create policy "members can view group rosters" on group_members
   for select using (
-    user_id = auth.uid()
+    user_id = (select auth.uid())
     or public.is_group_member(group_id)
   );
-
-create policy "users can add themselves to a group" on group_members
-  for insert with check (user_id = auth.uid());
 
 -- A guest row is never self-inserted (a guest never authenticates at all)
 -- — an active member adds one on the group's behalf instead.
@@ -516,22 +525,32 @@ create policy "members can add guests to their group" on group_members
     and public.is_group_member(group_id)
   );
 
-create policy "members can update group rosters" on group_members
-  for update using (public.is_group_member(group_id)) with check (public.is_group_member(group_id));
+-- Direct updates: any member can rename/archive a guest or set a guest's
+-- claim token; you can change your own row (in practice, your avatar in
+-- this group). The column grants at the end of this file limit both to
+-- display_name/active/avatar_icon/claim_token — user_id and group_id never
+-- change directly. Deactivating a real member only happens through
+-- remove_group_member(), which checks for the admin and writes their
+-- departure snapshot.
+create policy "members can update guests" on group_members
+  for update
+  using (user_id is null and public.is_group_member(group_id))
+  with check (user_id is null and public.is_group_member(group_id));
+
+create policy "members can update their own membership" on group_members
+  for update
+  using (user_id = (select auth.uid()) and public.is_group_member(group_id))
+  with check (user_id = (select auth.uid()));
 
 -- categories: open to any active member, same as guest management — this
 -- is shared group configuration, not the "only the admin can remove a
 -- person" concern that real-member removal is specifically about.
-create policy "members can view categories" on categories
-  for select using (public.is_group_member(group_id));
 create policy "members can manage categories" on categories
   for all using (public.is_group_member(group_id));
 
 -- recurring_bills: same reasoning as categories — shared group
 -- configuration any active member can set up or adjust, not a
 -- removing-a-person concern.
-create policy "members can view recurring bills" on recurring_bills
-  for select using (public.is_group_member(group_id));
 create policy "members can manage recurring bills" on recurring_bills
   for all using (public.is_group_member(group_id));
 
@@ -561,6 +580,8 @@ create policy "members can update bills" on bills
 create policy "members can delete bills" on bills
   for delete using (public.is_group_member(bills.group_id));
 
+-- One "manage" (for all) policy each — it covers reads too, so there's no
+-- separate "view" policy evaluating the identical check a second time.
 -- These three all route through is_group_member() (a STABLE function)
 -- rather than a hand-rolled join, and that's deliberate, not just style:
 -- called this way, repeated invocations with the same group_id within one
@@ -572,28 +593,16 @@ create policy "members can delete bills" on bills
 -- ~9s for the bill list's full nested load (well past a statement
 -- timeout); this version measures ~340ms for the exact same result set.
 -- Semantics are identical either way — same active-membership check.
-create policy "members can view items" on items
-  for select using (
-    public.is_group_member((select b.group_id from bills b where b.id = items.bill_id))
-  );
 create policy "members can manage items" on items
   for all using (
     public.is_group_member((select b.group_id from bills b where b.id = items.bill_id))
   );
 
-create policy "members can view item shares" on item_shares
-  for select using (
-    public.is_group_member((select b.group_id from items i join bills b on b.id = i.bill_id where i.id = item_shares.item_id))
-  );
 create policy "members can manage item shares" on item_shares
   for all using (
     public.is_group_member((select b.group_id from items i join bills b on b.id = i.bill_id where i.id = item_shares.item_id))
   );
 
-create policy "members can view bill payers" on bill_payers
-  for select using (
-    public.is_group_member((select b.group_id from bills b where b.id = bill_payers.bill_id))
-  );
 create policy "members can manage bill payers" on bill_payers
   for all using (
     public.is_group_member((select b.group_id from bills b where b.id = bill_payers.bill_id))
@@ -617,10 +626,10 @@ create policy "members can delete payments" on payments
 -- else needs to write it on their behalf); the "mark settled" toggle is a
 -- plain update the owner does themselves.
 create policy "users can view their own departure snapshots" on departure_snapshots
-  for select using (user_id = auth.uid());
+  for select using (user_id = (select auth.uid()));
 
 create policy "users can update their own departure snapshots" on departure_snapshots
-  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+  for update using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
 -- spending_thresholds: strictly personal, same as departure_snapshots —
 -- nobody but the owner ever reads or writes their own budget figures, and
@@ -628,16 +637,16 @@ create policy "users can update their own departure snapshots" on departure_snap
 -- behalf" case, so this is a plain full set of CRUD policies rather than
 -- select+update only.
 create policy "users can view their own thresholds" on spending_thresholds
-  for select using (user_id = auth.uid());
+  for select using (user_id = (select auth.uid()));
 
 create policy "users can add their own thresholds" on spending_thresholds
-  for insert with check (user_id = auth.uid());
+  for insert with check (user_id = (select auth.uid()));
 
 create policy "users can update their own thresholds" on spending_thresholds
-  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+  for update using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
 create policy "users can delete their own thresholds" on spending_thresholds
-  for delete using (user_id = auth.uid());
+  for delete using (user_id = (select auth.uid()));
 
 -- ============================================================================
 -- remove_group_member: deactivates a *real account's* membership AND writes
@@ -657,12 +666,11 @@ create policy "users can delete their own thresholds" on spending_thresholds
 -- remaining active real members — deterministic, no group is ever left
 -- without an admin as long as a real member remains in it.
 --
--- The balance and daily_totals numbers are computed client-side (reusing
--- the exact same, already-tested settlement.js math) and passed in, rather
--- than re-derived here in SQL — this is a personal, display-only historical
--- record, not the source of truth for any live balance, so trusting the
--- caller's arithmetic here is a reasonable trade for not maintaining a
--- second implementation of the settlement math in PL/pgSQL.
+-- The frozen balance is get_group_balances()' figure (the same one the
+-- group page shows), taken before the member is deactivated;
+-- snapshot_balance is accepted but ignored, for older app versions. The
+-- daily_totals breakdown is computed client-side (settlement.js) and
+-- passed in — it's a personal, display-only record for the person leaving.
 -- ============================================================================
 create function public.remove_group_member(
   target_group_id uuid,
@@ -681,6 +689,7 @@ declare
   target_participant_id uuid;
   current_admin_id uuid;
   next_admin_id uuid;
+  frozen_balance numeric;
 begin
   select id into caller_participant_id from group_members
     where group_id = target_group_id and user_id = auth.uid() and active = true;
@@ -692,11 +701,19 @@ begin
   select id into target_participant_id from group_members
     where group_id = target_group_id and user_id = target_user_id;
 
+  if target_participant_id is null then
+    raise exception 'That person is not a member of this group';
+  end if;
+
   select admin_id into current_admin_id from groups where id = target_group_id;
 
   if caller_participant_id <> target_participant_id and caller_participant_id <> current_admin_id then
     raise exception 'Only the group admin can remove other members';
   end if;
+
+  select b.balance into frozen_balance
+    from public.get_group_balances(target_group_id) b
+    where b.member_id = target_participant_id;
 
   update group_members
   set active = false
@@ -715,7 +732,7 @@ begin
   end if;
 
   insert into departure_snapshots (group_id, user_id, group_name, left_at, balance, daily_totals)
-  values (target_group_id, target_user_id, group_name, now(), snapshot_balance, snapshot_daily)
+  values (target_group_id, target_user_id, group_name, now(), coalesce(frozen_balance, 0), snapshot_daily)
   on conflict (group_id, user_id) do update
     set group_name = excluded.group_name,
         left_at = excluded.left_at,
@@ -727,11 +744,9 @@ $$;
 
 -- ============================================================================
 -- transfer_admin: hands the admin role to another active real member.
--- Only the current admin can call this — enforced here, not just left to
--- the general "members can rename their group" policy, since that policy
--- (being a blanket per-row check, not a per-column one) would otherwise
--- let any member overwrite admin_id directly. This function is the one
--- sanctioned path the app itself ever uses to change it.
+-- Only the current admin can call this. It's the only way admin_id changes:
+-- the column grants at the end of this file keep a direct UPDATE to a
+-- group's name.
 -- ============================================================================
 create function public.transfer_admin(target_group_id uuid, new_admin_id uuid)
 returns void
@@ -1300,6 +1315,45 @@ begin
   );
 end;
 $$;
+
+-- ============================================================================
+-- API privileges. Nothing is callable signed out: every page is behind a
+-- login, and the functions that act "as the caller" assume there is one.
+-- Trigger functions aren't API endpoints at all (a trigger fires regardless
+-- of EXECUTE). Direct UPDATEs are limited to the columns the app edits —
+-- everything else changes through the admin-checked functions above, which
+-- run as the table owner and aren't limited by these grants.
+-- ============================================================================
+do $$
+declare
+  f record;
+begin
+  for f in
+    select p.oid::regprocedure as signature,
+           p.prorettype in ('trigger'::regtype, 'event_trigger'::regtype) as is_trigger
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
+  loop
+    execute format('revoke execute on function %s from public, anon', f.signature);
+    if f.is_trigger then
+      execute format('revoke execute on function %s from authenticated', f.signature);
+    else
+      execute format('grant execute on function %s to authenticated', f.signature);
+    end if;
+  end loop;
+end;
+$$;
+
+alter default privileges in schema public revoke execute on functions from public;
+alter default privileges in schema public revoke execute on functions from anon;
+
+revoke update on groups from anon, authenticated;
+grant update (name) on groups to authenticated;
+
+revoke update on group_members from anon, authenticated;
+grant update (display_name, active, avatar_icon, claim_token) on group_members to authenticated;
 
 -- ============================================================================
 -- Realtime: after running this file, go to
