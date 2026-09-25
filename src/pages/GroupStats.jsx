@@ -5,6 +5,7 @@ import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
 import { fetchGroupBills } from '../lib/groupViewSnapshot'
 import { statsRawFromBills, toWindowStart } from '../lib/groupStatsSnapshot'
+import { totalsByBill } from '../lib/accountStatsMath'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupStatsCache } from '../lib/groupStatsCache'
 import { computeSpendingTotals } from '../lib/settlement'
@@ -198,13 +199,14 @@ export default function GroupStats() {
   const totals = computeSpendingTotals({ bills, items, itemShares })
   const categoryTotals = computeCategoryTotals({ bills, items })
 
+  const billTotalById = totalsByBill(items)
   const billTotals = bills.map((b) => ({
     id: b.id,
     title: b.title,
     created_at: b.created_at,
     paid_by: b.paid_by,
     payers: b.payers,
-    total: items.filter((it) => it.bill_id === b.id).reduce((sum, it) => sum + Number(it.total_price), 0),
+    total: billTotalById.get(b.id) || 0,
   }))
 
   const groupTotal = billTotals.reduce((sum, b) => sum + b.total, 0)
