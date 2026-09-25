@@ -12,12 +12,16 @@
 -- Adding a parameter creates a second overload rather than replacing the
 -- function, and two overloads that both accept (target_group_id) make every
 -- call ambiguous — so the old signature is dropped first. Nothing deployed
--- calls it yet.
+-- calls it yet. Safe to re-run: drop-if-exists plus create-or-replace.
+--
+-- Nested items/shares/payers are aggregated in an explicit order, so the
+-- same bill is byte-identical whether it comes from a full list or a
+-- patch (without it, Postgres' plan decided the order, and it differed).
 -- ============================================================================
 
 drop function if exists public.get_group_bills(uuid, timestamptz);
 
-create function public.get_group_bills(
+create or replace function public.get_group_bills(
   target_group_id uuid,
   since timestamptz default null,
   bill_ids uuid[] default null
@@ -42,7 +46,7 @@ begin
     ),
     shares as (
       select s.item_id,
-             jsonb_agg(jsonb_build_object('member_id', s.member_id, 'shares', s.shares)) as item_shares
+             jsonb_agg(jsonb_build_object('member_id', s.member_id, 'shares', s.shares) order by s.member_id) as item_shares
       from item_shares s
       join items i on i.id = s.item_id
       join gb on gb.id = i.bill_id
@@ -55,7 +59,7 @@ begin
                'total_price', i.total_price,
                'category_id', i.category_id,
                'item_shares', coalesce(sh.item_shares, '[]'::jsonb)
-             )) as items
+             ) order by i.created_at, i.id) as items
       from items i
       join gb on gb.id = i.bill_id
       left join shares sh on sh.item_id = i.id
@@ -63,7 +67,7 @@ begin
     ),
     payers as (
       select bp.bill_id,
-             jsonb_agg(jsonb_build_object('member_id', bp.member_id, 'amount', bp.amount)) as bill_payers
+             jsonb_agg(jsonb_build_object('member_id', bp.member_id, 'amount', bp.amount) order by bp.member_id) as bill_payers
       from bill_payers bp
       join gb on gb.id = bp.bill_id
       group by bp.bill_id

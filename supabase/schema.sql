@@ -1258,7 +1258,7 @@ begin
     ),
     shares as (
       select s.item_id,
-             jsonb_agg(jsonb_build_object('member_id', s.member_id, 'shares', s.shares)) as item_shares
+             jsonb_agg(jsonb_build_object('member_id', s.member_id, 'shares', s.shares) order by s.member_id) as item_shares
       from item_shares s
       join items i on i.id = s.item_id
       join gb on gb.id = i.bill_id
@@ -1271,7 +1271,7 @@ begin
                'total_price', i.total_price,
                'category_id', i.category_id,
                'item_shares', coalesce(sh.item_shares, '[]'::jsonb)
-             )) as items
+             ) order by i.created_at, i.id) as items
       from items i
       join gb on gb.id = i.bill_id
       left join shares sh on sh.item_id = i.id
@@ -1279,7 +1279,7 @@ begin
     ),
     payers as (
       select bp.bill_id,
-             jsonb_agg(jsonb_build_object('member_id', bp.member_id, 'amount', bp.amount)) as bill_payers
+             jsonb_agg(jsonb_build_object('member_id', bp.member_id, 'amount', bp.amount) order by bp.member_id) as bill_payers
       from bill_payers bp
       join gb on gb.id = bp.bill_id
       group by bp.bill_id
