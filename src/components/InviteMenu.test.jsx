@@ -108,4 +108,26 @@ describe('InviteMenu — sharing', () => {
     expect(writeText).toHaveBeenCalledWith('https://spesa.app/join/abc123')
     expect(await screen.findByText('Copied to clipboard!')).toBeInTheDocument()
   })
+
+  it("says so when the link can't be shared or copied, instead of doing nothing", async () => {
+    const user = userEvent.setup()
+    stubClipboard(vi.fn().mockRejectedValue(new Error('denied')))
+    renderMenu()
+
+    await user.click(screen.getByRole('button', { name: 'Invite' }))
+    await user.click(screen.getByRole('button', { name: 'Share invite link' }))
+
+    expect(await screen.findByText(/Couldn't share or copy the link/)).toBeInTheDocument()
+  })
+
+  it('still opens, with the Share button, when the QR code fails to load', async () => {
+    const user = userEvent.setup()
+    mockToDataURL.mockRejectedValue(new Error('Failed to fetch dynamically imported module'))
+    renderMenu()
+
+    await user.click(screen.getByRole('button', { name: 'Invite' }))
+
+    expect(await screen.findByText(/Couldn't load the QR code/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Share invite link' })).toBeInTheDocument()
+  })
 })

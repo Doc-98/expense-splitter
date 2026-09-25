@@ -420,6 +420,8 @@ input.bill-title-editable-input {
   text-align: center;
 }
 
+/* The app-wide crash screen (ErrorBoundary.jsx). */
+.error-boundary-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-md); }
 .status-error {
   color: var(--warn);
   background: var(--warn-light);

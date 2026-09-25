@@ -974,6 +974,8 @@ export default function GroupView() {
       if (result === 'copied') {
         setShareStatus('Copied to clipboard!')
         setTimeout(() => setShareStatus(null), 2000)
+      } else if (result === 'failed') {
+        setError("Couldn't share or copy — your browser blocked it.")
       }
     } catch (err) {
       setError(err.message)

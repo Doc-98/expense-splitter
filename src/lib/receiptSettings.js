@@ -47,6 +47,10 @@ export function getReceiptSettings() {
 
 export function setReceiptSettings(partial) {
   const next = { ...getReceiptSettings(), ...partial }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  } catch {
+    // Storage full or blocked: the change still applies to this visit.
+  }
   return next
 }

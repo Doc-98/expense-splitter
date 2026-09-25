@@ -47,6 +47,10 @@ export function getStatsPreferences() {
 
 export function setStatsPreferences(partial) {
   const next = { ...getStatsPreferences(), ...partial }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  } catch {
+    // Storage full or blocked: the change still applies to this visit.
+  }
   return next
 }

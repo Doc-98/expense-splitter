@@ -95,6 +95,15 @@ describe('GroupCategoriesSection — loading', () => {
     expect(mockFetchCategories).toHaveBeenCalledWith('group-1')
     expect(groupCategoriesCache.get('group-1')).toEqual(categoriesFixture())
   })
+
+  it('shows an error, keeping the cached list, when loading fails', async () => {
+    groupCategoriesCache.set('group-1', categoriesFixture())
+    mockFetchCategories.mockRejectedValue({ message: 'Failed to fetch' })
+    render(<GroupCategoriesSection />)
+
+    expect(await screen.findByText(/Couldn't load categories/)).toBeInTheDocument()
+    expect(screen.getByText('Groceries', { selector: '.category-label' })).toBeInTheDocument()
+  })
 })
 
 describe('GroupCategoriesSection — add category', () => {

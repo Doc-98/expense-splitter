@@ -111,6 +111,17 @@ describe('ShareButton — actions', () => {
     expect(await screen.findByText('Copied to clipboard!')).toBeInTheDocument()
   })
 
+  it("says so when the text can't be shared or copied", async () => {
+    const user = userEvent.setup()
+    stubClipboard(vi.fn().mockRejectedValue(new Error('denied')))
+    render(<ShareButton getText={() => 'recap text'} title="Recap" />)
+
+    await user.click(screen.getByRole('button', { name: 'Share' }))
+    await user.click(screen.getByRole('button', { name: 'Share as text' }))
+
+    expect(await screen.findByText(/Couldn't share or copy this/)).toBeInTheDocument()
+  })
+
   it('calls window.print() and closes the menu on "Download as PDF"', async () => {
     const user = userEvent.setup()
     render(<ShareButton getText={() => 'text'} title="Recap" />)

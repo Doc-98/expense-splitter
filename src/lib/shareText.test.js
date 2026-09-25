@@ -60,4 +60,13 @@ describe('shareOrCopyText', () => {
     expect(writeText).toHaveBeenCalledWith('text')
     expect(result).toBe('copied')
   })
+
+  it('reports "failed", without throwing, when the clipboard refuses', async () => {
+    stubClipboard(vi.fn().mockRejectedValue(new DOMException('Write permission denied.', 'NotAllowedError')))
+    expect(await shareOrCopyText('text', 'title')).toBe('failed')
+  })
+
+  it('reports "failed" when there is no clipboard at all (an insecure page)', async () => {
+    expect(await shareOrCopyText('text', 'title')).toBe('failed')
+  })
 })
