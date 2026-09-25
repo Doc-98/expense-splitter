@@ -9,7 +9,7 @@ import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
 import { isNotFoundError } from '../lib/notFound'
 import { useCoalescedRunner } from '../lib/coalescedRunner'
-import { GROUP_BILLS_SELECT, computeGroupViewSnapshot } from '../lib/groupViewSnapshot'
+import { fetchGroupBills, computeGroupViewSnapshot } from '../lib/groupViewSnapshot'
 import { fetchGroupSettlement } from '../lib/groupBalances'
 import { getStatsWindowStart } from '../lib/timeRange'
 import { recordGroupVisit } from '../lib/recentGroups'
@@ -323,15 +323,7 @@ export default function GroupView() {
   // it now, real load or not.
   const loadRecentBillsForFirstPaint = useCallback(async () => {
     try {
-      const windowStart = getStatsWindowStart()
-      const billsData = await fetchAllRows(() =>
-        supabase
-          .from('bills')
-          .select(GROUP_BILLS_SELECT, { count: 'exact' })
-          .eq('group_id', groupId)
-          .gte('created_at', windowStart.toISOString())
-          .order('created_at', { ascending: false })
-      )
+      const billsData = await fetchGroupBills(supabase, groupId, { since: getStatsWindowStart() })
       // loadBillsAndSettlement might already have won this race — a
       // small/young group with nothing to window in the first place, or
       // just a faster response. Applying this now would only ever be a
@@ -353,13 +345,7 @@ export default function GroupView() {
       // Bills and the balance don't depend on each other, so fetch both at
       // once rather than waiting on one before starting the other.
       const [billsData, settlementData] = await Promise.all([
-        fetchAllRows(() =>
-          supabase
-            .from('bills')
-            .select(GROUP_BILLS_SELECT, { count: 'exact' })
-            .eq('group_id', groupId)
-            .order('created_at', { ascending: false })
-        ),
+        fetchGroupBills(supabase, groupId),
         fetchGroupSettlement(supabase, groupId),
       ])
 
@@ -863,7 +849,7 @@ export default function GroupView() {
   // `settlement` for a real group) and "Download as PDF" needs the printed
   // content already sitting in the DOM the instant window.print() fires —
   // neither has anywhere to await an async fetch. bills' own item rows
-  // already carry total_price/category_id (GROUP_BILLS_SELECT), which is
+  // already carry total_price/category_id (see fetchGroupBills), which is
   // all a total-and-by-category summary needs; only a full itemized
   // transcript (name/quantity per item) would need the heavier fetch those
   // two functions do, and that's exactly what selecting bills and sharing

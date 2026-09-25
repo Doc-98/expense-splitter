@@ -1,9 +1,8 @@
 import { supabase } from '../supabaseClient'
-import { fetchAllRows } from './fetchAllRows'
 import { fetchAllGroupMembers } from './members'
 import { fetchCategories } from './categories'
 import { getStatsWindowStart } from './timeRange'
-import { GROUP_BILLS_SELECT, computeGroupViewSnapshot } from './groupViewSnapshot'
+import { fetchGroupBills, computeGroupViewSnapshot } from './groupViewSnapshot'
 import { fetchGroupSettlement } from './groupBalances'
 import { groupViewCache } from './groupViewCache'
 
@@ -53,14 +52,7 @@ export async function prefetchGroupView(groupId) {
       supabase.from('groups').select('*').eq('id', groupId).single(),
       fetchAllGroupMembers(groupId),
       fetchCategories(groupId),
-      fetchAllRows(() =>
-        supabase
-          .from('bills')
-          .select(GROUP_BILLS_SELECT, { count: 'exact' })
-          .eq('group_id', groupId)
-          .gte('created_at', windowStart.toISOString())
-          .order('created_at', { ascending: false })
-      ),
+      fetchGroupBills(supabase, groupId, { since: windowStart }),
       fetchGroupSettlement(supabase, groupId),
     ])
     if (groupResult.error || !groupResult.data) return

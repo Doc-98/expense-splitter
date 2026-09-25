@@ -1227,6 +1227,75 @@ end;
 $$;
 
 -- ============================================================================
+-- get_group_bills: the group page's bill list (bill rows with nested items/
+-- item_shares and bill_payers, newest first) in one call. Security definer
+-- with one is_group_member() check up front, same as get_group_balances —
+-- see supabase/migrations/20260925020000_group_bills_rpc.sql.
+-- ============================================================================
+create function public.get_group_bills(target_group_id uuid, since timestamptz default null)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_group_member(target_group_id) then
+    return '[]'::jsonb;
+  end if;
+
+  return (
+    with gb as (
+      select b.* from bills b
+      where b.group_id = target_group_id
+        and (since is null or b.created_at >= since)
+    ),
+    shares as (
+      select s.item_id,
+             jsonb_agg(jsonb_build_object('member_id', s.member_id, 'shares', s.shares)) as item_shares
+      from item_shares s
+      join items i on i.id = s.item_id
+      join gb on gb.id = i.bill_id
+      group by s.item_id
+    ),
+    bill_items as (
+      select i.bill_id,
+             jsonb_agg(jsonb_build_object(
+               'id', i.id,
+               'total_price', i.total_price,
+               'category_id', i.category_id,
+               'item_shares', coalesce(sh.item_shares, '[]'::jsonb)
+             )) as items
+      from items i
+      join gb on gb.id = i.bill_id
+      left join shares sh on sh.item_id = i.id
+      group by i.bill_id
+    ),
+    payers as (
+      select bp.bill_id,
+             jsonb_agg(jsonb_build_object('member_id', bp.member_id, 'amount', bp.amount)) as bill_payers
+      from bill_payers bp
+      join gb on gb.id = bp.bill_id
+      group by bp.bill_id
+    )
+    select coalesce(
+      jsonb_agg(
+        to_jsonb(gb) || jsonb_build_object(
+          'items', coalesce(bi.items, '[]'::jsonb),
+          'bill_payers', coalesce(p.bill_payers, '[]'::jsonb)
+        )
+        order by gb.created_at desc, gb.id desc
+      ),
+      '[]'::jsonb
+    )
+    from gb
+    left join bill_items bi on bi.bill_id = gb.id
+    left join payers p on p.bill_id = gb.id
+  );
+end;
+$$;
+
+-- ============================================================================
 -- Realtime: after running this file, go to
 -- Database -> Replication -> supabase_realtime in the Supabase dashboard and
 -- turn on replication for: bills, items, item_shares, bill_payers, payments,

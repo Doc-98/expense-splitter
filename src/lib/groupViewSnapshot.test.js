@@ -1,5 +1,35 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { computeGroupViewSnapshot } from './groupViewSnapshot'
+import { computeGroupViewSnapshot, fetchGroupBills } from './groupViewSnapshot'
+
+describe('fetchGroupBills', () => {
+  function fakeSupabase(result) {
+    const rpc = vi.fn(() => Promise.resolve(result))
+    return { supabase: { rpc }, rpc }
+  }
+
+  it('calls get_group_bills for the whole group when no window is given', async () => {
+    const bills = [{ id: 'b1', items: [], bill_payers: [] }]
+    const { supabase, rpc } = fakeSupabase({ data: bills, error: null })
+    expect(await fetchGroupBills(supabase, 'group-1')).toEqual(bills)
+    expect(rpc).toHaveBeenCalledWith('get_group_bills', { target_group_id: 'group-1' })
+  })
+
+  it('passes a first-paint window as an ISO timestamp', async () => {
+    const { supabase, rpc } = fakeSupabase({ data: [], error: null })
+    await fetchGroupBills(supabase, 'group-1', { since: new Date('2025-01-01T00:00:00Z') })
+    expect(rpc).toHaveBeenCalledWith('get_group_bills', { target_group_id: 'group-1', since: '2025-01-01T00:00:00.000Z' })
+  })
+
+  it('treats a null response as an empty list', async () => {
+    const { supabase } = fakeSupabase({ data: null, error: null })
+    expect(await fetchGroupBills(supabase, 'group-1')).toEqual([])
+  })
+
+  it('throws the RPC error instead of returning an empty list', async () => {
+    const { supabase } = fakeSupabase({ data: null, error: { code: 'PGRST003', message: 'pool timeout' } })
+    await expect(fetchGroupBills(supabase, 'group-1')).rejects.toMatchObject({ code: 'PGRST003' })
+  })
+})
 
 describe('computeGroupViewSnapshot', () => {
   afterEach(() => {
