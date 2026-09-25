@@ -9,6 +9,7 @@ import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupItemsByDate } from '../lib/dateGroups'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
 import { isNotFoundError } from '../lib/notFound'
+import { useCoalescedRunner } from '../lib/coalescedRunner'
 import BackButton from '../components/BackButton'
 import Pagination from '../components/Pagination'
 
@@ -74,20 +75,27 @@ export default function History() {
     }
   }, [groupId])
 
+  const paymentsRunner = useCoalescedRunner(loadPayments)
+  const membersRunner = useCoalescedRunner(loadMembers)
+
   useEffect(() => {
     loadGroup()
-    loadMembers()
-    loadPayments()
+    membersRunner.now()
+    paymentsRunner.now()
 
     const groupFilter = `group_id=eq.${groupId}`
     const channel = supabase
       .channel(`history-${groupId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: groupFilter }, loadPayments)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: groupFilter }, loadMembers)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: groupFilter }, () =>
+        paymentsRunner.schedule()
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: groupFilter }, () =>
+        membersRunner.schedule()
+      )
       .subscribe()
 
     return () => supabase.removeChannel(channel)
-  }, [groupId, loadGroup, loadMembers, loadPayments])
+  }, [groupId, loadGroup, membersRunner, paymentsRunner])
 
   // Clamp same as the bill list's own — deleting enough payments off the
   // last page (or an Undo right at the boundary) can otherwise leave `page`
@@ -109,7 +117,7 @@ export default function History() {
       setError(deleteError.message)
       return
     }
-    loadPayments()
+    paymentsRunner.now()
   }
 
   const { bind: bindSwipe } = useSwipeToDelete()

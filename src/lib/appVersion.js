@@ -16,6 +16,7 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
-  'Fixed a bug where deleting a bill right after scanning a receipt into it could leave it stuck — undeletable, then showing a confusing raw error when reopened. Scanned items now save in one go instead of one at a time, and a bill or group that turns out to already be gone by the time you open it now sends you back with a plain notice instead of an error',
-  "A scan that fails now says why, in plain language — \"Gemini is overloaded right now, try again in a moment\" instead of the provider's own raw error text",
+  'Fixed the app slowing to a crawl — deletes not working, bills opening empty, "connection pool" errors — right after scanning a receipt, especially with the app open on more than one device. Each open page now reloads once per batch of changes instead of once per changed row, and balances are computed about 30× faster',
+  'Removing an item is now instant: it disappears on the first tap (and comes back with a message if the removal fails), instead of seeming to do nothing while the server catches up',
+  'A bill whose items are still loading now says "Loading items…" instead of looking empty',
 ]

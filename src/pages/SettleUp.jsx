@@ -8,6 +8,7 @@ import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
 import { fetchGroupSettlement } from '../lib/groupBalances'
 import { isNotFoundError } from '../lib/notFound'
+import { useCoalescedRunner } from '../lib/coalescedRunner'
 import BackButton from '../components/BackButton'
 
 // Every debt in the group, full stop — GroupView.jsx's own balance summary
@@ -80,28 +81,32 @@ export default function SettleUp() {
     }
   }, [groupId])
 
+  const loadRunner = useCoalescedRunner(load)
+
   useEffect(() => {
     loadGroup()
-    load()
+    loadRunner.now()
 
     // Mirrors GroupView.jsx's own realtime subscription, scoped to just
     // what this page actually shows — any bill/item/share/payment change
     // can shift the simplified debt list, and a member change can rename
     // who a row's talking about. Filtered to this group the same way
     // GroupView.jsx's own does; see that file's identical comment for why
-    // items/item_shares stay unfiltered.
+    // items/item_shares stay unfiltered. Scheduled, not called directly —
+    // see coalescedRunner.js.
     const groupFilter = `group_id=eq.${groupId}`
+    const reload = () => loadRunner.schedule()
     const channel = supabase
       .channel(`settle-up-${groupId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: groupFilter }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: groupFilter }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: groupFilter }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: groupFilter }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: groupFilter }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: groupFilter }, reload)
       .subscribe()
 
     return () => supabase.removeChannel(channel)
-  }, [groupId, loadGroup, load])
+  }, [groupId, loadGroup, loadRunner])
 
   // Recording a payment settles it the same way GroupView.jsx's own
   // Record-a-payment form does (a plain insert — the RLS policy is what
@@ -122,7 +127,7 @@ export default function SettleUp() {
       setError(paymentError.message)
       return
     }
-    load()
+    loadRunner.now()
   }
 
   const mine = (settlement || []).filter((t) => t.from === myParticipantId || t.to === myParticipantId)

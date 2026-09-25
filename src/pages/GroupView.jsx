@@ -8,6 +8,7 @@ import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
 import { isNotFoundError } from '../lib/notFound'
+import { useCoalescedRunner } from '../lib/coalescedRunner'
 import { GROUP_BILLS_SELECT, computeGroupViewSnapshot } from '../lib/groupViewSnapshot'
 import { fetchGroupSettlement } from '../lib/groupBalances'
 import { getStatsWindowStart } from '../lib/timeRange'
@@ -513,7 +514,13 @@ export default function GroupView() {
   // recurring-bills sweep, and the bills/items/item_shares realtime
   // subscription below all mean "the bill list itself changed," as
   // opposed to loadSettlement's narrower "just the balance."
-  const reloadAll = loadBillsAndSettlement
+  // All four go through coalesced runners (see coalescedRunner.js): realtime
+  // handlers schedule(), the page's own writes call now().
+  const billsRunner = useCoalescedRunner(loadBillsAndSettlement)
+  const settlementRunner = useCoalescedRunner(loadSettlement)
+  const membersRunner = useCoalescedRunner(loadMembers)
+  const categoriesRunner = useCoalescedRunner(loadCategories)
+  const reloadAll = billsRunner.now
 
   // Keeps the cache current with whatever's actually on screen — the
   // initial load, a background reload, and a realtime update all funnel
@@ -570,8 +577,8 @@ export default function GroupView() {
     }
 
     loadGroup()
-    loadMembers()
-    loadCategories()
+    membersRunner.now()
+    categoriesRunner.now()
     reloadAll()
 
     // Feeds the app-boot warm-up (see recentGroups.js/prefetchGroup.js) —
@@ -603,27 +610,24 @@ export default function GroupView() {
     // bill_id/item_id, one join step further from group_id), and
     // Realtime's filter can't express a join — those two stay unfiltered,
     // same as before, which is the one real limitation here, not an
-    // oversight.
+    // oversight. Every handler schedules rather than reloading directly:
+    // realtime sends one event per row, so one scan is dozens of events.
     const groupFilter = `group_id=eq.${groupId}`
     const channel = supabase
       .channel(`group-${groupId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: groupFilter }, reloadAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, reloadAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, reloadAll)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'payments', filter: groupFilter },
-        loadSettlement
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: groupFilter }, () =>
+        billsRunner.schedule()
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'group_members', filter: groupFilter },
-        loadMembers
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => billsRunner.schedule())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, () => billsRunner.schedule())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: groupFilter }, () =>
+        settlementRunner.schedule()
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'categories', filter: groupFilter },
-        loadCategories
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: groupFilter }, () =>
+        membersRunner.schedule()
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter: groupFilter }, () =>
+        categoriesRunner.schedule()
       )
       .subscribe()
 

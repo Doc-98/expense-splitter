@@ -1150,17 +1150,25 @@ $$;
 -- get_group_balances: each member's net balance for a group, computed
 -- server-side — a straight SQL translation of computeBalances()/
 -- creditPayers() in src/lib/settlement.js (see
--- supabase/migrations/20260923213308_group_balances_rpc.sql for the full
--- reasoning, including how this was verified against that file's own test
--- fixtures). Not security definer — every table this reads still goes
--- through its own existing RLS policy as the calling user, same as a
--- direct client-side select from any of them already does.
+-- supabase/migrations/20260923213308_group_balances_rpc.sql for how it was
+-- verified). Security definer with one is_group_member() check up front
+-- rather than per-row RLS, which made it ~30x slower — see
+-- supabase/migrations/20260925011000_fast_group_balances.sql.
 -- ============================================================================
 create function public.get_group_balances(target_group_id uuid)
 returns table(member_id uuid, balance numeric)
-language sql
+language plpgsql
 stable
+security definer
+set search_path = public
 as $$
+#variable_conflict use_column
+begin
+  if not public.is_group_member(target_group_id) then
+    return;
+  end if;
+
+  return query
   with bill_totals as (
     select b.id as bill_id, b.paid_by, coalesce(sum(i.total_price), 0) as total
     from bills b
@@ -1195,26 +1203,27 @@ as $$
     where ist.total_shares > 0
   ),
   payment_credits as (
-    select from_member as member_id, amount as amount from payments where group_id = target_group_id
+    select p.from_member as member_id, p.amount as amount from payments p where p.group_id = target_group_id
   ),
   payment_debits as (
-    select to_member as member_id, -amount as amount from payments where group_id = target_group_id
+    select p.to_member as member_id, -p.amount as amount from payments p where p.group_id = target_group_id
   ),
   all_movements as (
-    select member_id, amount from payer_credits
+    select m.member_id, m.amount from payer_credits m
     union all
-    select member_id, amount from single_payer_credits
+    select m.member_id, m.amount from single_payer_credits m
     union all
-    select member_id, -amount from debits
+    select m.member_id, -m.amount from debits m
     union all
-    select member_id, amount from payment_credits
+    select m.member_id, m.amount from payment_credits m
     union all
-    select member_id, amount from payment_debits
+    select m.member_id, m.amount from payment_debits m
   )
-  select member_id, round(sum(amount), 2) as balance
-  from all_movements
-  where member_id is not null
-  group by member_id;
+  select am.member_id, round(sum(am.amount), 2)
+  from all_movements am
+  where am.member_id is not null
+  group by am.member_id;
+end;
 $$;
 
 -- ============================================================================
