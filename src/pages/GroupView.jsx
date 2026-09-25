@@ -9,6 +9,8 @@ import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
 import { isNotFoundError } from '../lib/notFound'
 import { useCoalescedRunner } from '../lib/coalescedRunner'
+import { createRealtimeRelevance } from '../lib/realtimeRelevance'
+import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
 import { fetchGroupBills, computeGroupViewSnapshot } from '../lib/groupViewSnapshot'
 import { fetchGroupSettlement } from '../lib/groupBalances'
 import { getStatsWindowStart } from '../lib/timeRange'
@@ -64,6 +66,9 @@ export default function GroupView() {
   // sidesteps that — always reads the latest value, with nothing to go
   // stale.
   const billsRef = useRef(null)
+  // Which realtime events concern this group — replaced per group in the
+  // subscription effect below (see realtimeRelevance.js).
+  const relevanceRef = useRef(createRealtimeRelevance())
   useEffect(() => {
     billsRef.current = bills
   }, [bills])
@@ -356,6 +361,8 @@ export default function GroupView() {
       // The one place this ever gets confirmed true — this is the only
       // function that fetches the group's complete, unwindowed bill list.
       setHistoryComplete(true)
+      // Complete list, so it's also what the realtime filter learns from.
+      relevanceRef.current.learn(billsData)
     } catch (err) {
       setError(`Couldn't load this group's bills: ${loadErrorMessage(err)}`)
     }
@@ -508,6 +515,15 @@ export default function GroupView() {
   const categoriesRunner = useCoalescedRunner(loadCategories)
   const reloadAll = billsRunner.now
 
+  // Catches whatever realtime didn't deliver (app backgrounded, connection
+  // dropped, or an event the relevance filter skipped) — see realtimeResync.js.
+  const resyncAll = useCallback(() => {
+    billsRunner.schedule()
+    membersRunner.schedule()
+    categoriesRunner.schedule()
+  }, [billsRunner, membersRunner, categoriesRunner])
+  useResync(resyncAll)
+
   // Keeps the cache current with whatever's actually on screen — the
   // initial load, a background reload, and a realtime update all funnel
   // through the same state setters above, so this one effect covers all
@@ -596,16 +612,21 @@ export default function GroupView() {
     // bill_id/item_id, one join step further from group_id), and
     // Realtime's filter can't express a join — those two stay unfiltered,
     // same as before, which is the one real limitation here, not an
-    // oversight. Every handler schedules rather than reloading directly:
-    // realtime sends one event per row, so one scan is dozens of events.
+    // oversight — relevance.isRelevant() drops the ones that belong to
+    // another group instead. Every handler schedules rather than reloading
+    // directly: realtime sends one event per row, so one scan is dozens of
+    // events. A rejoin after a dropped connection triggers a full resync.
+    const relevance = createRealtimeRelevance()
+    relevanceRef.current = relevance
+    const onBillChange = (table) => (payload) => {
+      if (relevance.isRelevant(table, payload)) billsRunner.schedule()
+    }
     const groupFilter = `group_id=eq.${groupId}`
     const channel = supabase
       .channel(`group-${groupId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: groupFilter }, () =>
-        billsRunner.schedule()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => billsRunner.schedule())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, () => billsRunner.schedule())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: groupFilter }, onBillChange('bills'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, onBillChange('items'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, onBillChange('item_shares'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: groupFilter }, () =>
         settlementRunner.schedule()
       )
@@ -615,7 +636,7 @@ export default function GroupView() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter: groupFilter }, () =>
         categoriesRunner.schedule()
       )
-      .subscribe()
+      .subscribe(resyncOnRejoin(resyncAll))
 
     return () => supabase.removeChannel(channel)
     // eslint-disable-next-line react-hooks/exhaustive-deps

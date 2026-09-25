@@ -22,6 +22,8 @@ import { getGroupViewPreferences, avatarSizeSpec } from '../lib/groupViewPrefere
 import { isNotFoundError } from '../lib/notFound'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { useCoalescedRunner } from '../lib/coalescedRunner'
+import { createRealtimeRelevance } from '../lib/realtimeRelevance'
+import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
@@ -43,6 +45,8 @@ export default function BillView() {
   const [itemsStatus, setItemsStatus] = useState('loading')
   // Ids removed optimistically; a deleted UUID never legitimately comes back.
   const deletingIdsRef = useRef(new Set())
+  // Which realtime events concern this bill — see realtimeRelevance.js.
+  const relevanceRef = useRef(createRealtimeRelevance())
   const [newItem, setNewItem] = useState({ name: '', price: '', quantity: '1' })
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState(null)
@@ -114,6 +118,7 @@ export default function BillView() {
     // put the just-removed row back on screen.
     setItems((data || []).filter((it) => !deletingIdsRef.current.has(it.id)))
     setItemsStatus('ready')
+    relevanceRef.current.learn([{ id: billId, items: data || [] }])
   }, [billId])
 
   const loadBill = useCallback(async () => {
@@ -149,6 +154,13 @@ export default function BillView() {
   const itemsRunner = useCoalescedRunner(loadItems)
   const billRunner = useCoalescedRunner(loadBill)
   const refreshItems = itemsRunner.now
+
+  // Catches whatever realtime didn't deliver — see realtimeResync.js.
+  const resyncBill = useCallback(() => {
+    itemsRunner.schedule()
+    billRunner.schedule()
+  }, [itemsRunner, billRunner])
+  useResync(resyncBill)
 
   useEffect(() => {
     async function loadBillAndMembers() {
@@ -212,22 +224,26 @@ export default function BillView() {
     // the table has its own bill_id column: items/bill_payers both do.
     // item_shares doesn't (it only carries item_id, one join step further
     // from bill_id), and Realtime's filter can't express a join — that one
-    // stays unfiltered, same as before, which is the one real limitation
-    // here, not an oversight.
+    // stays unfiltered at the source, and relevance.isRelevant() drops the
+    // share changes that belong to other bills instead. A rejoin after a
+    // dropped connection triggers a full resync.
+    const relevance = createRealtimeRelevance()
+    relevanceRef.current = relevance
+    const onItemChange = (table) => (payload) => {
+      if (relevance.isRelevant(table, payload)) itemsRunner.schedule()
+    }
     const billFilter = `bill_id=eq.${billId}`
     const channel = supabase
       .channel(`bill-${billId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: billFilter }, () =>
-        itemsRunner.schedule()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, () => itemsRunner.schedule())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: billFilter }, onItemChange('items'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, onItemChange('item_shares'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bill_payers', filter: billFilter }, () =>
         billRunner.schedule()
       )
-      .subscribe()
+      .subscribe(resyncOnRejoin(resyncBill))
 
     return () => supabase.removeChannel(channel)
-  }, [billId, groupId, navigate, itemsRunner, billRunner])
+  }, [billId, groupId, navigate, itemsRunner, billRunner, resyncBill])
 
   const total = items.reduce((sum, it) => sum + Number(it.total_price), 0)
   const isMultiPayer = billPayers.length > 0

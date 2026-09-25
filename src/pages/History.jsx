@@ -10,6 +10,7 @@ import { groupItemsByDate } from '../lib/dateGroups'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
 import { isNotFoundError } from '../lib/notFound'
 import { useCoalescedRunner } from '../lib/coalescedRunner'
+import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
 import BackButton from '../components/BackButton'
 import Pagination from '../components/Pagination'
 
@@ -77,6 +78,12 @@ export default function History() {
 
   const paymentsRunner = useCoalescedRunner(loadPayments)
   const membersRunner = useCoalescedRunner(loadMembers)
+  // Catches whatever realtime didn't deliver — see realtimeResync.js.
+  const resync = useCallback(() => {
+    paymentsRunner.schedule()
+    membersRunner.schedule()
+  }, [paymentsRunner, membersRunner])
+  useResync(resync)
 
   useEffect(() => {
     loadGroup()
@@ -92,10 +99,10 @@ export default function History() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: groupFilter }, () =>
         membersRunner.schedule()
       )
-      .subscribe()
+      .subscribe(resyncOnRejoin(resync))
 
     return () => supabase.removeChannel(channel)
-  }, [groupId, loadGroup, membersRunner, paymentsRunner])
+  }, [groupId, loadGroup, membersRunner, paymentsRunner, resync])
 
   // Clamp same as the bill list's own — deleting enough payments off the
   // last page (or an Undo right at the boundary) can otherwise leave `page`

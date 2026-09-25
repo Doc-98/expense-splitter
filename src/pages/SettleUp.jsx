@@ -9,6 +9,7 @@ import { groupViewCache } from '../lib/groupViewCache'
 import { fetchGroupSettlement } from '../lib/groupBalances'
 import { isNotFoundError } from '../lib/notFound'
 import { useCoalescedRunner } from '../lib/coalescedRunner'
+import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
 import BackButton from '../components/BackButton'
 
 // Every debt in the group, full stop — GroupView.jsx's own balance summary
@@ -82,6 +83,9 @@ export default function SettleUp() {
   }, [groupId])
 
   const loadRunner = useCoalescedRunner(load)
+  // Catches whatever realtime didn't deliver — see realtimeResync.js.
+  const resync = useCallback(() => loadRunner.schedule(), [loadRunner])
+  useResync(resync)
 
   useEffect(() => {
     loadGroup()
@@ -103,10 +107,10 @@ export default function SettleUp() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: groupFilter }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: groupFilter }, reload)
-      .subscribe()
+      .subscribe(resyncOnRejoin(resync))
 
     return () => supabase.removeChannel(channel)
-  }, [groupId, loadGroup, loadRunner])
+  }, [groupId, loadGroup, loadRunner, resync])
 
   // Recording a payment settles it the same way GroupView.jsx's own
   // Record-a-payment form does (a plain insert — the RLS policy is what
