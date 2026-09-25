@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'

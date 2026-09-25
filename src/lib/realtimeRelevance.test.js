@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import { createRealtimeRelevance, ALL_BILLS } from './realtimeRelevance'
 

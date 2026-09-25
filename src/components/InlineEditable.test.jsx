@@ -11,7 +11,7 @@ describe('InlineEditable', () => {
   })
 
   it('switches to an input, pre-filled with the raw value, on click', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<InlineEditable value="1.29" display="$1.29" onSave={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: '$1.29' }))
@@ -21,7 +21,7 @@ describe('InlineEditable', () => {
   })
 
   it('commits a changed value on Enter and stops editing', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onSave = vi.fn()
     render(<InlineEditable value="1.29" display="$1.29" onSave={onSave} />)
 
@@ -35,7 +35,7 @@ describe('InlineEditable', () => {
   })
 
   it('commits a changed value on blur too', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onSave = vi.fn()
     render(
       <>
@@ -53,7 +53,7 @@ describe('InlineEditable', () => {
   })
 
   it('reverts without saving on Escape', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onSave = vi.fn()
     render(<InlineEditable value="1.29" display="$1.29" onSave={onSave} />)
 
@@ -67,7 +67,7 @@ describe('InlineEditable', () => {
   })
 
   it('does not call onSave when the value is unchanged', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onSave = vi.fn()
     render(<InlineEditable value="1.29" display="$1.29" onSave={onSave} />)
 
@@ -78,7 +78,7 @@ describe('InlineEditable', () => {
   })
 
   it('reverts instead of saving when confirmed empty', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onSave = vi.fn()
     render(<InlineEditable value="1.29" display="$1.29" onSave={onSave} />)
 
@@ -91,7 +91,7 @@ describe('InlineEditable', () => {
   })
 
   it('renders a textarea instead of an input when multiline', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<InlineEditable value="a note" display="a note" onSave={vi.fn()} multiline />)
 
     await user.click(screen.getByRole('button', { name: 'a note' }))

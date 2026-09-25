@@ -127,7 +127,7 @@ describe('GroupMembersSection', () => {
   })
 
   it('transfers admin on confirm, with the right ids, then reloads', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockFetchGroupRosterData.mockResolvedValue(rosterAsAdmin())
     render(<GroupMembersSection />)
 
@@ -141,7 +141,7 @@ describe('GroupMembersSection', () => {
   })
 
   it('does not transfer admin when the confirm is cancelled', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     window.confirm.mockReturnValue(false)
     mockFetchGroupRosterData.mockResolvedValue(rosterAsAdmin())
     render(<GroupMembersSection />)
@@ -152,7 +152,7 @@ describe('GroupMembersSection', () => {
   })
 
   it('shows an error when the admin transfer fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockFetchGroupRosterData.mockResolvedValue(rosterAsAdmin())
     mockRpc.mockResolvedValue({ error: { message: 'transfer failed' } })
     render(<GroupMembersSection />)
@@ -163,7 +163,7 @@ describe('GroupMembersSection', () => {
   })
 
   it('removes a member on confirm — fetches categories, snapshots, then reloads', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const categories = [{ id: 'cat-1', name: 'Groceries' }]
     mockFetchGroupRosterData.mockResolvedValue(rosterAsAdmin())
     mockFetchCategories.mockResolvedValue(categories)
@@ -183,7 +183,7 @@ describe('GroupMembersSection', () => {
   })
 
   it('does not remove a member when the confirm is cancelled', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     window.confirm.mockReturnValue(false)
     mockFetchGroupRosterData.mockResolvedValue(rosterAsAdmin())
     render(<GroupMembersSection />)
@@ -196,7 +196,7 @@ describe('GroupMembersSection', () => {
   })
 
   it('shows an error when removing a member fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockFetchGroupRosterData.mockResolvedValue(rosterAsAdmin())
     mockSnapshotAndRemoveMember.mockRejectedValue(new Error('could not remove member'))
     render(<GroupMembersSection />)

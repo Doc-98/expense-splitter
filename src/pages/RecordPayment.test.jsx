@@ -75,7 +75,7 @@ describe('RecordPayment — dropdowns layout', () => {
   })
 
   it('keeps Record payment disabled until both people and a valid amount are set', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
 
@@ -93,7 +93,7 @@ describe('RecordPayment — dropdowns layout', () => {
   })
 
   it("disables a person on one side once they're picked on the other", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
 
@@ -104,7 +104,7 @@ describe('RecordPayment — dropdowns layout', () => {
   })
 
   it('records the payment with the right ids and amount, then navigates back to the group', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
 
@@ -118,7 +118,7 @@ describe('RecordPayment — dropdowns layout', () => {
   })
 
   it('shows an error and stays put when recording the payment fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     paymentsInsertResult = { error: { message: 'could not record payment' } }
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
@@ -162,7 +162,7 @@ describe('RecordPayment — avatars layout', () => {
   })
 
   it('picks a payer and recipient by tapping their avatar', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
 
@@ -179,7 +179,7 @@ describe('RecordPayment — avatars layout', () => {
   })
 
   it('disables a person on the opposite row once picked on this one, in both directions', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
 
@@ -214,7 +214,7 @@ describe('RecordPayment — people who have left', () => {
   })
 
   it('offers them, marked as having left, once the option is ticked — and records a payment with them', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
 
@@ -229,7 +229,7 @@ describe('RecordPayment — people who have left', () => {
   })
 
   it('drops a picked past member when the option is unticked again', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
     const toggle = await screen.findByRole('checkbox', { name: "Show people who've left" })
@@ -254,7 +254,7 @@ describe('RecordPayment — people who have left', () => {
 
   it('works the same in the avatars layout', async () => {
     setGroupViewPreferences({ paymentFormLayout: 'avatars' })
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<RecordPayment />)
     await screen.findByRole('link', { name: 'Beach Trip' })
     await screen.findAllByRole('button', { name: 'Alice' })

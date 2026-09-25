@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
 import { createDoubleTap, DOUBLE_TAP_MS } from './doubleTap'
 

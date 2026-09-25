@@ -215,7 +215,7 @@ describe('SettleUp — settlement list', () => {
 
 describe('SettleUp — marking a debt paid', () => {
   it('records a payment for one of your own debts with the right ids and amount, then reloads', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderPage()
 
     const mineRow = (await findMineDebtor()).closest('li')
@@ -232,7 +232,7 @@ describe('SettleUp — marking a debt paid', () => {
   })
 
   it("records a payment for someone else's debt from the collapsed section too", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderPage()
     await findMineDebtor()
 
@@ -249,7 +249,7 @@ describe('SettleUp — marking a debt paid', () => {
   })
 
   it('shows an error and keeps the debt listed when recording the payment fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockPaymentsInsert.mockResolvedValue({ error: { message: 'could not record payment' } })
     renderPage()
 

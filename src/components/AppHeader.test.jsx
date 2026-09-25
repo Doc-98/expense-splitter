@@ -57,7 +57,7 @@ describe('AppHeader', () => {
   })
 
   it('fires both Settings prefetches, with the current user id, on account chip click', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<AppHeader />)
 
     await user.click(screen.getByRole('link', { name: 'Marco' }))

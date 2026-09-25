@@ -141,7 +141,7 @@ describe('GroupSubscriptionsSection — loading', () => {
 
 describe('GroupSubscriptionsSection — adding a subscription', () => {
   it('disables submit until a title and a positive amount are given', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderSection()
     await screen.findByText('Rent')
 
@@ -173,7 +173,7 @@ describe('GroupSubscriptionsSection — adding a subscription', () => {
   })
 
   it('submits a new subscription with the entered fields, then reloads', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderSection()
     await screen.findByText('Rent')
 
@@ -199,7 +199,7 @@ describe('GroupSubscriptionsSection — adding a subscription', () => {
   })
 
   it('clears the title and amount on success, but keeps category/payer/split as they were', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderSection()
     await screen.findByText('Rent')
 
@@ -214,7 +214,7 @@ describe('GroupSubscriptionsSection — adding a subscription', () => {
   })
 
   it('shows an error when adding fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockAddRecurringBill.mockRejectedValue(new Error('could not add subscription'))
     renderSection()
     await screen.findByText('Rent')
@@ -229,7 +229,7 @@ describe('GroupSubscriptionsSection — adding a subscription', () => {
 
 describe('GroupSubscriptionsSection — editing', () => {
   it('pre-fills the form from the template, switches the heading, and hides frequency/start date', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
 
@@ -244,7 +244,7 @@ describe('GroupSubscriptionsSection — editing', () => {
   })
 
   it('submits the edited fields via updateRecurringBill, then reloads and returns to "New subscription"', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
 
@@ -268,7 +268,7 @@ describe('GroupSubscriptionsSection — editing', () => {
   })
 
   it('cancelling an edit resets the form and the heading, without calling updateRecurringBill', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
 
@@ -282,7 +282,7 @@ describe('GroupSubscriptionsSection — editing', () => {
   })
 
   it('shows an error when saving an edit fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockUpdateRecurringBill.mockRejectedValue(new Error('could not save changes'))
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
@@ -297,7 +297,7 @@ describe('GroupSubscriptionsSection — editing', () => {
 
 describe('GroupSubscriptionsSection — pause/resume', () => {
   it('pauses an active template', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
 
@@ -308,7 +308,7 @@ describe('GroupSubscriptionsSection — pause/resume', () => {
   })
 
   it('shows "Resume" for a paused template, and resumes it on click', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockFetchGroupSubscriptionsData.mockResolvedValue(dataFixture({ templates: [templateFixture({ active: false })] }))
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
@@ -321,7 +321,7 @@ describe('GroupSubscriptionsSection — pause/resume', () => {
   })
 
   it('shows an error when pausing fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockSetRecurringBillActive.mockRejectedValue(new Error('could not pause subscription'))
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
@@ -335,7 +335,7 @@ describe('GroupSubscriptionsSection — pause/resume', () => {
 
 describe('GroupSubscriptionsSection — deleting', () => {
   it('shows how many bills a subscription has already created before confirming', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockCountRecurringBillOccurrences.mockResolvedValue({ count: 3, total: 3600 })
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
@@ -349,7 +349,7 @@ describe('GroupSubscriptionsSection — deleting', () => {
   })
 
   it("says a subscription hasn't created any bills yet, and hides the delete-bills-too option", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
 
@@ -361,7 +361,7 @@ describe('GroupSubscriptionsSection — deleting', () => {
   })
 
   it('cancels without deleting anything', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
 
@@ -374,7 +374,7 @@ describe('GroupSubscriptionsSection — deleting', () => {
   })
 
   it('deletes just the template on "Keep the bills", then reloads', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
 
@@ -387,7 +387,7 @@ describe('GroupSubscriptionsSection — deleting', () => {
   })
 
   it('deletes the template and its bills on "Delete the bills too"', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockCountRecurringBillOccurrences.mockResolvedValue({ count: 3, total: 3600 })
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
@@ -400,7 +400,7 @@ describe('GroupSubscriptionsSection — deleting', () => {
   })
 
   it('cancels the edit in progress when deleting the template currently being edited', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
 
@@ -416,7 +416,7 @@ describe('GroupSubscriptionsSection — deleting', () => {
   })
 
   it('shows an error when the occurrence count lookup fails, without opening the modal', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockCountRecurringBillOccurrences.mockRejectedValue(new Error('could not check bills'))
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')
@@ -429,7 +429,7 @@ describe('GroupSubscriptionsSection — deleting', () => {
   })
 
   it('shows an error and keeps the confirmation open when deleting fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockDeleteRecurringBill.mockRejectedValue(new Error('could not delete subscription'))
     renderSection()
     const row = (await screen.findByText('Rent')).closest('li')

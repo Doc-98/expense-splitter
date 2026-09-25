@@ -39,7 +39,7 @@ describe('InviteMenu — opening', () => {
   })
 
   it('shows a generating placeholder while the QR code is not yet ready', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockToDataURL.mockReturnValue(new Promise(() => {})) // never resolves this test
     renderMenu()
 
@@ -48,7 +48,7 @@ describe('InviteMenu — opening', () => {
   })
 
   it('shows the QR code once generation resolves', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderMenu()
 
     await user.click(screen.getByRole('button', { name: 'Invite' }))
@@ -58,7 +58,7 @@ describe('InviteMenu — opening', () => {
   })
 
   it('generates the QR code only once — cached across close/reopen', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderMenu()
 
     await user.click(screen.getByRole('button', { name: 'Invite' }))
@@ -71,7 +71,7 @@ describe('InviteMenu — opening', () => {
   })
 
   it('closes on an outside click', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderMenu()
 
     await user.click(screen.getByRole('button', { name: 'Invite' }))
@@ -84,7 +84,7 @@ describe('InviteMenu — opening', () => {
 
 describe('InviteMenu — sharing', () => {
   it('shares the invite link and message via navigator.share when available', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const share = vi.fn().mockResolvedValue(undefined)
     stubShare(share)
     renderMenu()
@@ -97,7 +97,7 @@ describe('InviteMenu — sharing', () => {
   })
 
   it('falls back to copying, with a status message, when navigator.share is unavailable', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const writeText = vi.fn().mockResolvedValue(undefined)
     stubClipboard(writeText)
     renderMenu()
@@ -110,7 +110,7 @@ describe('InviteMenu — sharing', () => {
   })
 
   it("says so when the link can't be shared or copied, instead of doing nothing", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     stubClipboard(vi.fn().mockRejectedValue(new Error('denied')))
     renderMenu()
 
@@ -121,7 +121,7 @@ describe('InviteMenu — sharing', () => {
   })
 
   it('still opens, with the Share button, when the QR code fails to load', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     mockToDataURL.mockRejectedValue(new Error('Failed to fetch dynamically imported module'))
     renderMenu()
 

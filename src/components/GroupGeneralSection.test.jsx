@@ -90,7 +90,7 @@ describe('GroupGeneralSection', () => {
   })
 
   it('keeps Save disabled until the name actually changes', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupGeneralSection />)
 
     const input = await screen.findByPlaceholderText('Group name')
@@ -105,7 +105,7 @@ describe('GroupGeneralSection', () => {
   })
 
   it('saves a renamed group and disables Save again on success', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupGeneralSection />)
 
     const input = await screen.findByPlaceholderText('Group name')
@@ -119,7 +119,7 @@ describe('GroupGeneralSection', () => {
   })
 
   it('shows the error and leaves the draft in place when the rename fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupGeneralSection />)
 
     const input = await screen.findByPlaceholderText('Group name')
@@ -133,7 +133,7 @@ describe('GroupGeneralSection', () => {
   })
 
   it('picks an avatar icon, saving it optimistically', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupGeneralSection />)
 
     await screen.findByPlaceholderText('Group name') // wait for the initial loads to settle
@@ -147,7 +147,7 @@ describe('GroupGeneralSection', () => {
   })
 
   it('reverts the icon and shows an error when saving it fails', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<GroupGeneralSection />)
 
     await screen.findByPlaceholderText('Group name')
