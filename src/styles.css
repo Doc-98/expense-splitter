@@ -2302,6 +2302,16 @@ input.item-editable-input, textarea.item-editable-input {
   cursor: pointer;
 }
 .delete-all-payments-option input { flex-shrink: 0; }
+/* Record a payment's "Show people who've left" — a plain inline tick box,
+   not a stacked field label. */
+.show-past-members {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.show-past-members input { flex-shrink: 0; margin: 0; }
 
 /* ---------- Settings page ---------- */
 /* A plain label + control row — Appearance's dark-mode switch, Currency's

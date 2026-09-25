@@ -20,4 +20,6 @@ export const WHATS_NEW = [
   'Removing an item is now a trash-can button on the right of the item\'s details',
   'A bill\'s details (including who new items are split with) now start open',
   'Double-tap someone in a "Split with" row to make them the only one splitting — on each item and on the bill\'s default for new items',
+  "Stats and Graphs now open instantly from a group page: they're filled from what the group page has already loaded, and refresh much faster in the background",
+  "Record a payment shows only current members by default — tick \"Show people who've left\" to settle up with someone who's left the group",
 ]

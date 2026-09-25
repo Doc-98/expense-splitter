@@ -3,13 +3,13 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
-import { fetchAllRows } from '../lib/fetchAllRows'
+import { fetchGroupBills } from '../lib/groupViewSnapshot'
+import { statsRawFromBills, toWindowStart } from '../lib/groupStatsSnapshot'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupStatsCache } from '../lib/groupStatsCache'
 import { computeSpendingTotals } from '../lib/settlement'
 import { computeCategoryTotals } from '../lib/categoryStats'
 import { getPeriodRange, filterByDateRange, getStatsWindowStart, isViewCovered } from '../lib/timeRange'
-import { deriveBillsItemsShares } from '../lib/deriveBillData'
 import { comparePeriods } from '../lib/periodComparison'
 import { getStatsPreferences } from '../lib/statsPreferences'
 import { formatGroupStatsRecap } from '../lib/recapText'
@@ -70,62 +70,41 @@ export default function GroupStats() {
 
   const nameOf = (id) => members.find((m) => m.id === id)?.name || 'Someone'
 
-  const BILLS_SELECT =
-    'id, title, created_at, paid_by, category_id, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
-
   function applyRawBills(rawBillsData) {
-    const { list, items, itemShares } = deriveBillsItemsShares(rawBillsData)
-    setRawBills(
-      list.map((b) => ({
-        id: b.id,
-        title: b.title,
-        created_at: b.created_at,
-        paid_by: b.paid_by,
-        payers: b.payers,
-        category_id: b.category_id,
-      }))
-    )
-    setRawItems(items)
-    setRawShares(itemShares)
+    const { rawBills: nextBills, rawItems: nextItems, rawShares: nextShares } = statsRawFromBills(rawBillsData)
+    setRawBills(nextBills)
+    setRawItems(nextItems)
+    setRawShares(nextShares)
   }
 
   // A failed fetch here used to just leave every number on this page at its
   // initial empty-array default — indistinguishable from "this group
-  // genuinely has no bills for that period." Now it surfaces instead, and
-  // the bills query is paged through fetchAllRows rather than asked for in
-  // one shot, since a group with a big imported history can have thousands
-  // of bills — exactly the kind of request that's prone to silently timing
-  // out before this had any error handling to catch it.
+  // genuinely has no bills for that period." Now it surfaces instead.
   //
-  // The bills fetch itself is split into two phases: a "recent window"
-  // (this year plus last year — see getStatsWindowStart) fetched up front
-  // so the page can render immediately with genuinely correct numbers for
-  // any of today's default views, and the rest of this group's history
-  // backfilled afterward, in the background, without blocking first paint.
-  // isViewCovered (used below, in render) is how the page knows whether
-  // whatever's currently selected actually needs that backfill to have
-  // finished before its numbers can be trusted.
+  // Bills come from get_group_bills (the group page's own single fast call).
+  // Normally this page already painted from groupStatsCache — filled by the
+  // group page itself (see groupStatsSnapshot.js) — and this is only the
+  // background refresh: with complete history already on screen, it
+  // re-fetches the complete list in one go, so older periods never
+  // briefly drop out. With nothing complete cached yet (a link straight to
+  // this page), it first fetches a "recent window" (this year plus last
+  // year — see getStatsWindowStart) so the page renders right away with
+  // correct numbers for today's default views, then the complete history
+  // in the background; isViewCovered (below, in render) is how the page
+  // knows whether the selected period needs that second step first.
   const load = useCallback(async () => {
     try {
       const windowStart = getStatsWindowStart()
-      setHistoryWindowStart(windowStart)
+      const hadCompleteHistory = groupStatsCache.get(groupId)?.historyStatus === 'complete'
+      if (!hadCompleteHistory) setHistoryWindowStart(windowStart)
 
-      // Members, categories, the group's own name, and the recent window
-      // of bills don't depend on each other — fetch all four at once
-      // instead of stacking round-trips in a row before anything on this
-      // page can render.
-      const [membersData, categoriesData, groupResult, recentBillsData] = await Promise.all([
+      // Members, categories, the group's own name, and the bills don't
+      // depend on each other — fetch all four at once.
+      const [membersData, categoriesData, groupResult, billsData] = await Promise.all([
         fetchAllGroupMembers(groupId),
         fetchCategories(groupId),
         supabase.from('groups').select('name, is_personal').eq('id', groupId).single(),
-        fetchAllRows(() =>
-          supabase
-            .from('bills')
-            .select(BILLS_SELECT, { count: 'exact' })
-            .eq('group_id', groupId)
-            .gte('created_at', windowStart.toISOString())
-            .order('created_at', { ascending: true })
-        ),
+        fetchGroupBills(supabase, groupId, hadCompleteHistory ? {} : { since: windowStart }),
       ])
       // Already gone (deleted elsewhere while this page was open) — bounce
       // back rather than sink the rest of this load into a page with
@@ -141,20 +120,15 @@ export default function GroupStats() {
         setGroupName(groupResult.data.name)
         setIsPersonal(groupResult.data.is_personal)
       }
-      // Deliberately doesn't touch historyStatus here — if this group's
-      // full history was already cached from a previous visit (status
-      // already 'complete'), this recent-window refresh shouldn't flash
-      // it back to "still loading" for the moment before the backfill
-      // below re-confirms it; only the backfill's own outcome is allowed
-      // to change historyStatus.
-      applyRawBills(recentBillsData)
+      applyRawBills(billsData)
       setError(null)
+      if (hadCompleteHistory) {
+        setHistoryStatus('complete')
+        return
+      }
 
       try {
-        const olderBillsData = await fetchAllRows(() =>
-          supabase.from('bills').select(BILLS_SELECT, { count: 'exact' }).eq('group_id', groupId).lt('created_at', windowStart.toISOString())
-        )
-        applyRawBills([...olderBillsData, ...recentBillsData])
+        applyRawBills(await fetchGroupBills(supabase, groupId))
         setHistoryStatus('complete')
       } catch {
         // The recent window above is still shown, correctly, for anything
@@ -189,7 +163,7 @@ export default function GroupStats() {
       setRawItems(cached.rawItems)
       setRawShares(cached.rawShares)
       setHistoryStatus(cached.historyStatus)
-      setHistoryWindowStart(cached.historyWindowStart)
+      setHistoryWindowStart(toWindowStart(cached.historyWindowStart))
     }
     load()
   }, [groupId, load])

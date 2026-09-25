@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import GroupView from './GroupView'
 import { CurrencyProvider } from '../context/CurrencyContext'
 import { groupViewCache } from '../lib/groupViewCache'
+import { groupStatsCache } from '../lib/groupStatsCache'
 
 // The page's realtime/patching glue, end to end: the real GroupView, the real
 // runners, relevance tracking, patch planning and patch merging — only the
@@ -207,6 +208,7 @@ beforeEach(() => {
   mockRemoveChannel.mockReset()
   mockNavigate.mockReset()
   groupViewCache.clear()
+  groupStatsCache.clear()
 })
 
 afterEach(() => {
@@ -445,5 +447,39 @@ describe('GroupView — verification after patching', () => {
 
     await settle(15 * 1000)
     expect(fullLoads()).toHaveLength(1)
+  })
+})
+
+describe('GroupView — filling the stats cache', () => {
+  const statsBillTitles = () => groupStatsCache.get('group-1')?.rawBills.map((b) => b.title)
+
+  it("fills Stats' cache from its own complete bill list, so Stats opens instantly", async () => {
+    await renderLoaded()
+    const cached = groupStatsCache.get('group-1')
+    expect(cached.historyStatus).toBe('complete')
+    expect(cached.groupName).toBe('Beach Trip')
+    expect(cached.members).toEqual(MEMBERS)
+    expect(statsBillTitles()).toEqual(['Dinner', 'Groceries', 'Taxi'])
+    expect(cached.rawItems).toHaveLength(4)
+  })
+
+  it('keeps it current as bills change', async () => {
+    await renderLoaded()
+    server.get('bill-c').title = 'Airport taxi'
+    fire('bills', 'UPDATE', { id: 'bill-c', group_id: 'group-1' })
+    await settle()
+    expect(statsBillTitles()).toEqual(['Dinner', 'Groceries', 'Airport taxi'])
+  })
+
+  it("doesn't fill it from the first-paint preview while the complete list is still missing", async () => {
+    nextFullError = { code: 'PGRST003', message: 'Timed out acquiring connection from connection pool.' }
+    render(
+      <CurrencyProvider>
+        <GroupView />
+      </CurrencyProvider>
+    )
+    await screen.findByText(/Couldn't load this group's bills/)
+    await screen.findByText('Groceries')
+    expect(groupStatsCache.get('group-1')).toBeUndefined()
   })
 })
