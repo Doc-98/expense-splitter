@@ -20,6 +20,10 @@ import { useSwipeToDelete } from '../lib/useSwipeToDelete'
 import AvatarGlyph from '../components/AvatarGlyph'
 import { getGroupViewPreferences, avatarSizeSpec } from '../lib/groupViewPreferences'
 import { isNotFoundError } from '../lib/notFound'
+import { loadErrorMessage } from '../lib/loadErrorMessage'
+import { useCoalescedRunner } from '../lib/coalescedRunner'
+import { createRealtimeRelevance } from '../lib/realtimeRelevance'
+import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
@@ -36,6 +40,13 @@ export default function BillView() {
   const [allMembers, setAllMembers] = useState([])
   const [categories, setCategories] = useState([])
   const [items, setItems] = useState([])
+  // 'loading' until the first successful load — an empty `items` alone can't
+  // tell "still loading" apart from "this bill really has no items".
+  const [itemsStatus, setItemsStatus] = useState('loading')
+  // Ids removed optimistically; a deleted UUID never legitimately comes back.
+  const deletingIdsRef = useRef(new Set())
+  // Which realtime events concern this bill — see realtimeRelevance.js.
+  const relevanceRef = useRef(createRealtimeRelevance())
   const [newItem, setNewItem] = useState({ name: '', price: '', quantity: '1' })
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState(null)
@@ -99,10 +110,15 @@ export default function BillView() {
       // whole receipt to "no items yet" on a transient network failure —
       // this runs after nearly every mutation on this page, so that would
       // otherwise be an easy way to make a real receipt look empty.
-      setError(loadError.message)
+      setError(loadErrorMessage(loadError))
+      setItemsStatus((status) => (status === 'ready' ? 'ready' : 'error'))
       return
     }
-    setItems(data || [])
+    // A load that started before an optimistic delete landed would otherwise
+    // put the just-removed row back on screen.
+    setItems((data || []).filter((it) => !deletingIdsRef.current.has(it.id)))
+    setItemsStatus('ready')
+    relevanceRef.current.learn([{ id: billId, items: data || [] }])
   }, [billId])
 
   const loadBill = useCallback(async () => {
@@ -126,12 +142,25 @@ export default function BillView() {
         navigate(`/groups/${groupId}`, { state: { notice: 'This bill was deleted.' } })
         return
       }
-      setError(loadError.message)
+      setError(loadErrorMessage(loadError))
       return
     }
     setBill(billData)
     setBillPayers(billData?.bill_payers || [])
   }, [billId, groupId, navigate])
+
+  // See coalescedRunner.js — realtime handlers schedule(), this page's own
+  // writes call refreshItems().
+  const itemsRunner = useCoalescedRunner(loadItems)
+  const billRunner = useCoalescedRunner(loadBill)
+  const refreshItems = itemsRunner.now
+
+  // Catches whatever realtime didn't deliver — see realtimeResync.js.
+  const resyncBill = useCallback(() => {
+    itemsRunner.schedule()
+    billRunner.schedule()
+  }, [itemsRunner, billRunner])
+  useResync(resyncBill)
 
   useEffect(() => {
     async function loadBillAndMembers() {
@@ -182,11 +211,11 @@ export default function BillView() {
         setCategories(categoriesData)
         setGroup(groupResult.data)
       } catch (err) {
-        setError(err.message)
+        setError(loadErrorMessage(err))
       }
     }
     loadBillAndMembers()
-    loadItems()
+    itemsRunner.now()
 
     // `filter` narrows each subscription to *this* bill specifically —
     // without it, any change to any bill in any group you're a member of
@@ -195,22 +224,26 @@ export default function BillView() {
     // the table has its own bill_id column: items/bill_payers both do.
     // item_shares doesn't (it only carries item_id, one join step further
     // from bill_id), and Realtime's filter can't express a join — that one
-    // stays unfiltered, same as before, which is the one real limitation
-    // here, not an oversight.
+    // stays unfiltered at the source, and relevance.isRelevant() drops the
+    // share changes that belong to other bills instead. A rejoin after a
+    // dropped connection triggers a full resync.
+    const relevance = createRealtimeRelevance()
+    relevanceRef.current = relevance
+    const onItemChange = (table) => (payload) => {
+      if (relevance.isRelevant(table, payload)) itemsRunner.schedule()
+    }
     const billFilter = `bill_id=eq.${billId}`
     const channel = supabase
       .channel(`bill-${billId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: billFilter }, loadItems)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, loadItems)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'bill_payers', filter: billFilter },
-        loadBill
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: billFilter }, onItemChange('items'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, onItemChange('item_shares'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bill_payers', filter: billFilter }, () =>
+        billRunner.schedule()
       )
-      .subscribe()
+      .subscribe(resyncOnRejoin(resyncBill))
 
     return () => supabase.removeChannel(channel)
-  }, [billId, groupId, loadItems, loadBill, navigate])
+  }, [billId, groupId, navigate, itemsRunner, billRunner, resyncBill])
 
   const total = items.reduce((sum, it) => sum + Number(it.total_price), 0)
   const isMultiPayer = billPayers.length > 0
@@ -272,7 +305,7 @@ export default function BillView() {
     if (!inserted) return // insertItemWithShares already set the error
 
     setNewItem({ name: '', price: '', quantity: '1' })
-    loadItems()
+    refreshItems()
     // Ready for the next item without reaching for the mouse.
     nameRef.current?.focus()
   }
@@ -301,16 +334,34 @@ export default function BillView() {
       setError(toggleError.message)
       return
     }
-    loadItems()
+    refreshItems()
   }
 
+  // Optimistic: the row disappears on the first tap, so a slow server never
+  // looks like "delete didn't work" and invites a second tap (both swipe and
+  // the "Remove item" button land here). Repeat taps for a row already being
+  // deleted are ignored; on failure the row is put back in its original spot.
   async function deleteItem(itemId) {
+    if (deletingIdsRef.current.has(itemId)) return
+    const removed = items.find((it) => it.id === itemId)
+    deletingIdsRef.current.add(itemId)
+    setItems((current) => current.filter((it) => it.id !== itemId))
+    setError(null)
+
     const { error: deleteError } = await supabase.from('items').delete().eq('id', itemId)
     if (deleteError) {
-      setError(deleteError.message)
+      deletingIdsRef.current.delete(itemId)
+      if (removed) {
+        setItems((current) =>
+          current.some((it) => it.id === itemId)
+            ? current
+            : [...current, removed].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+        )
+      }
+      setError(`Couldn't remove that item: ${loadErrorMessage(deleteError)}`)
       return
     }
-    loadItems()
+    refreshItems()
   }
 
   // Each of ItemRow's four click-to-edit fields (name, unit price,
@@ -342,7 +393,7 @@ export default function BillView() {
     }
     const { error: updateError } = await supabase.from('items').update(patch).eq('id', item.id)
     if (updateError) setError(updateError.message)
-    loadItems()
+    refreshItems()
   }
 
   // The simple view's own amount field — same total_price back-solve as
@@ -471,7 +522,7 @@ export default function BillView() {
       setError(updateError.message)
       return
     }
-    loadItems()
+    refreshItems()
   }
 
   async function handleScanned(parsedItems) {
@@ -532,7 +583,7 @@ export default function BillView() {
         if (sharesError) setError(sharesError.message)
       }
     }
-    loadItems()
+    refreshItems()
   }
 
   // Lets you try the whole scan → review → assign-buyers flow without
@@ -763,10 +814,21 @@ export default function BillView() {
                 onUpdate={(field, value) => updateItemField(item, field, value)}
               />
             ))}
-            {items.length === 0 && <p className="empty-state">No items yet — scan a receipt or add one below.</p>}
+            {items.length === 0 && itemsStatus === 'loading' && <p className="empty-state">Loading items…</p>}
+            {items.length === 0 && itemsStatus === 'error' && (
+              <p className="empty-state">
+                Couldn't load this bill's items.{' '}
+                <button type="button" className="btn-link" onClick={refreshItems}>
+                  Try again
+                </button>
+              </p>
+            )}
+            {items.length === 0 && itemsStatus === 'ready' && (
+              <p className="empty-state">No items yet — scan a receipt or add one below.</p>
+            )}
             <div className="receipt-total-row">
               <span>Total</span>
-              <span className="mono">{format(total)}</span>
+              <span className="mono">{itemsStatus === 'ready' ? format(total) : '—'}</span>
             </div>
           </div>
 

@@ -2,12 +2,22 @@ import { deriveBillsItemsShares } from './deriveBillData'
 import { computeSpendingTotals } from './settlement'
 import { getPeriodRange, filterByDateRange } from './timeRange'
 
-// Same shape GroupView.jsx has always fetched bills in — pulled out here
-// (rather than left as a local constant) so prefetchGroup.js's background
-// warm-up asks for exactly the same columns, not a shape that happens to
-// drift out of sync with what GroupView.jsx itself needs to render.
-export const GROUP_BILLS_SELECT =
-  '*, items(id, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+// The group page's bill list — every bill row with nested items (each with
+// item_shares) and bill_payers, newest first — in one call to the
+// get_group_bills RPC (see supabase/migrations/20260925020000_group_bills_rpc.sql).
+// Same shape the page used to request from PostgREST's embedded select, but
+// ~10x cheaper for the database. `since` (a Date) limits it to bills
+// created at or after that moment, for the fast first-paint window;
+// `billIds` to just those bills, for per-bill updates (see billPatches.js).
+// Shared with prefetchGroup.js so the warm-up asks for exactly the same shape.
+export async function fetchGroupBills(supabase, groupId, { since, billIds } = {}) {
+  const args = { target_group_id: groupId }
+  if (since) args.since = since.toISOString()
+  if (billIds) args.bill_ids = billIds
+  const { data, error } = await supabase.rpc('get_group_bills', args)
+  if (error) throw error
+  return data || []
+}
 
 // Pulled out of GroupView.jsx's own computeAndSetSettlement (per-bill
 // personal totals and the week/month preview totals) so the exact same
@@ -29,11 +39,24 @@ export const GROUP_BILLS_SELECT =
 export function computeGroupViewSnapshot(billsData) {
   const { list: settlementBills, items, itemShares } = deriveBillsItemsShares(billsData)
 
+  // Grouped once up front — filtering the full item/share lists per bill
+  // was bills × items work (~4M comparisons on the largest group) on
+  // every reload.
+  const itemsByBill = new Map()
+  for (const item of items) {
+    if (!itemsByBill.has(item.bill_id)) itemsByBill.set(item.bill_id, [])
+    itemsByBill.get(item.bill_id).push(item)
+  }
+  const sharesByItem = new Map()
+  for (const share of itemShares) {
+    if (!sharesByItem.has(share.item_id)) sharesByItem.set(share.item_id, [])
+    sharesByItem.get(share.item_id).push(share)
+  }
+
   const billPersonalTotals = {}
   for (const bill of settlementBills) {
-    const billItems = items.filter((it) => it.bill_id === bill.id)
-    const billItemIds = new Set(billItems.map((it) => it.id))
-    const billItemShares = itemShares.filter((s) => billItemIds.has(s.item_id))
+    const billItems = itemsByBill.get(bill.id) || []
+    const billItemShares = billItems.flatMap((it) => sharesByItem.get(it.id) || [])
     billPersonalTotals[bill.id] = computeSpendingTotals({ bills: [bill], items: billItems, itemShares: billItemShares })
   }
 

@@ -8,7 +8,18 @@ import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
 import { isNotFoundError } from '../lib/notFound'
-import { GROUP_BILLS_SELECT, computeGroupViewSnapshot } from '../lib/groupViewSnapshot'
+import { useCoalescedRunner } from '../lib/coalescedRunner'
+import { createRealtimeRelevance } from '../lib/realtimeRelevance'
+import {
+  applyBillPatch,
+  diffBillLists,
+  emptyPending,
+  planSync,
+  queueAffected,
+  VERIFY_BILL_PATCHES,
+} from '../lib/billPatches'
+import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
+import { fetchGroupBills, computeGroupViewSnapshot } from '../lib/groupViewSnapshot'
 import { fetchGroupSettlement } from '../lib/groupBalances'
 import { getStatsWindowStart } from '../lib/timeRange'
 import { recordGroupVisit } from '../lib/recentGroups'
@@ -37,6 +48,7 @@ import { SearchIcon, PieChartIcon, SettingsIcon, ArrowRightIcon, SettleIcon, Rec
 import BackButton from '../components/BackButton'
 
 const BILLS_PAGE_SIZE = 15
+const VERIFY_DELAY_MS = 30 * 1000
 
 export default function GroupView() {
   const { groupId } = useParams()
@@ -63,6 +75,20 @@ export default function GroupView() {
   // sidesteps that — always reads the latest value, with nothing to go
   // stale.
   const billsRef = useRef(null)
+  // Which realtime events concern this group — replaced per group in the
+  // subscription effect below (see realtimeRelevance.js).
+  const relevanceRef = useRef(createRealtimeRelevance())
+  // Work queued for the bills runner (see syncBills): a full reload, and/or
+  // specific bills to patch, and/or a verification pass.
+  const pendingRef = useRef(emptyPending())
+  // True once this group's complete list has loaded — patches only ever
+  // build on a complete list, never on the cache or the first-paint window.
+  const fullyLoadedRef = useRef(false)
+  // Bumped on every queued change; verifyPatches uses it to tell whether
+  // anything happened while its comparison fetch was in flight.
+  const changeCountRef = useRef(0)
+  const verifyTimerRef = useRef(null)
+  const billsRunnerRef = useRef(null)
   useEffect(() => {
     billsRef.current = bills
   }, [bills])
@@ -322,15 +348,7 @@ export default function GroupView() {
   // it now, real load or not.
   const loadRecentBillsForFirstPaint = useCallback(async () => {
     try {
-      const windowStart = getStatsWindowStart()
-      const billsData = await fetchAllRows(() =>
-        supabase
-          .from('bills')
-          .select(GROUP_BILLS_SELECT, { count: 'exact' })
-          .eq('group_id', groupId)
-          .gte('created_at', windowStart.toISOString())
-          .order('created_at', { ascending: false })
-      )
+      const billsData = await fetchGroupBills(supabase, groupId, { since: getStatsWindowStart() })
       // loadBillsAndSettlement might already have won this race — a
       // small/young group with nothing to window in the first place, or
       // just a faster response. Applying this now would only ever be a
@@ -352,16 +370,13 @@ export default function GroupView() {
       // Bills and the balance don't depend on each other, so fetch both at
       // once rather than waiting on one before starting the other.
       const [billsData, settlementData] = await Promise.all([
-        fetchAllRows(() =>
-          supabase
-            .from('bills')
-            .select(GROUP_BILLS_SELECT, { count: 'exact' })
-            .eq('group_id', groupId)
-            .order('created_at', { ascending: false })
-        ),
+        fetchGroupBills(supabase, groupId),
         fetchGroupSettlement(supabase, groupId),
       ])
 
+      // Set directly too (not only via the mirroring effect): a patch run
+      // queued right behind this one must merge into this list.
+      billsRef.current = billsData
       setBills(billsData)
       setSettlement(settlementData)
       setError(null)
@@ -369,10 +384,89 @@ export default function GroupView() {
       // The one place this ever gets confirmed true — this is the only
       // function that fetches the group's complete, unwindowed bill list.
       setHistoryComplete(true)
+      // Complete list, so it's also what the realtime filter learns from,
+      // and what per-bill patches may now safely build on.
+      relevanceRef.current.learn(billsData)
+      fullyLoadedRef.current = true
     } catch (err) {
       setError(`Couldn't load this group's bills: ${loadErrorMessage(err)}`)
     }
   }, [groupId])
+
+  // Queues the verification pass ~30s after the latest patch (restarting the
+  // wait on each new one, so a busy stretch gets one check at the end).
+  const scheduleVerification = useCallback(() => {
+    clearTimeout(verifyTimerRef.current)
+    verifyTimerRef.current = setTimeout(() => {
+      pendingRef.current.verify = true
+      billsRunnerRef.current?.schedule()
+    }, VERIFY_DELAY_MS)
+  }, [])
+
+  // Refreshes just `billIds` (see billPatches.js) plus the balance. Throws
+  // on failure so syncBills can fall back to a full reload.
+  const patchBills = useCallback(
+    async (billIds) => {
+      const [fetched, settlementData] = await Promise.all([
+        fetchGroupBills(supabase, groupId, { billIds }),
+        fetchGroupSettlement(supabase, groupId),
+      ])
+      relevanceRef.current.learn(fetched)
+      const next = applyBillPatch(billsRef.current, billIds, fetched)
+      billsRef.current = next
+      setBills(next)
+      setSettlement(settlementData)
+      setError(null)
+      computeAndSetBillDerivedState(next)
+    },
+    [groupId]
+  )
+
+  // The verification period: some time after a burst of patches, fetch the
+  // whole list and compare. A difference means a patching bug — it's logged
+  // with the bills involved, and the screen is corrected on the spot.
+  // Skipped (not failed) if anything changed while fetching, since the
+  // comparison would be meaningless; the next patch re-arms it anyway.
+  const verifyPatches = useCallback(async () => {
+    const before = billsRef.current
+    const changesBefore = changeCountRef.current
+    let fresh
+    try {
+      fresh = await fetchGroupBills(supabase, groupId)
+    } catch {
+      return // best-effort; the periodic resync still covers correctness
+    }
+    if (changeCountRef.current !== changesBefore || billsRef.current !== before) return
+    const differing = diffBillLists(fresh, before)
+    if (differing.length === 0) return
+    console.warn('[bill patches] patched list differed from a full reload; corrected. Bills:', differing)
+    relevanceRef.current.learn(fresh)
+    billsRef.current = fresh
+    setBills(fresh)
+    computeAndSetBillDerivedState(fresh)
+  }, [groupId])
+
+  // The one task the bills runner executes: drains whatever's queued in
+  // pendingRef. What to do is decided by planSync (billPatches.js, tested);
+  // this only carries it out — and turns a failed patch into a full reload.
+  const syncBills = useCallback(async () => {
+    const plan = planSync(pendingRef.current, { fullyLoaded: fullyLoadedRef.current })
+    pendingRef.current = emptyPending()
+
+    if (plan.kind === 'full') {
+      await loadBillsAndSettlement()
+    } else if (plan.kind === 'patch') {
+      try {
+        await patchBills(plan.billIds)
+        if (VERIFY_BILL_PATCHES) scheduleVerification()
+      } catch (err) {
+        console.error('Bill patch failed, reloading the whole list instead:', err)
+        await loadBillsAndSettlement()
+      }
+    } else if (plan.kind === 'verify') {
+      await verifyPatches()
+    }
+  }, [loadBillsAndSettlement, patchBills, verifyPatches, scheduleVerification])
 
   useEffect(() => {
     if (!bills) return
@@ -513,7 +607,46 @@ export default function GroupView() {
   // recurring-bills sweep, and the bills/items/item_shares realtime
   // subscription below all mean "the bill list itself changed," as
   // opposed to loadSettlement's narrower "just the balance."
-  const reloadAll = loadBillsAndSettlement
+  // All four go through coalesced runners (see coalescedRunner.js): realtime
+  // handlers schedule(), the page's own writes call now().
+  // The bills runner drains pendingRef through syncBills, so full reloads,
+  // per-bill patches and verification passes all run strictly one at a
+  // time: whatever is applied last was also fetched last.
+  const billsRunner = useCoalescedRunner(syncBills)
+  const settlementRunner = useCoalescedRunner(loadSettlement)
+  const membersRunner = useCoalescedRunner(loadMembers)
+  const categoriesRunner = useCoalescedRunner(loadCategories)
+  useEffect(() => {
+    billsRunnerRef.current = billsRunner
+  }, [billsRunner])
+
+  // The whole list, right away.
+  const reloadAll = useCallback(() => {
+    pendingRef.current.full = true
+    billsRunner.now()
+  }, [billsRunner])
+
+  // Just these bills, right away — after the page's own edit to them.
+  const refreshBills = useCallback(
+    (billIds) => {
+      for (const id of billIds) pendingRef.current.billIds.add(id)
+      changeCountRef.current++
+      billsRunner.now()
+    },
+    [billsRunner]
+  )
+
+  // Catches whatever realtime didn't deliver (app backgrounded, connection
+  // dropped, or an event the relevance filter skipped) — see realtimeResync.js.
+  // Always a full reload: a resync is exactly the "might have missed
+  // something" case patches can't cover.
+  const resyncAll = useCallback(() => {
+    pendingRef.current.full = true
+    billsRunner.schedule()
+    membersRunner.schedule()
+    categoriesRunner.schedule()
+  }, [billsRunner, membersRunner, categoriesRunner])
+  useResync(resyncAll)
 
   // Keeps the cache current with whatever's actually on screen — the
   // initial load, a background reload, and a realtime update all funnel
@@ -540,6 +673,13 @@ export default function GroupView() {
   }, [groupId, group, allMembers, categories, bills, billPersonalTotals, settlement, weekTotal, monthTotal, historyComplete])
 
   useEffect(() => {
+    // Per-group patch state starts over: nothing learned, nothing queued,
+    // and no patching until this group's complete list has loaded.
+    const relevance = createRealtimeRelevance()
+    relevanceRef.current = relevance
+    pendingRef.current = emptyPending()
+    fullyLoadedRef.current = false
+
     // Paints instantly from whatever was on screen last time this group was
     // open, if anything — then the loads just below always run anyway, so
     // a stale cache is never shown for more than the length of one fetch.
@@ -570,8 +710,8 @@ export default function GroupView() {
     }
 
     loadGroup()
-    loadMembers()
-    loadCategories()
+    membersRunner.now()
+    categoriesRunner.now()
     reloadAll()
 
     // Feeds the app-boot warm-up (see recentGroups.js/prefetchGroup.js) —
@@ -603,31 +743,38 @@ export default function GroupView() {
     // bill_id/item_id, one join step further from group_id), and
     // Realtime's filter can't express a join — those two stay unfiltered,
     // same as before, which is the one real limitation here, not an
-    // oversight.
+    // oversight — relevance.affectedBills() drops the ones that belong to
+    // another group instead, and traces the rest to the one bill they touch
+    // so only that bill is re-fetched. Every handler queues and schedules
+    // rather than loading directly: realtime sends one event per row, so
+    // one scan is dozens of events. A rejoin after a dropped connection
+    // triggers a full resync.
+    const onBillChange = (table) => (payload) => {
+      if (!queueAffected(pendingRef.current, relevance.affectedBills(table, payload))) return
+      changeCountRef.current++
+      billsRunner.schedule()
+    }
     const groupFilter = `group_id=eq.${groupId}`
     const channel = supabase
       .channel(`group-${groupId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: groupFilter }, reloadAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, reloadAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, reloadAll)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'payments', filter: groupFilter },
-        loadSettlement
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: groupFilter }, onBillChange('bills'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, onBillChange('items'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, onBillChange('item_shares'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: groupFilter }, () =>
+        settlementRunner.schedule()
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'group_members', filter: groupFilter },
-        loadMembers
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: groupFilter }, () =>
+        membersRunner.schedule()
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'categories', filter: groupFilter },
-        loadCategories
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter: groupFilter }, () =>
+        categoriesRunner.schedule()
       )
-      .subscribe()
+      .subscribe(resyncOnRejoin(resyncAll))
 
-    return () => supabase.removeChannel(channel)
+    return () => {
+      supabase.removeChannel(channel)
+      clearTimeout(verifyTimerRef.current)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId])
 
@@ -697,7 +844,8 @@ export default function GroupView() {
     setError(null)
     const { error: deleteError } = await supabase.from('bills').delete().eq('id', bill.id)
     if (deleteError) setError(deleteError.message)
-    reloadAll()
+    // Just this bill: gone if the delete worked, back as it was if not.
+    refreshBills([bill.id])
   }
 
   // Entry point is the ⋮ menu's own "Rename" (see BillActionsMenu below) —
@@ -716,7 +864,7 @@ export default function GroupView() {
       return
     }
     setEditingBillId(null)
-    reloadAll()
+    refreshBills([billId])
   }
 
   // Selection is independent of pagination on purpose — picking bills on
@@ -774,9 +922,13 @@ export default function GroupView() {
       setError(deleteError.message)
       return
     }
+    const deletedIds = Array.from(selectedIds)
     setSelectedIds(new Set())
     setSelectMode(false)
-    reloadAll()
+    // Wiping the whole group is a full reload; a handful is a patch (and
+    // syncBills turns a large selection into a full reload by itself).
+    if (allBillsSelected) reloadAll()
+    else refreshBills(deletedIds)
   }
 
   // Entry point for the per-bill menu's own "Select" action — the only way
@@ -859,7 +1011,7 @@ export default function GroupView() {
   // `settlement` for a real group) and "Download as PDF" needs the printed
   // content already sitting in the DOM the instant window.print() fires —
   // neither has anywhere to await an async fetch. bills' own item rows
-  // already carry total_price/category_id (GROUP_BILLS_SELECT), which is
+  // already carry total_price/category_id (see fetchGroupBills), which is
   // all a total-and-by-category summary needs; only a full itemized
   // transcript (name/quantity per item) would need the heavier fetch those
   // two functions do, and that's exactly what selecting bills and sharing
