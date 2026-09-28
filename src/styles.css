@@ -1,4 +1,10 @@
 /* ---------- Design tokens ---------- */
+/* Both themes meet WCAG AAA: every text color (--ink, --ink-soft,
+   --accent-dark, --warn) is at least 7:1 on every ground it can land on
+   (--bg, --surface, --surface-tint, --accent-light, and --warn-light for
+   --warn), labels on fills are 7:1 via --on-accent/--on-warn, and --border
+   and --accent (focus ring, bar fills) are at least 3:1 on every surface.
+   Check a new text/ground pairing against that before adding it. */
 :root {
   --bg: #FAF9F6;
   --surface: #FFFFFF;
@@ -10,13 +16,19 @@
      popovers, and everything else that isn't a list row are unaffected. */
   --surface-tint: #EDF3F0;
   --ink: #1F2A24;
-  --ink-soft: #5C6B63;
-  --border: #E4E1D8;
-  --accent: #2F6F5E;
-  --accent-dark: #23574A;
+  --ink-soft: #434E49;
+  /* Strong enough (3:1 on every surface) that borders alone set inputs,
+     rows and tiles apart, not just a change of fill. */
+  --border: #8F8463;
+  --accent: #2A6253;
+  --accent-dark: #225448;
   --accent-light: #DCEDE6;
-  --warn: #B54F30;
+  --warn: #7D3016;
   --warn-light: #F5E3DB;
+  /* Labels on --accent / --warn fills. Always use these rather than a
+     literal white: dark mode flips them to near-black. */
+  --on-accent: #FFFFFF;
+  --on-warn: #FFFFFF;
 
   --font-display: 'Fraunces', Georgia, serif;
   --font-body: 'Inter', system-ui, sans-serif;
@@ -32,17 +44,19 @@
 }
 
 [data-theme="dark"] {
-  --bg: #14201B;
-  --surface: #1E2E27;
-  --surface-tint: #25382F;
+  --bg: #111C17;
+  --surface: #16231D;
+  --surface-tint: #18261F;
   --ink: #EDEAE2;
-  --ink-soft: #93A79C;
-  --border: #33473D;
-  --accent: #3E9179;
+  --ink-soft: #ADBDB4;
+  --border: #5A7E6C;
+  --accent: #4BB093;
   --accent-dark: #8FDCC4;
-  --accent-light: #24443B;
-  --warn: #E2825F;
-  --warn-light: #3D2A20;
+  --accent-light: #1B3129;
+  --warn: #EBAA93;
+  --warn-light: #2F2019;
+  --on-accent: #0B1310;
+  --on-warn: #0B1310;
 
   color-scheme: dark;
 }
@@ -74,6 +88,9 @@ body {
 
 button { font-family: inherit; font-size: inherit; }
 input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px prevents iOS zoom-on-focus */
+/* The browser's default placeholder grey is too faint for AAA, especially
+   in dark mode — --ink-soft holds 7:1 on every surface an input sits on. */
+::placeholder { color: var(--ink-soft); opacity: 1; }
 
 /* Themed text-selection highlight — without this, selecting/auto-selecting
    text (e.g. InlineEditable's select() on entering edit mode, see that
@@ -81,7 +98,7 @@ input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px preve
    which reads as a jarring grey/light box against this app's dark theme
    (most visible on the simple bill view's big .amount-card-value-input,
    auto-selected the moment you tap it). */
-::selection { background: var(--accent); color: #fff; }
+::selection { background: var(--accent); color: var(--on-accent); }
 
 .mono { font-family: var(--font-mono); }
 
@@ -435,6 +452,7 @@ input.bill-title-editable-input {
 .status-error {
   color: var(--warn);
   background: var(--warn-light);
+  border: 1px solid var(--warn);
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius);
   font-size: 14px;
@@ -444,6 +462,7 @@ input.bill-title-editable-input {
 .status-success {
   color: var(--accent-dark);
   background: var(--accent-light);
+  border: 1px solid var(--accent);
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius);
   font-size: 14px;
@@ -465,9 +484,9 @@ input.bill-title-editable-input {
 .btn-primary:active, .btn-secondary:active, .btn-danger:active { transform: scale(0.98); }
 .btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled { opacity: 0.55; cursor: default; }
 
-.btn-primary { background: var(--accent); color: white; }
+.btn-primary { background: var(--accent); color: var(--on-accent); }
 .btn-secondary { background: var(--accent-light); color: var(--accent-dark); }
-.btn-danger { background: var(--warn); color: white; }
+.btn-danger { background: var(--warn); color: var(--on-warn); }
 
 .btn-link {
   background: none;
@@ -552,7 +571,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   border: none;
   border-radius: 50%;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -579,7 +598,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   border: none;
   border-radius: 50%;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -631,7 +650,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   color: var(--ink-soft);
   cursor: pointer;
 }
-.tab.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+.tab.active { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--border), 0 1px 2px rgba(0,0,0,0.08); }
 
 .auth-form { display: flex; flex-direction: column; }
 .auth-form .btn-primary { margin-top: 4px; }
@@ -1152,8 +1171,8 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
      this, iOS Safari would take it as double-tap-to-zoom instead. */
   touch-action: manipulation;
 }
-.avatar.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.avatar.former { border-style: dashed; opacity: 0.7; }
+.avatar.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.avatar.former { border-style: dashed; }
 /* RecordPayment.jsx's own avatar-picker layout — a person already picked
    on the *other* side (Who paid vs. Paid to) dims and stops accepting taps
    here, the same "can't pick the same person twice" rule the dropdown
@@ -1190,7 +1209,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   border: 1px solid var(--border); color: var(--ink-soft); background: var(--surface);
   cursor: pointer;
 }
-.avatar-picker-option.is-selected { background: var(--accent); border-color: var(--accent); color: #fff; }
+.avatar-picker-option.is-selected { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
 /* Settings > Profile's collapsed "Choose your avatar" row (Group
    Settings > General's per-group picker still shows the grid outright —
@@ -1227,7 +1246,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   justify-content: center;
   background: var(--accent);
   border: 1px solid var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 12px;
   font-weight: 600;
 }
@@ -1344,7 +1363,7 @@ input.amount-card-value-input {
 .item-row-head-shell { position: relative; overflow: hidden; border-radius: 8px; }
 .item-row-delete-action {
   position: absolute; top: 0; right: 0; bottom: 0; width: 76px;
-  background: var(--warn); color: #fff; border: none;
+  background: var(--warn); color: var(--on-warn); border: none;
   font-size: 12px; font-weight: 500; cursor: pointer;
 }
 .item-row-head {
@@ -1447,7 +1466,7 @@ input.item-editable-input, textarea.item-editable-input {
   cursor: pointer;
 }
 .buyer-chip.active { background: var(--accent-light); border-color: var(--accent); color: var(--accent-dark); }
-.buyer-chip.former { border-style: dashed; opacity: 0.7; }
+.buyer-chip.former { border-style: dashed; }
 .buyer-chip input { display: none; }
 
 .item-warning {
@@ -1718,7 +1737,7 @@ input.item-editable-input, textarea.item-editable-input {
   padding: 10px 14px;
   font-size: 14px;
 }
-.member-list-item.former { opacity: 0.7; border-style: dashed; }
+.member-list-item.former { border-style: dashed; }
 .member-list-actions { display: flex; gap: 10px; }
 .guest-rename-form { display: flex; gap: 8px; align-items: center; flex: 1; }
 .guest-rename-form input { flex: 1; }
@@ -2770,7 +2789,7 @@ input.item-editable-input, textarea.item-editable-input {
   min-width: 0;
 }
 .settings-shell.expanded .nav-item .label { display: inline; }
-.nav-item:hover { background: var(--border); }
+.nav-item:hover { background: var(--surface-tint); }
 .nav-item.active { background: var(--accent-light); color: var(--accent-dark); }
 .nav-spacer { flex: 1; }
 .nav-item.signout {
@@ -2882,7 +2901,7 @@ input.item-editable-input, textarea.item-editable-input {
   height: 34px;
   border-radius: 9px;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   font-family: var(--font-display);
   font-size: 18px;
   font-weight: 700;

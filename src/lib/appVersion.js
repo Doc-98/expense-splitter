@@ -16,9 +16,7 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
-  "Invite links now work for friends who've never opened the app — they used to land on a \"page doesn't exist\" error",
-  "Opening an invite or guest-claim link while signed out now says why you're being asked to sign in, and takes you straight back to it afterwards — even when a new account has to confirm its email first",
-  "The Invite menu on a group's Members page now opens fully on screen",
-  "A one-item bill now has its own \"Split with\" right under the amount — no more adding a second item just to choose who's splitting it",
-  "\"Add another item\" starts the new item split between the same people as the first, and the bill's default is now labelled \"Next item split with\"",
+  "Easier to read in both light and dark mode: text, links and amounts now have much stronger contrast (WCAG AAA), and outlines around fields, cards and tiles are clearly visible",
+  "In dark mode, buttons now use dark text on brighter green and terracotta, so their labels stand out",
+  "The selected tab, people who've left a group, and success or error messages no longer rely on a faint shade or fade to tell them apart",
 ]

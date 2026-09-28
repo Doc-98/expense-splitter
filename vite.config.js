@@ -69,7 +69,7 @@ export default defineConfig({
         name: 'Spesa - Expense Splitter',
         short_name: 'Spesa',
         description: 'Split receipts and expenses with your group, in real time.',
-        theme_color: '#2F6F5E',
+        theme_color: '#2A6253',
         background_color: '#FAF9F6',
         display: 'standalone',
         start_url: '/',
