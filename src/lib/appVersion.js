@@ -21,4 +21,5 @@ export const WHATS_NEW = [
   "The selected tab, people who've left a group, and success or error messages no longer rely on a faint shade or fade to tell them apart",
   "Using a keyboard? Every button, link, tab and row now shows the same clear green focus ring, including the guide's search and the amount filter slider, which had none",
   "Prices and quantities you're typing line up digit for digit, and the day headings in the bill list use a proper bold instead of an artificially thickened one",
+  "Easier to tap: the \"Split with\" avatars are bigger (all three sizes in Settings went up a step), and icon buttons, links, tabs, switches and the send arrow in text fields now respond to a full fingertip-sized area around them, even where they look the same",
 ]

@@ -549,6 +549,40 @@ input.bill-title-editable-input {
    own hamburger, tinted while its expanded nav is showing. */
 .icon-btn.active-toggle { background: var(--accent-light); color: var(--accent-dark); }
 
+/* ---------- Touch targets ----------
+   Every small control gets a tap area of at least 44×44px (WCAG 2.5.5,
+   the AAA target the rest of the app aims for) without changing how it
+   looks: an invisible ::after, centred on the control, that grows to 44px
+   in whichever direction the control is smaller. It only helps where
+   there's room — a neighbour closer than that would share the extra
+   strip — so tight clusters get real 44px boxes instead (the avatar rows'
+   36px + 8px gap, the time-range arrows and the sign-in links below).
+   .input-submit-btn is absolutely positioned already, which is all the
+   ::after needs; the rest get position: relative for it. */
+.icon-btn, .btn-icon, .btn-link, .row-submit-btn, .install-banner-dismiss,
+.account-chip, .tab, .avatar, .avatar-picker-option { position: relative; }
+.icon-btn::after, .btn-icon::after, .row-submit-btn::after, .input-submit-btn::after,
+.install-banner-dismiss::after, .account-chip::after, .avatar::after, .avatar-picker-option::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
+/* Text links and tabs are already wide enough and often sit side by side
+   (Save / Cancel), so theirs only grows vertically. */
+.btn-link::after, .tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: max(100%, 44px);
+  transform: translateY(-50%);
+}
+
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-soft); margin-bottom: var(--space-sm); }
 
 input[type="text"], input[type="email"], input[type="password"], input:not([type]), select {
@@ -669,7 +703,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 
 .auth-form { display: flex; flex-direction: column; }
 .auth-form .btn-primary { margin-top: 4px; }
-.auth-form .btn-link { margin-top: var(--space-sm); text-align: center; }
+.auth-form .btn-link { margin-top: var(--space-xs); text-align: center; min-height: 44px; }
 .auth-magic-link-hint { margin: var(--space-sm) 0 0; font-size: 13px; line-height: 1.4; }
 /* A short caption directly under one field, not a whole form — tighter
    than .auth-magic-link-hint (which sits under the whole magic-link
@@ -1175,11 +1209,15 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    used both here (a bill's default split) and on each item row below.
    Reuses .buyer-chip's own active-state logic (filled/accent when on,
    outline when off), just circular instead of a pill with a name in it. */
-.avatar-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.avatar-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* 36px + the row's 8px gap = a 44px pitch, so the invisible 44px tap area
+   (see "Touch targets" below) meets its neighbour's exactly — no overlap,
+   no dead strip in between. Was 26px with a 6px gap, which is where most
+   mis-taps on a busy bill came from. */
 .avatar {
-  width: 26px; height: 26px; border-radius: 50%; flex: none; padding: 0;
+  width: 36px; height: 36px; border-radius: 50%; flex: none; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 600;
+  font-size: 15px; font-weight: 600;
   border: 1px solid var(--border); color: var(--ink-soft); background: var(--surface);
   cursor: pointer;
   /* Double-tap means "only this buyer" on the split-with pickers — without
@@ -1193,12 +1231,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    here, the same "can't pick the same person twice" rule the dropdown
    layout already gets for free from each <option disabled>. */
 .avatar:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
-/* The two bigger options on top of the 26px default above — see the
+/* The two bigger options on top of the 36px default above — see the
    "Split-with avatar size" picker in Settings > Profile (avatarSizeSpec()
    in groupViewPreferences.js is the one place that decides both this
    class and the icon's own px, so they can't drift). */
-.avatar.avatar-md { width: 34px; height: 34px; font-size: 14px; }
-.avatar.avatar-lg { width: 42px; height: 42px; font-size: 17px; }
+.avatar.avatar-md { width: 42px; height: 42px; font-size: 17px; }
+.avatar.avatar-lg { width: 48px; height: 48px; font-size: 20px; }
 
 /* The size picker itself — three buttons, each previewing its size with a
    real (non-interactive) .avatar circle rather than just a text label. */
@@ -1214,11 +1252,11 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 
 /* The 16-icon grid itself — Settings > Profile (account default) and
    Group Settings > General (per-group override) both use this, see
-   AvatarPicker.jsx. Slightly bigger than .avatar's 26px since these are
-   the actual tap targets for choosing one, not a compact inline row. */
+   AvatarPicker.jsx. Same 36px as .avatar and the same 8px gap, so each
+   option also gets a full 44px tap area (see "Touch targets"). */
 .avatar-picker { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .avatar-picker-option {
-  width: 34px; height: 34px; border-radius: 50%; flex: none; padding: 0;
+  width: 36px; height: 36px; border-radius: 50%; flex: none; padding: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 12px; font-weight: 600;
   border: 1px solid var(--border); color: var(--ink-soft); background: var(--surface);
@@ -2025,7 +2063,20 @@ input.item-editable-input, textarea.item-editable-input {
 .time-range-label-stack { display: flex; flex-direction: column; align-items: center; min-width: 110px; }
 .time-range-year { font-size: 11px; color: var(--ink-soft); line-height: 1.4; }
 .time-range-label { font-size: 14px; font-weight: 500; text-align: center; }
-.time-range-nav .btn-icon { font-size: 24px; padding: 4px 5px; }
+.time-range-nav .btn-icon {
+  font-size: 24px; padding: 4px 5px;
+  /* The arrows sit only 6px apart, too close for the invisible tap area
+     (see "Touch targets") to grow sideways without overlapping — so each
+     is a real 44px box instead, glyph unchanged. */
+  min-width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.time-range-nav .btn-icon::after { content: none; }
+/* Week view has six arrows (‹‹‹ ‹‹ ‹ · › ›› ›››): at 44px each the row
+   needs ~410px and would wrap on a 360px phone, so there they keep their
+   natural width and only the height goes to 44px. Month view (four
+   arrows, ~310px) keeps the full 44×44. */
+.time-range-nav:has(> .btn-icon:nth-of-type(6)) .btn-icon { min-width: 0; }
 .time-range-nav .btn-icon:disabled { opacity: 0.3; cursor: default; }
 /* The extra "jump ~1 month" / "jump ~1 year" tiers — smaller and softer
    than the ordinary single-step ‹ / ›, which stays the biggest/clearest
@@ -2394,7 +2445,7 @@ input.item-editable-input, textarea.item-editable-input {
    requested specifically for dark mode once it moved off the account
    dropdown and onto its own settings row. */
 .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
-.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; left: 0; top: 50%; width: 100%; height: 44px; transform: translateY(-50%); margin: 0; cursor: pointer; }
 .switch-slider {
   position: absolute;
   inset: 0;

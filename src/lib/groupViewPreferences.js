@@ -57,9 +57,9 @@ export const AVATAR_SIZE_OPTIONS = ['small', 'medium', 'large']
 // ItemRow, and the Settings size picker can't drift out of sync on what
 // "medium" or "large" means.
 const AVATAR_SIZE_SPECS = {
-  small: { iconPx: 14, className: '' },
-  medium: { iconPx: 18, className: 'avatar-md' },
-  large: { iconPx: 22, className: 'avatar-lg' },
+  small: { iconPx: 19, className: '' },
+  medium: { iconPx: 22, className: 'avatar-md' },
+  large: { iconPx: 25, className: 'avatar-lg' },
 }
 
 export function avatarSizeSpec(size) {
