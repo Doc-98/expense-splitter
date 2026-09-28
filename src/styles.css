@@ -61,6 +61,59 @@
   color-scheme: dark;
 }
 
+/* ---------- Category colours ----------
+   One variable per palette slot (src/lib/categories.js's CATEGORY_COLORS
+   order: Groceries, Eating out, Household, Bills & utilities, Transport,
+   Health, Other). categoryColor() turns a saved preset colour into its
+   var(--category-N), so what's painted follows the theme and the
+   colour-blind setting while the saved value never changes. Custom colours
+   bypass these entirely and show exactly as saved.
+
+   Default palette: every step clears 3:1 against bg/surface/surface-tint
+   in its theme, and any two stay ≥ 15 apart (OKLab ΔE×100, all pairs) for
+   full colour vision. Colour-blind readers get ~7 — distinguishable only
+   next to a label. */
+:root {
+  --category-1: #534195;
+  --category-2: #C77510;
+  --category-3: #359E59;
+  --category-4: #B572A0;
+  --category-5: #2384D8;
+  --category-6: #A52030;
+  --category-7: #6A6966;
+}
+[data-theme="dark"] {
+  --category-1: #725EC2;
+  --category-2: #D47C10;
+  --category-3: #20A857;
+  --category-4: #D465B5;
+  --category-5: #2997F5;
+  --category-6: #BE4149;
+  --category-7: #878683;
+}
+/* Colour-blind palette (Settings > Layout, stored per device — see
+   colorBlindPalette.js): same slots and colour families, re-stepped in
+   lightness so any two stay ≥ 8 apart under protanopia and deuteranopia
+   (Machado 2009 simulation, all pairs). The trade: full-colour-vision
+   separation drops to ~11, which is why it's opt-in rather than the
+   default. Still ≥ 3:1 on every surface. */
+:root[data-palette="colorblind"] {
+  --category-1: #4246A7;
+  --category-2: #8F5E01;
+  --category-3: #3C9A6B;
+  --category-4: #6C3A6F;
+  --category-5: #3C8DBB;
+  --category-6: #E26733;
+}
+[data-theme="dark"][data-palette="colorblind"] {
+  --category-1: #727EEC;
+  --category-2: #BB8A46;
+  --category-3: #287B53;
+  --category-4: #A34EAA;
+  --category-5: #4B9AC7;
+  --category-6: #C24B0E;
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root { height: 100%; }
@@ -2515,6 +2568,10 @@ input.item-editable-input, textarea.item-editable-input {
 }
 .settings-preview-eyebrow::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none; }
 .settings-preview-empty-note { margin: 0; font-size: 13px; color: var(--ink-soft); font-style: italic; }
+/* Settings > Layout's color-blind palette preview: the seven default
+   categories, each dot beside its name. */
+.settings-preview-categories { list-style: none; margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 13px; }
+.settings-preview-categories li { display: flex; align-items: center; gap: 6px; min-width: 0; }
 
 /* The Budgets position preview's own bar rows — same colors/shape as the
    real .stats-bar-row on Your Stats (accent fill, warn when over budget),

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useClickOutside } from '../lib/useClickOutside'
 import ColorSwatchPicker from './ColorSwatchPicker'
+import { categoryColor } from '../lib/categoryPalette'
 
 // The colored dot next to a category name doubles as its color editor —
 // click it to reopen the same swatch row shown when the category was first
@@ -20,7 +21,7 @@ export default function CategoryColorButton({ color, onChangeColor }) {
       <button
         type="button"
         className="category-dot category-dot-button"
-        style={{ background: color }}
+        style={{ background: categoryColor(color) }}
         onClick={() => setOpen((o) => !o)}
         aria-label="Change category color"
         aria-expanded={open}

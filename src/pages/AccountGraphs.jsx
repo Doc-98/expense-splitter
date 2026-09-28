@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
 import { computeDailyTotalsForUser } from '../lib/settlement'
 import { mergeCategoriesByName } from '../lib/categories'
+import { categoryColor } from '../lib/categoryPalette'
 import { fetchBillsForGroups } from '../lib/groupViewSnapshot'
 import { splitByGroup } from '../lib/accountStatsMath'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
@@ -210,13 +211,13 @@ export default function AccountGraphs() {
     return {
       key: categoryKey,
       name: category?.name || categoryKey,
-      color: category?.color || '#999999',
+      color: categoryColor(category?.color),
       amount: Math.round(amount * 100) / 100,
     }
   })
 
   const selectedCategory = mergedCategories.find((c) => categoryKeyFor(c.name) === categoryFilter)
-  const lineColor = categoryFilter ? selectedCategory?.color || 'var(--accent)' : 'var(--accent)'
+  const lineColor = categoryFilter && selectedCategory?.color ? categoryColor(selectedCategory.color) : 'var(--accent)'
 
   return (
     <div className="page">

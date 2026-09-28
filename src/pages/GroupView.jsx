@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
+import { categoryColor } from '../lib/categoryPalette'
 import { fetchAllRows } from '../lib/fetchAllRows'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupViewCache } from '../lib/groupViewCache'
@@ -1189,7 +1190,7 @@ export default function GroupView() {
                           checked={selectedTagIds.has(cat.id)}
                           onChange={() => toggleTag(cat.id)}
                         />
-                        <span className="category-dot" style={{ background: cat.color }} />
+                        <span className="category-dot" style={{ background: categoryColor(cat.color) }} />
                         {cat.name}
                       </label>
                     ))}

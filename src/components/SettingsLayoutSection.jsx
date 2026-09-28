@@ -5,6 +5,8 @@ import { getStatsPreferences, setStatsPreferences, THRESHOLDS_POSITION_OPTIONS }
 import { getGroupViewPreferences, setGroupViewPreferences, PAYMENT_FORM_LAYOUT_OPTIONS } from '../lib/groupViewPreferences'
 import { GRANULARITIES, granularityLabel } from './TimeRangeSelector'
 import { DEFAULT_CATEGORIES } from '../lib/categories'
+import { categoryColor } from '../lib/categoryPalette'
+import { getColorBlindPalette, setColorBlindPalette } from '../lib/colorBlindPalette'
 import { ChevronIcon } from './icons'
 
 const THEME_MODES = ['light', 'dark', 'system']
@@ -49,6 +51,7 @@ export default function SettingsLayoutSection() {
   const { format } = useCurrency()
   const [statsPrefs, setStatsPrefsState] = useState(getStatsPreferences)
   const [groupPrefs, setGroupPrefsState] = useState(getGroupViewPreferences)
+  const [colorBlind, setColorBlindState] = useState(getColorBlindPalette)
   const [openPreview, setOpenPreview] = useState(null)
 
   function updateStatsPref(partial) {
@@ -83,6 +86,48 @@ export default function SettingsLayoutSection() {
         ))}
       </div>
       <p className="muted">"System" follows your device's own light/dark setting, live.</p>
+
+      <div className={openPreview === 'colorBlind' ? 'is-open' : ''}>
+        <div className="settings-row">
+          <button type="button" className="settings-row-label-btn" onClick={() => toggleLabel('colorBlind')}>
+            Color-blind friendly category colors
+            <ChevronIcon size={14} className="settings-row-chevron" />
+          </button>
+          <label className="switch">
+            <input
+              type="checkbox"
+              checked={colorBlind}
+              onChange={(e) => {
+                setColorBlindState(setColorBlindPalette(e.target.checked))
+                setOpenPreview('colorBlind')
+              }}
+              aria-label="Color-blind friendly category colors"
+            />
+            <span className="switch-slider" />
+          </label>
+        </div>
+        <div className="xwrap">
+          <div className="xinner">
+            <div className="settings-preview-box">
+              <p className="settings-preview-eyebrow">Preview</p>
+              {/* The seven default category colours, painted through
+                  categoryColor() like everywhere else, so this follows
+                  the switch (and the theme) live. */}
+              <ul className="settings-preview-categories">
+                {DEFAULT_CATEGORIES.map((c) => (
+                  <li key={c.name}>
+                    <span className="category-dot" style={{ background: categoryColor(c.color) }} />
+                    {c.name}
+                  </li>
+                ))}
+              </ul>
+              <p className="settings-preview-empty-note">
+                Tells the default category colors apart by lightness, not just hue. Custom colors stay as chosen. Only on this device.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <h2 className="settings-section-title">Stats</h2>
       <div className="settings-row">
@@ -411,11 +456,11 @@ function BudgetsPositionPreview({ position, format }) {
       <p className="settings-preview-budgets-title">Budgets</p>
       <div className="settings-preview-budget-row">
         <span className="settings-preview-budget-label">
-          <span className="category-dot" style={{ background: PREVIEW_GROCERIES.color }} />
+          <span className="category-dot" style={{ background: categoryColor(PREVIEW_GROCERIES.color) }} />
           {PREVIEW_GROCERIES.name}
         </span>
         <div className="settings-preview-budget-track">
-          <div className="settings-preview-budget-fill" style={{ width: '72%', background: PREVIEW_GROCERIES.color }} />
+          <div className="settings-preview-budget-fill" style={{ width: '72%', background: categoryColor(PREVIEW_GROCERIES.color) }} />
         </div>
         <span className="mono settings-preview-budget-value">
           {format(180)} / {format(250)}
@@ -423,7 +468,7 @@ function BudgetsPositionPreview({ position, format }) {
       </div>
       <div className="settings-preview-budget-row">
         <span className="settings-preview-budget-label">
-          <span className="category-dot" style={{ background: PREVIEW_TRANSPORT.color }} />
+          <span className="category-dot" style={{ background: categoryColor(PREVIEW_TRANSPORT.color) }} />
           {PREVIEW_TRANSPORT.name}
         </span>
         <div className="settings-preview-budget-track">

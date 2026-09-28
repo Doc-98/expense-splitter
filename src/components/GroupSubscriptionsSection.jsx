@@ -14,6 +14,7 @@ import { fetchGroupSubscriptionsData } from '../lib/prefetchGroupSettings'
 import { groupSubscriptionsCache } from '../lib/groupSubscriptionsCache'
 import { useCurrency } from '../context/CurrencyContext'
 import { parseNumber } from '../lib/parseNumber'
+import { categoryColor } from '../lib/categoryPalette'
 
 const FREQUENCY_LABELS = { weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly' }
 
@@ -272,7 +273,7 @@ export default function GroupSubscriptionsSection() {
                 {categoryNameOf(t.category_id) && (
                   <span
                     className="category-dot"
-                    style={{ background: categories.find((c) => c.id === t.category_id)?.color }}
+                    style={{ background: categoryColor(categories.find((c) => c.id === t.category_id)?.color) }}
                   />
                 )}
                 <strong>{t.title}</strong>

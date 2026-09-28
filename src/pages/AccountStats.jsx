@@ -6,6 +6,7 @@ import { useCurrency } from '../context/CurrencyContext'
 import { computeSpendingTotals } from '../lib/settlement'
 import { computeMyCategorySpend, mergeCategorySpend } from '../lib/categoryStats'
 import { mergeCategoriesByName } from '../lib/categories'
+import { categoryColor } from '../lib/categoryPalette'
 import { fetchThresholds } from '../lib/thresholds'
 import { fetchBillsForGroups } from '../lib/groupViewSnapshot'
 import { fetchGroupBalances } from '../lib/groupBalances'
@@ -300,7 +301,7 @@ export default function AccountStats() {
       return {
         key,
         name: t.category_name,
-        color: categoryColorByKey.get(key) || '#999999',
+        color: categoryColor(categoryColorByKey.get(key)),
         spent,
         amount,
         over: spent > amount,
@@ -449,7 +450,7 @@ export default function AccountStats() {
     .map(([key, { name, amount }]) => ({
       key,
       name,
-      color: categoryColorByKey.get(key) || '#999999',
+      color: categoryColor(categoryColorByKey.get(key)),
       amount,
       comparison: canCompare ? comparePeriods(amount, previousCategorySpend[key]?.amount || 0) : null,
     }))

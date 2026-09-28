@@ -58,7 +58,7 @@ const MEMBERS = [
   { id: 'member-alice', userId: 'user-me', name: 'Alice', avatarIcon: null, isGuest: false, active: true },
   { id: 'member-bob', userId: 'user-bob', name: 'Bob', avatarIcon: null, isGuest: false, active: true },
 ]
-const CATEGORIES = [{ id: 'cat-housing', name: 'Housing', color: '#4a86e8' }]
+const CATEGORIES = [{ id: 'cat-housing', name: 'Housing', color: '#534195' }]
 
 function templateFixture(overrides = {}) {
   return {

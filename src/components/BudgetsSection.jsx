@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { DEFAULT_CATEGORIES } from '../lib/categories'
+import { categoryColor } from '../lib/categoryPalette'
 import { saveThreshold, deleteThreshold } from '../lib/thresholds'
 import { parseNumber } from '../lib/parseNumber'
 import { fetchBudgetsData } from '../lib/prefetchSettings'
@@ -138,7 +139,7 @@ export default function BudgetsSection() {
     return (
       <li key={key} className="member-list-item threshold-row">
         <span className="category-label">
-          <span className="category-dot" style={{ background: cat.color }} />
+          <span className="category-dot" style={{ background: categoryColor(cat.color) }} />
           {cat.name}
         </span>
         <span className="threshold-input-wrap">

@@ -17,39 +17,22 @@ const { mockFetchCategories, mockAddCategory, mockRenameCategory, mockDeleteCate
 
 // This component never touches Supabase directly at all — every read/write
 // goes through lib/categories.js — so the mock boundary is that module, same
-// lib-function pattern as GroupMembersSection.test.jsx. Unlike those,
-// though, ColorSwatchPicker (rendered for real here, unmocked) imports
-// CATEGORY_COLORS from this same module, so the mock factory has to keep
-// supplying it too — using vi.importActual would pull in lib/categories.js's
-// own `supabase` import and, through it, supabaseClient.js's createClient()
-// call, which throws with no env vars configured in tests. Inlining the
-// real preset array here (copied from lib/categories.js) avoids that
-// entirely.
+// lib-function pattern as GroupMembersSection.test.jsx. The preset
+// palette ColorSwatchPicker renders comes from lib/categoryPalette.js,
+// which has no Supabase import, so it's used for real rather than mocked.
 vi.mock('../lib/categories', () => ({
   fetchCategories: mockFetchCategories,
   addCategory: mockAddCategory,
   renameCategory: mockRenameCategory,
   deleteCategory: mockDeleteCategory,
   updateCategoryColor: mockUpdateCategoryColor,
-  CATEGORY_COLORS: [
-    '#4a86e8',
-    '#e69138',
-    '#6aa84f',
-    '#a479e2',
-    '#45818e',
-    '#cc4125',
-    '#999999',
-    '#f1c232',
-    '#c27ba0',
-    '#3d85c6',
-  ],
 }))
 vi.mock('react-router-dom', () => ({ useParams: () => ({ groupId: 'group-1' }) }))
 
 function categoriesFixture() {
   return [
-    { id: 'cat-groceries', name: 'Groceries', color: '#4a86e8' },
-    { id: 'cat-eating-out', name: 'Eating out', color: '#e69138' },
+    { id: 'cat-groceries', name: 'Groceries', color: '#534195' },
+    { id: 'cat-eating-out', name: 'Eating out', color: '#c77510' },
   ]
 }
 
@@ -63,7 +46,7 @@ function addCategoryForm() {
 
 beforeEach(() => {
   mockFetchCategories.mockReset().mockResolvedValue(categoriesFixture())
-  mockAddCategory.mockReset().mockResolvedValue({ id: 'cat-new', name: 'Health', color: '#cc4125' })
+  mockAddCategory.mockReset().mockResolvedValue({ id: 'cat-new', name: 'Health', color: '#a52030' })
   mockRenameCategory.mockReset().mockResolvedValue(undefined)
   mockDeleteCategory.mockReset().mockResolvedValue(undefined)
   mockUpdateCategoryColor.mockReset().mockResolvedValue(undefined)
@@ -125,7 +108,7 @@ describe('GroupCategoriesSection — add category', () => {
     await user.type(screen.getByPlaceholderText('New category'), 'Health')
     await user.click(screen.getByRole('button', { name: 'Add category' }))
 
-    expect(mockAddCategory).toHaveBeenCalledWith('group-1', 'Health', '#4a86e8')
+    expect(mockAddCategory).toHaveBeenCalledWith('group-1', 'Health', '#534195')
     expect(screen.getByPlaceholderText('New category')).toHaveValue('') // cleared on success
     await waitForCallCount(mockFetchCategories, 2) // initial load + reload after add
   })
@@ -135,11 +118,11 @@ describe('GroupCategoriesSection — add category', () => {
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
 
-    await user.click(within(addCategoryForm()).getByLabelText('Choose color #cc4125'))
+    await user.click(within(addCategoryForm()).getByLabelText('Choose color #a52030'))
     await user.type(screen.getByPlaceholderText('New category'), 'Health')
     await user.click(screen.getByRole('button', { name: 'Add category' }))
 
-    expect(mockAddCategory).toHaveBeenCalledWith('group-1', 'Health', '#cc4125')
+    expect(mockAddCategory).toHaveBeenCalledWith('group-1', 'Health', '#a52030')
   })
 
   it('shows an error and keeps the typed name when adding fails', async () => {
@@ -213,15 +196,15 @@ describe('GroupCategoriesSection — color change', () => {
     const row = rowFor('Groceries')
 
     await user.click(within(row).getByLabelText('Change category color'))
-    await user.click(within(row).getByLabelText('Choose color #e69138'))
+    await user.click(within(row).getByLabelText('Choose color #c77510'))
 
-    expect(mockUpdateCategoryColor).toHaveBeenCalledWith('cat-groceries', '#e69138')
+    expect(mockUpdateCategoryColor).toHaveBeenCalledWith('cat-groceries', '#c77510')
     // The popover stays open after a pick (see CategoryColorButton's own
     // comment) — its ColorSwatchPicker is handed the category's own color
     // as `value`, so which swatch now shows "selected" is a reliable proxy
     // for the (optimistically updated) state, without relying on jsdom's
     // lossy inline-style-to-computed-style color normalization.
-    expect(within(row).getByLabelText('Choose color #e69138')).toHaveClass('selected')
+    expect(within(row).getByLabelText('Choose color #c77510')).toHaveClass('selected')
   })
 
   it('reverts the color and shows an error when the write fails', async () => {
@@ -232,10 +215,10 @@ describe('GroupCategoriesSection — color change', () => {
     const row = rowFor('Groceries')
 
     await user.click(within(row).getByLabelText('Change category color'))
-    await user.click(within(row).getByLabelText('Choose color #e69138'))
+    await user.click(within(row).getByLabelText('Choose color #c77510'))
 
     expect(await screen.findByText('could not change color')).toBeInTheDocument()
-    expect(within(row).getByLabelText('Choose color #4a86e8')).toHaveClass('selected') // reverted
+    expect(within(row).getByLabelText('Choose color #534195')).toHaveClass('selected') // reverted
   })
 })
 

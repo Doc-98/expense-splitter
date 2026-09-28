@@ -903,8 +903,9 @@ Tapping your name, top right of any page, opens `/settings` — everything
 account-level, arranged into sections down a side nav rather than a single
 long scroll: **Profile** (display name, avatar, currency), **Groups** (every
 group you're in, with a way to leave one directly, plus Sticky filters),
-**Layout** (every per-device display preference — theme, default stats
-period, where Budgets sits, group-page display toggles — most with a small
+**Layout** (every per-device display preference — theme, the color-blind
+category palette, default stats period, where Budgets sits, group-page
+display toggles — most with a small
 live preview of what the setting changes), **Budgets**, **Scan**, **How to
 Use**, **Updates**, and **About**. **Sign Out** sits at the bottom of the nav,
 split off by its own divider — it's an action, not a section, and opens a
@@ -1092,8 +1093,34 @@ A bill's category is the common case (one tap covers the whole receipt); an
 individual item can override it when it genuinely belongs somewhere else.
 
 Each category has a color, shown as a small dot wherever the category
-appears — a 10-color preset plus the browser's own picker for anything else,
-changeable any time from Group Settings → Categories.
+appears — a 7-color preset (one per default category) plus the browser's own
+picker for anything else, changeable any time from Group Settings →
+Categories.
+
+<details>
+<summary>How category colors are chosen and painted</summary>
+
+The presets (`src/lib/categoryPalette.js`) were picked with a validator rather
+than by eye: each clears 3:1 against the page in both themes, and any two
+stay clearly apart for full color vision — *any* two, because pie slices sort
+by amount, so any pair can end up side by side. What's saved on a category is
+the preset's hex; what's painted goes through `categoryColor()`, which turns a
+preset into `var(--category-N)`. `styles.css` defines those variables per
+theme (dark mode gets its own lighter steps) and for the **color-blind
+palette** (Settings → Layout, per device): the same color families re-stepped
+in lightness so any two stay apart under the two common kinds of red-green
+color blindness, at some cost to full-color separation, which is why it's
+opt-in. Custom colors skip all of this and show exactly as picked.
+
+No palette can make seven or more categories reliably distinguishable by
+color alone for color-blind readers, so the category name belongs next to
+its color: the pie legend, stats bars and budget rows already do this; item
+rows (a lone dot today) and labels on the pie slices themselves are the
+remaining work, tracked on the project board. The pre-September-2026 presets were
+migrated to the new ones (`20260928171620_category_palette.sql`); the old
+yellow/pink/navy extras were dropped as presets and stay as custom colors
+where used.
+</details>
 
 ## Budgets
 
