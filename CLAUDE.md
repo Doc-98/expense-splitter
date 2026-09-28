@@ -36,10 +36,22 @@ expectations, etc.) — read that first, every session.
 ## Permissions
 
 - Everything is pre-approved in `.claude/settings.json` — shell, file
-  edits, and the Supabase, GitHub and session tools, including applying
-  migrations to production, deploying edge functions and merging PRs. Go
+  edits, subagents/skills/artifacts, and every connected service
+  (Supabase, GitHub, session tools, Trello, Vercel, Docs, Notion, Gmail,
+  Google Calendar/Drive), including applying migrations to production,
+  deploying edge functions, merging PRs and editing the Trello board. Go
   ahead with these without asking first — standing preference, confirmed
-  2026-09-25.
+  2026-09-25 and again 2026-09-28. A newly connected service needs adding
+  to that allow list (`"mcp__<ServerName>"`) or it will prompt.
+- In cloud sessions (claude.ai/code) that file isn't enough for connector
+  tools: the launcher pre-approves each connector tool from the account's
+  own per-tool permissions at claude.ai/customize/connectors, and a tool
+  left on "needs approval" there still prompts (seen 2026-09-28:
+  `execute_sql`, and every Trello/Vercel tool). The fix is on the user's
+  side, set to always allow there; connectors are read when a session
+  starts. Repo hooks do run in cloud sessions (verified 2026-09-28), so the
+  destructive-SQL hook below still guards `execute_sql`/`apply_migration`
+  even once they're always-allowed.
 - The one exception is SQL that deletes something (`DELETE FROM`,
   `TRUNCATE`, or `DROP` of a table, column, policy, function, …): that
   still needs the user's one-click confirmation. The PreToolUse hook

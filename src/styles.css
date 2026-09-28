@@ -411,6 +411,16 @@ input.bill-title-editable-input {
   margin-bottom: var(--space-lg);
 }
 
+/* Above the sign-in form when someone arrived from an invite/claim link. */
+.auth-invite-note {
+  margin: calc(-1 * var(--space-sm)) 0 var(--space-lg);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 10px;
+  background: var(--accent-light);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 .muted { color: var(--ink-soft); font-size: 14px; }
 
 .empty-state {
@@ -967,9 +977,13 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 
 .invite-menu-wrap { position: relative; }
 .invite-menu-popover {
+  /* Anchored to the button's right edge: the Invite button sits at the
+     right of the Members header, so opening rightwards (left: 0) pushed
+     most of the menu off-screen on a phone. */
   position: absolute;
-  left: 0;
+  right: 0;
   top: calc(100% + 6px);
+  max-width: calc(100vw - 2 * var(--space-md));
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1116,6 +1130,11 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .detail-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .detail-row-label { font-size: 12.5px; color: var(--ink-soft); flex: none; }
+/* "Next item split with": allowed to shrink, so on a narrow row "split
+   with" (kept together) drops onto its own line instead of squeezing the
+   avatars. */
+.detail-row-label.next-item-split-label { flex: 0 1 auto; min-width: 0; }
+.nowrap { white-space: nowrap; }
 
 /* ---------- Compact avatar picker ----------
    "Split with," as small initialed circles instead of full-name chips —
@@ -1230,6 +1249,9 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   text-align: center;
 }
 .amount-card-label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; }
+/* A one-item bill's "Split with", under the amount — edits that one item. */
+.amount-card-split { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border); }
+.amount-card-split .avatar-row { justify-content: center; }
 /* A <button> under the hood (InlineEditable's non-editing state) — same
    reset .item-editable already gives its own buttons (background/border/
    padding/margin cleared, replaced by just the dotted underline), which

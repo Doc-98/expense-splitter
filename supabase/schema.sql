@@ -1359,6 +1359,6 @@ grant update (display_name, active, avatar_icon, claim_token) on group_members t
 -- Realtime: after running this file, go to
 -- Database -> Replication -> supabase_realtime in the Supabase dashboard and
 -- turn on replication for: bills, items, item_shares, bill_payers, payments,
--- group_members.
+-- group_members, categories.
 -- That's what makes changes show up live on everyone's phone.
 -- ============================================================================

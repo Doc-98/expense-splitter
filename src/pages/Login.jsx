@@ -1,6 +1,14 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { peekPendingRedirect, pendingRedirectReason } from '../lib/pendingRedirect'
+
+// Shown above the form when someone got here by opening an invite or
+// guest-claim link while signed out — once they're in, App.jsx's Shell
+// takes them straight back to it.
+const REASON_NOTES = {
+  join: "Sign in — or create an account — to join the group you were invited to. You'll go straight to it afterwards.",
+  claim: "Sign in — or create an account — to claim your guest history. You'll go straight to it afterwards.",
+}
 
 export default function Login() {
   // Password first — most people landing here for the first time are
@@ -19,13 +27,7 @@ export default function Login() {
   const [displayName, setDisplayName] = useState('')
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
-
-  function redirectAfterLogin() {
-    const next = sessionStorage.getItem('redirectAfterLogin')
-    sessionStorage.removeItem('redirectAfterLogin')
-    navigate(next || '/', { replace: true })
-  }
+  const [reason] = useState(() => pendingRedirectReason(peekPendingRedirect()))
 
   async function handleMagicLink(e) {
     e.preventDefault()
@@ -102,17 +104,19 @@ export default function Login() {
       setLoading(false)
       if (error) return setStatus({ type: 'error', text: error.message })
       if (!data.session) {
-        return setStatus({
+        setStatus({
           type: 'success',
-          text: 'Account created — check your email to confirm, then sign in.',
+          text: reason
+            ? "Account created — check your email and open the confirmation link in this browser. You'll be signed in and taken straight back to your invite."
+            : 'Account created — check your email to confirm, then sign in.',
         })
       }
-      redirectAfterLogin()
+      // With a session, App.jsx's Shell takes it from here (back to the
+      // invite, or to the groups list).
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       setLoading(false)
-      if (error) return setStatus({ type: 'error', text: error.message })
-      redirectAfterLogin()
+      if (error) setStatus({ type: 'error', text: error.message })
     }
   }
 
@@ -121,6 +125,7 @@ export default function Login() {
       <div className="auth-card">
         <h1 className="brand">Spesa</h1>
         <p className="brand-sub">Split receipts with your people.</p>
+        {reason && <p className="auth-invite-note">{REASON_NOTES[reason]}</p>}
 
         <div className="tab-row">
           <button

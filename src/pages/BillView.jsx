@@ -17,12 +17,11 @@ import BackButton from '../components/BackButton'
 import { ArrowRightIcon, ChevronIcon, PlusIcon } from '../components/icons'
 import { useCurrency } from '../context/CurrencyContext'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
-import AvatarGlyph from '../components/AvatarGlyph'
-import { getGroupViewPreferences, avatarSizeSpec } from '../lib/groupViewPreferences'
+import BuyerPicker from '../components/BuyerPicker'
+import { getGroupViewPreferences } from '../lib/groupViewPreferences'
 import { isNotFoundError } from '../lib/notFound'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { useCoalescedRunner } from '../lib/coalescedRunner'
-import { useDoubleTap } from '../lib/doubleTap'
 import { createKeyedQueue } from '../lib/keyedQueue'
 import { createRealtimeRelevance } from '../lib/realtimeRelevance'
 import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
@@ -53,8 +52,6 @@ export default function BillView() {
   const buyerWritesPendingRef = useRef(new Map())
   // Default "split with" saves, one after another — see saveDefaultBuyers.
   const defaultBuyersWriteRef = useRef(Promise.resolve())
-  // Tap an avatar to toggle; double-tap to make that member the only one.
-  const tapDefaultBuyer = useDoubleTap()
   // Which realtime events concern this bill — see realtimeRelevance.js.
   const relevanceRef = useRef(createRealtimeRelevance())
   const [newItem, setNewItem] = useState({ name: '', price: '', quantity: '1' })
@@ -63,8 +60,8 @@ export default function BillView() {
   const [noteDraft, setNoteDraft] = useState('')
   const [noteSaved, setNoteSaved] = useState(false)
   const [error, setError] = useState(null)
-  // Open by default — see .bill-summary below. Its "Split with" is the
-  // default for every item added next, so it should be in plain sight
+  // Open by default — see .bill-summary below. Its "Next item split with"
+  // is the default for every item added next, so it should be in plain sight
   // before the first item goes in; one tap folds it down to a summary line
   // (note, paid by, category, default split, date) to give the receipt
   // the room.
@@ -100,7 +97,6 @@ export default function BillView() {
   const nameOf = (id) => allMembers.find((m) => m.id === id)?.name || 'Someone'
 
   const { avatarSize } = getGroupViewPreferences()
-  const { iconPx: avatarIconPx, className: avatarSizeClass } = avatarSizeSpec(avatarSize)
 
   // Who a brand-new item defaults to being split with: the bill's own
   // "default split" setting if one's been chosen, otherwise everyone
@@ -532,6 +528,21 @@ export default function BillView() {
     saveDefaultBuyers([memberId])
   }
 
+  // "Add another item" on a one-item bill: the next item starts out split
+  // the same way as the first — usually right (the same people are sharing
+  // the rest of the receipt), and it's what "Next item split with", now
+  // shown, picks up from. Skipped when it already matches, or when the
+  // first item has no one current on it (nothing sensible to copy).
+  function startItemizing() {
+    const firstItemIds = items[0].item_shares
+      .map((s) => s.member_id)
+      .filter((id) => activeMembers.some((m) => m.id === id))
+    const same =
+      firstItemIds.length === defaultBuyerIds.length && firstItemIds.every((id) => defaultBuyerIds.includes(id))
+    if (group && !group.is_personal && firstItemIds.length && !same) saveDefaultBuyers(firstItemIds)
+    setItemizing(true)
+  }
+
   // Optimistic, same reasoning as GroupGeneralSection's saveAvatarIcon —
   // and chained, so a toggle and the double tap right behind it are saved
   // in the order they happened. A failure puts back what was there before
@@ -549,7 +560,7 @@ export default function BillView() {
   }
 
   // Backdates or postdates the bill — its own click-to-edit date, next to
-  // "New items split with," rather than a dedicated form field, since most
+  // "Next item split with," rather than a dedicated form field, since most
   // bills are added the same day they happened and don't need one; this
   // is for the rest: adding one late without it landing in the wrong
   // week's stats, or fixing up an imported bill by hand. Just an UPDATE on
@@ -796,22 +807,24 @@ export default function BillView() {
                 </select>
               </div>
 
-              {group && !group.is_personal && (
+              {/* Hidden while the bill has a single item: the amount card's
+                  own "Split with" is the one to use then, and the only way
+                  to add a next item (Add another item) copies it over — see
+                  startItemizing. */}
+              {group && !group.is_personal && !isSimpleView && (
                 <div className="detail-row">
-                  <span className="detail-row-label">Split with</span>
-                  <div className="avatar-row">
-                    {activeMembers.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        className={`avatar ${avatarSizeClass} ${defaultBuyerIds.includes(m.id) ? 'active' : ''}`}
-                        title={m.name}
-                        onClick={() => tapDefaultBuyer(m.id, () => toggleDefaultBuyer(m.id), () => setOnlyDefaultBuyer(m.id))}
-                      >
-                        <AvatarGlyph iconId={m.avatarIcon} name={m.name} size={avatarIconPx} />
-                      </button>
-                    ))}
-                  </div>
+                  {/* "split with" drops to its own line when the row is
+                      too narrow for the whole label. */}
+                  <span className="detail-row-label next-item-split-label">
+                    Next item <span className="nowrap">split with</span>
+                  </span>
+                  <BuyerPicker
+                    members={activeMembers}
+                    selectedIds={defaultBuyerIds}
+                    onToggle={toggleDefaultBuyer}
+                    onOnly={setOnlyDefaultBuyer}
+                    avatarSize={avatarSize}
+                  />
                 </div>
               )}
 
@@ -867,8 +880,23 @@ export default function BillView() {
               onSave={saveSimpleAmount}
               ariaLabel="Bill amount"
             />
+            {group && !group.is_personal && (
+              <div className="amount-card-split">
+                <span className="amount-card-label">Split with</span>
+                <BuyerPicker
+                  members={allMembers}
+                  selectedIds={items[0].item_shares.map((s) => s.member_id)}
+                  onToggle={(memberId) => toggleBuyer(items[0], memberId)}
+                  onOnly={(memberId) => setOnlyBuyer(items[0], memberId)}
+                  avatarSize={avatarSize}
+                />
+                {items[0].item_shares.length === 0 && (
+                  <p className="item-warning">No one's assigned yet — this bill won't be counted in the settle-up.</p>
+                )}
+              </div>
+            )}
           </div>
-          <button type="button" className="ghost-row" onClick={() => setItemizing(true)}>
+          <button type="button" className="ghost-row" onClick={startItemizing}>
             <PlusIcon size={16} />
             Add another item
           </button>

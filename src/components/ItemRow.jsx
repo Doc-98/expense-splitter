@@ -1,11 +1,9 @@
 import { useState } from 'react'
 import { useCurrency } from '../context/CurrencyContext'
 import { parseNumber, parseAmount } from '../lib/parseNumber'
-import AvatarGlyph from './AvatarGlyph'
+import BuyerPicker from './BuyerPicker'
 import InlineEditable from './InlineEditable'
 import { ChevronIcon, TrashIcon } from './icons'
-import { useDoubleTap } from '../lib/doubleTap'
-import { avatarSizeSpec } from '../lib/groupViewPreferences'
 
 // onUpdate(field, value) is called with one of 'name' | 'unit_price' |
 // 'quantity' | 'total_price' and the raw new value — BillView.jsx's
@@ -40,15 +38,7 @@ export default function ItemRow({
 }) {
   const { format } = useCurrency()
   const [open, setOpen] = useState(false)
-  // Tap an avatar to toggle that buyer; double-tap to make them the only one.
-  const tapBuyer = useDoubleTap()
-  const { iconPx: avatarIconPx, className: avatarSizeClass } = avatarSizeSpec(avatarSize)
-  const buyerIds = new Set(item.item_shares.map((s) => s.member_id))
-  // Always show current members (whether checked or not), plus anyone no
-  // longer active who's still assigned to this specific item — so a former
-  // member's existing split stays visible on old items, but they don't show
-  // up as a pickable option anywhere they weren't already assigned.
-  const visibleMembers = members.filter((m) => m.active || buyerIds.has(m.id))
+  const buyerIds = item.item_shares.map((s) => s.member_id)
 
   // An item with no category of its own inherits the bill's — the dot
   // always reflects that *effective* category, not just what's literally
@@ -61,7 +51,7 @@ export default function ItemRow({
   // comparison/arithmetic below goes through this rather than the raw
   // item.quantity, same convention used everywhere else in this app.
   const quantity = Number(item.quantity) || 1
-  const unassigned = !hideBuyers && buyerIds.size === 0
+  const unassigned = !hideBuyers && buyerIds.length === 0
 
   function saveName(value) {
     const trimmed = value.trim()
@@ -171,23 +161,13 @@ export default function ItemRow({
             {!hideBuyers && (
               <div className="item-body-row">
                 <span className="item-body-label">Split with</span>
-                <div className="avatar-row">
-                  {visibleMembers.map((m) => {
-                    const label = `${m.name}${m.isGuest ? ' (guest)' : ''}${!m.active ? ' (left)' : ''}`
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        className={`avatar ${avatarSizeClass} ${buyerIds.has(m.id) ? 'active' : ''} ${m.active ? '' : 'former'}`}
-                        title={label}
-                        aria-label={label}
-                        onClick={() => tapBuyer(m.id, () => onToggleBuyer(m.id), () => onOnlyBuyer(m.id))}
-                      >
-                        <AvatarGlyph iconId={m.avatarIcon} name={m.name} size={avatarIconPx} />
-                      </button>
-                    )
-                  })}
-                </div>
+                <BuyerPicker
+                  members={members}
+                  selectedIds={buyerIds}
+                  onToggle={onToggleBuyer}
+                  onOnly={onOnlyBuyer}
+                  avatarSize={avatarSize}
+                />
               </div>
             )}
             {categories.length > 0 && (

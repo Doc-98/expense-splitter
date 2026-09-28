@@ -8,6 +8,7 @@ import BootSplash from './components/BootSplash'
 import InstallPrompt from './components/InstallPrompt'
 import PwaUpdater from './components/PwaUpdater'
 import ErrorBoundary from './components/ErrorBoundary'
+import { savePendingRedirect, takePendingRedirect } from './lib/pendingRedirect'
 import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
 import Groups from './pages/Groups'
@@ -52,11 +53,7 @@ function RequireAuth({ children }) {
   if (session === undefined) return <BootSplash />
 
   if (session === null) {
-    try {
-      sessionStorage.setItem('redirectAfterLogin', location.pathname)
-    } catch {
-      // Storage blocked: after signing in they land on the groups list.
-    }
+    savePendingRedirect(location.pathname)
     return <Navigate to="/login" replace />
   }
 
@@ -76,7 +73,10 @@ function Shell() {
   // Whenever a session appears — whether from a password sign-in, clicking a
   // magic-link email, or confirming a new account by email — check if we
   // owe the person a trip back to wherever they originally tried to go
-  // (e.g. an invite link) and finish that journey automatically.
+  // (e.g. an invite link) and finish that journey automatically; otherwise
+  // a signed-in person on /login goes to their groups. The one place that
+  // navigates after sign-in (Login.jsx itself doesn't), so the two can't
+  // race each other to different pages.
   //
   // Skipped on /reset-password specifically: confirming a password-reset
   // link also makes a session appear (a temporary "recovery" one — see
@@ -87,14 +87,9 @@ function Shell() {
   // get to actually set their new password.
   useEffect(() => {
     if (!session || location.pathname === '/reset-password') return
-    let next = null
-    try {
-      next = sessionStorage.getItem('redirectAfterLogin')
-      sessionStorage.removeItem('redirectAfterLogin')
-    } catch {
-      // Storage blocked — nothing was saved to return to.
-    }
+    const next = takePendingRedirect()
     if (next) navigate(next, { replace: true })
+    else if (location.pathname === '/login') navigate('/', { replace: true })
   }, [session, navigate, location.pathname])
 
   return (
