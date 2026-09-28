@@ -44,18 +44,33 @@ Trello.
 
 ## Latest update
 
-**Settle up, Record payment, and History now live on their own pages,**
-reached from a redesigned group page: a slimmer balance summary up top,
-three action buttons in place of the old inline settle-up list, and a
-"Quick stats" preview that moved up next to them instead of sitting at the
-bottom of the page. Payment history reuses the bill list's card design;
-recording a payment can pick people from a dropdown or by tapping their
-avatar, whichever you prefer in Settings.
+**Faster, sturdier, and easier to split a bill.** The last few releases
+were mostly about what happens under the hood, plus a handful of fixes
+that came straight out of real use:
 
-A new **Settings > Layout** section also consolidates every per-device
-display preference — theme (now with a live-tracking "System" option),
-default stats period, budgets position, and group-page display toggles —
-that used to be scattered across Profile and Groups.
+- **Balances and full history come from the server.** A group's balances
+  are computed by one Postgres function (`get_group_balances()`) and its
+  whole bill history arrives in one call (`get_group_bills()`), instead of
+  the phone rebuilding both from plain selects that silently stopped at
+  1,000 rows. Stats and Graphs now open instantly from a group page, filled
+  from what that page already loaded; a change someone else makes patches
+  just that one bill on screen rather than reloading the whole group.
+- **Splitting a one-item bill** no longer means adding a second item first:
+  "Split with" sits right under the amount, and double-tapping anyone
+  (there, on an item, or on the bill's "Next item split with") makes them
+  the only one splitting it.
+- **Invite links work for people who've never opened the app** (they used
+  to hit the host's 404 page), and signing in or signing up from one takes
+  you straight back to the group — even when a new account has to confirm
+  its email first.
+- **Swipe-to-remove** follows your finger properly on bills, items, and
+  payments; removing an item is a trash-can button; PDF receipts can be
+  scanned too.
+- **Security hardening**: nothing is callable signed out, members can only
+  rename a group (not rewrite its admin), can't edit anyone else's
+  membership, and the balance frozen when someone leaves is computed
+  server-side. When something does go wrong, the app now says so and offers
+  a way back instead of showing a blank screen.
 
 ## Contents
 
@@ -65,6 +80,7 @@ that used to be scattered across Profile and Groups.
 - [Setup](#setup)
 - [Receipt scanning](#receipt-scanning)
 - [Editing items](#editing-items)
+- [Who splits a bill](#who-splits-a-bill)
 - [Backdating a bill](#backdating-or-postdating-a-bill)
 - [Settings page](#settings-page)
 - [Group settings page](#group-settings-page)
@@ -97,8 +113,11 @@ that used to be scattered across Profile and Groups.
   sync, free tier to start
 - **Receipt scanning**: no server, no shared API key, no per-store parsing
   code required by default — see [Receipt scanning](#receipt-scanning)
-- **Settlement**: `src/lib/settlement.js` computes net balances per person
-  and simplifies them into the minimum number of payments to settle up
+- **Settlement**: each group's net balances come from the
+  `get_group_balances()` Postgres function; `src/lib/settlement.js`
+  simplifies them into the minimum number of payments to settle up (and
+  still does the full math client-side where it's needed, e.g. checking a
+  Splitwise import)
 
 ### Project structure
 
@@ -125,6 +144,7 @@ expense-splitter/
 │   ├── supabaseClient.js       # The one Supabase client instance, imported wherever it's needed
 │   └── styles.css              # The entire app's CSS — one file, no CSS-in-JS, no per-component
 │                                #   stylesheets, no Tailwind
+├── vercel.json                 # Sends every path to index.html (it's a single-page app) — see "Run it / deploy it"
 ├── vite.config.js              # Build config, plus deriving APP_VERSION from git history
 ├── vitest.config.js            # Deliberately its own file, not merged into vite.config.js —
 │                                #   see "Running the tests"
@@ -194,8 +214,9 @@ conventions this repo follows.
    [`supabase/schema.sql`](supabase/schema.sql) → run. Creates every table,
    security policy, and the profile-creation trigger.
 3. **Database → Replication → supabase_realtime** → enable for `bills`,
-   `items`, `item_shares`, `bill_payers`, `payments`, `group_members` — this
-   is what makes edits show up live on every phone without refreshing.
+   `items`, `item_shares`, `bill_payers`, `payments`, `group_members`,
+   `categories` — this is what makes edits show up live on every phone
+   without refreshing.
 4. **Authentication → Sign In / Providers** → confirm **Email** is on
    (default).
 5. Once you've deployed (**"3. Run it / deploy it"** below): set
@@ -610,9 +631,20 @@ appears in — asserting on it needs `waitFor`, not an immediate check
 right after the data-loaded `findBy`, or the assertion races a render
 that hasn't happened yet.
 
-**What isn't**: any other page beyond the two above (the pattern extends
-the same way, just with more to mock: more Supabase calls, sometimes a
-realtime subscription), and the AI-calling strategy modules themselves
+Pages tested since then follow the same shapes, a few with something new:
+`GroupView.test.jsx` (loading, per-bill realtime patching and resync),
+`GroupStats.test.jsx`/`AccountStats.test.jsx` (the RPC-backed stats, and
+opening instantly from the group page's cache), and `BillView.test.jsx`,
+which uses a small in-file stand-in for the query builder that records
+every write *and applies it* to a fake table — the page reloads its items
+after each write, so a stand-in that only recorded writes would have the
+reload quietly undo the optimistic change being tested. `App.test.jsx`
+renders the real routes, `AuthContext` and sign-in page (with the pages
+at either end stubbed) to cover the invite-link round trip through
+sign-in.
+
+**What isn't**: the remaining pages (the pattern extends the same way, just
+with more to mock), and the AI-calling strategy modules themselves
 (`billCategorization/strategies/`, `bank-statement-parsing/`,
 `receipt-parsing/` — these make real network calls to whichever provider is
 configured, so testing them meaningfully needs mocking the provider
@@ -623,10 +655,18 @@ hand-waved stub of it.
 
 **Adding a test**: for `src/lib/`, colocate `yourModule.test.js` next to
 `yourModule.js`, `import { describe, it, expect } from 'vitest'`. Vitest
-runs under jsdom (see `vitest.config.js`), so `localStorage` and other
-browser globals work directly — no environment setup needed even for
+runs under jsdom by default (see `vitest.config.js`), so `localStorage` and
+other browser globals work directly — no environment setup needed even for
 something like `bankCategoryMappings.test.js`, which exercises real
-`localStorage` rather than a mock of it.
+`localStorage` rather than a mock of it. A test that needs no browser API
+at all starts with `// @vitest-environment node` instead — noticeably
+faster, and most of `src/lib/` does this.
+
+Three habits keep the whole suite at a few seconds: that per-file `node`
+environment where it fits, `userEvent.setup({ delay: null })` (no
+artificial pause between simulated keystrokes), and fake timers
+(`vi.useFakeTimers()`) instead of real waiting for anything time-based.
+The `vmThreads` pool in `vitest.config.js` measured fastest here.
 
 For a component, colocate `YourComponent.test.jsx` next to
 `YourComponent.jsx`: `import { render, screen } from
@@ -678,17 +718,31 @@ never touches the `public` schema itself or Supabase's default permissions
 on it.
 
 ```sql
-drop function if exists public.remove_group_member(uuid, uuid, text, numeric, jsonb);
-drop function if exists public.join_group_by_code(text);
-drop function if exists public.create_group(text);
-drop function if exists public.is_group_member(uuid);
-drop function if exists public.handle_new_user() cascade;
+drop function if exists public.get_group_bills cascade;
+drop function if exists public.get_group_balances cascade;
+drop function if exists public.remove_group_member cascade;
+drop function if exists public.transfer_admin cascade;
+drop function if exists public.delete_all_group_bills cascade;
+drop function if exists public.delete_group cascade;
+drop function if exists public.delete_guest_permanently cascade;
+drop function if exists public.claim_guest_profile cascade;
+drop function if exists public.get_claim_preview cascade;
+drop function if exists public.join_group_by_code cascade;
+drop function if exists public.create_group cascade;
+drop function if exists public.get_or_create_personal_group cascade;
+drop function if exists public.is_group_member cascade;
+drop function if exists public.handle_new_user cascade;
 
+drop table if exists bank_import_drafts cascade;
+drop table if exists spending_thresholds cascade;
 drop table if exists departure_snapshots cascade;
 drop table if exists payments cascade;
+drop table if exists bill_payers cascade;
 drop table if exists item_shares cascade;
 drop table if exists items cascade;
 drop table if exists bills cascade;
+drop table if exists recurring_bills cascade;
+drop table if exists categories cascade;
 drop table if exists group_members cascade;
 drop table if exists groups cascade;
 drop table if exists profiles cascade;
@@ -817,6 +871,23 @@ reason iOS's decimal keypad gets a minus key at all: any `pattern` containing
 `parseAmount` accepts, not a stricter one that would just silently block
 submission of anything it doesn't recognize (comma-decimal prices included).
 
+## Who splits a bill
+
+Every "split with" row is the same avatar picker
+(`src/components/BuyerPicker.jsx`): tap someone to add or remove them,
+double-tap to make them the only one. It shows every current member, plus
+anyone who has left but is still on that particular item.
+
+- **A one-item bill** (most bills) shows just its amount, with its own
+  "Split with" row right under it — that edits the one item directly.
+- **Each item** of an itemized bill has the same row inside its details.
+- **"Next item split with"**, in the bill's details, is who a newly added
+  or scanned item starts out split with (`bills.default_buyer_ids`;
+  everyone, if never set). It's hidden on a one-item bill, where nothing
+  can be added without tapping **Add another item** first — which copies
+  the first item's people into it, so the second item starts out split the
+  same way.
+
 ## Backdating (or postdating) a bill
 
 There's no separate date column — `created_at` already doubles as a bill's
@@ -830,10 +901,12 @@ same-day bills by landing on midnight.
 
 Tapping your name, top right of any page, opens `/settings` — everything
 account-level, arranged into sections down a side nav rather than a single
-long scroll: **Profile** (display name, dark mode, currency, and the two
-per-device stats preferences below), **Groups** (every group you're in,
-with a way to leave one directly), **Budgets**, **Scan**, **How to Use**,
-**Updates**, and **About**. **Sign Out** sits at the bottom of the nav,
+long scroll: **Profile** (display name, avatar, currency), **Groups** (every
+group you're in, with a way to leave one directly, plus Sticky filters),
+**Layout** (every per-device display preference — theme, default stats
+period, where Budgets sits, group-page display toggles — most with a small
+live preview of what the setting changes), **Budgets**, **Scan**, **How to
+Use**, **Updates**, and **About**. **Sign Out** sits at the bottom of the nav,
 split off by its own divider — it's an action, not a section, and opens a
 confirm sheet rather than switching content.
 
@@ -845,11 +918,12 @@ its own component, several of them shared:
 
 | Section | Component |
 | --- | --- |
-| Groups | `SettingsGroupsSection.jsx` (new) |
+| Groups | `SettingsGroupsSection.jsx` |
+| Layout | `SettingsLayoutSection.jsx` |
 | Budgets | `BudgetsSection.jsx` |
 | Scan | `ScanSettingsSection.jsx` — also `/scan-settings` |
 | How to Use | `GuideSection.jsx` — also `/guide` |
-| Updates | `SettingsUpdatesSection.jsx` (new) |
+| Updates | `SettingsUpdatesSection.jsx` |
 | About | `AboutSection.jsx` — also `/about` |
 
 The three with a standalone route too are shared components rather than two
@@ -1023,9 +1097,12 @@ changeable any time from Group Settings → Categories.
 
 ## Budgets
 
-A personal (not group) monthly budget per category, set at **Settings →
+A personal (not group) budget per category, set at **Settings →
 Budgets** — profile-level since you're very possibly in more than one
-group. Categories with the same name (trimmed, case-insensitive) across
+group. A **Week/Month** switch there picks which period you enter and see
+budgets in; underneath it's always stored as a monthly figure
+(`src/lib/budgetPeriod.js` converts), so switching never rewrites what's
+saved. Categories with the same name (trimmed, case-insensitive) across
 every group you're in share one budget.
 
 Renamed from "Spending thresholds" in the UI — kept as "threshold"
@@ -1034,8 +1111,8 @@ to avoid a database migration and a much wider rename for no visible
 benefit; only user-facing copy changed.
 
 Shows as a progress bar on **Your Stats** (`/stats`) once set — always
-compared to the *current calendar month*, regardless of whatever period Your
-Stats' own selector shows, and always your own proportional share of what's
+compared to the *current* week or month (whichever the switch above picks),
+regardless of whatever period Your Stats' own selector shows, and always your own proportional share of what's
 been spent, never what you've fronted for anyone else.
 
 ## Period-over-period comparison
@@ -1065,16 +1142,19 @@ navigation](#keyboard-navigation).
   and ‹‹‹/››› (a year) — a year-jump alone still left up to ~25 clicks to
   land on one specific week.
 - **A shared default period** — every stats page opens on your saved default
-  (out of the box, Month), set from Settings → Profile; it's one preference,
+  (out of the box, Month), set from Settings → Layout; it's one preference,
   not one per page — changing it there changes it everywhere.
 - **Where Budgets sits on Your Stats** — pinned to the very top or very
   bottom of the page (never mid-page), since budgets are always this-month
   regardless of the selector while everything else on the page moves with
-  it. A per-device toggle, set from Settings → Profile, no obviously-correct
-  default.
+  it — or hidden altogether. A per-device choice, set from Settings →
+  Layout, no obviously-correct default.
 - **Recent history loads first** — this year plus last year's bills load up
   front for an instant render; the rest backfills in the background. A small
   note shows if you page back (or check "All time") before that finishes.
+  A group's own Stats and Graphs skip even that when opened from the group
+  page: they paint straight from the history that page already loaded
+  (`groupStatsCache`), then refresh in the background.
 
 All of the above persist in `localStorage`, same mechanism as currency and
 dark mode — they won't follow you to a different device.
@@ -1175,7 +1255,7 @@ vitest's own worker pool doesn't honor a timezone change made mid-test).
 Each bill in the list shows its total, plus what that *specific bill* means
 for you personally: **"You borrowed [x]"**, **"You lent [x]"**, or **"You
 are not involved"** — independent of the group's overall running balance
-shown further down the page, since fronting one bill doesn't mean you're
+shown at the top of the page, since fronting one bill doesn't mean you're
 "owed" overall if you're behind on others.
 
 ## Searching and filtering bills
@@ -1239,6 +1319,13 @@ with "Create a new group" below it rather than above. **Invite**, in Group
 Settings' **Members** tab, gives a QR code (for someone standing next to
 you) plus a shareable link — both generated client-side, no third-party
 image service involved.
+
+Opening an invite (or a guest's claim link) while signed out goes to the
+sign-in screen, which says why, and back to the invite once you're in —
+the link is remembered for a day in that browser (`src/lib/pendingRedirect.js`),
+so it survives a brand-new account's email confirmation opening in a new
+tab. A join link then joins straight away; a claim link still asks for one
+tap to confirm, since it takes over a guest's whole history.
 
 ## Personal spending
 
@@ -1593,21 +1680,30 @@ gated the same way.
 **Leaving a group** — Group Settings → **Danger Zone → Leave group** (any
 member, admin included) flips `group_members.active` to `false`; nothing is
 deleted, and old bills/items/payments stay exactly as they were. A
-`departure_snapshots` row is computed client-side *at the moment of
-removal*, while access still exists — day-by-day paid/consumed totals plus
-a category breakdown — so "Your Stats" stays exactly accurate for a
-departed group forever without needing to re-query it. Rejoining later just
+`departure_snapshots` row is recorded *at the moment of removal*, while
+access still exists — the balance computed server-side by
+`remove_group_member()` itself (from `get_group_balances()`), the
+day-by-day paid/consumed totals and category breakdown sent by the app — so
+"Your Stats" stays exactly accurate for a departed group forever without
+needing to re-query it. Rejoining later just
 resumes using live data, snapshot included.
 </details>
 
 ## Roadmap
 
 Roughly in likely order, nothing promised on a timeline — a personal
-project, built as time and interest allow:
+project, built as time and interest allow. The
+[project board](https://trello.com/b/AoQp8JgX/expense-splitter) tracks the
+same list, plus what's in progress.
 
-- Settlement/category-totals math moved into a Postgres function, if a
-  genuinely large group ever needs it beyond what client-side computation
-  and caching already handle
+- Credits in the About section
+- An invite that survives signing up in a *different* browser (say, a
+  confirmation email opened in a mail app's built-in browser): carry the
+  invite in the confirmation link itself rather than only in this
+  browser's storage
+- Category-totals math moved into a Postgres function too, the way group
+  balances and bill history already were, if a genuinely large group ever
+  needs it beyond what client-side computation and caching already handle
 - Group-level (shared) budgets, alongside the personal ones that
   exist today
 - AI-assisted category suggestions during a scan itself
@@ -1630,9 +1726,9 @@ project, built as time and interest allow:
 - No push notifications for a group-mate's new bill (realtime *within* an
   open app already works)
 - No receipt photo is kept after scanning, only the extracted items
-- A departure snapshot's numbers are trusted from the client, not re-derived
-  server-side — reasonable for a personal-use app, worth revisiting for
-  less-trusted users
+- A departure snapshot's day-by-day totals are trusted from the client
+  (its balance is computed server-side) — reasonable for a personal-use
+  app, worth revisiting for less-trusted users
 - Free OCR expects an item's name and price on the same line; a wrapped item
   name won't parse correctly for that line
 - OpenAI and other providers aren't built, but would follow the existing
@@ -1644,10 +1740,7 @@ project, built as time and interest allow:
 - Claim-guest links trust possession of the link, same model as the general
   group invite link
 - PDF export goes through the browser's print dialog, not a one-tap download
-- `admin_id` changes are only ever made through `transfer_admin()` in the
-  app's own code — the RLS policy itself is a blanket per-row check, so it
-  can't stop a raw API call from changing it directly
-- Budgets only cover the current calendar month, no history view
+- Budgets only cover the current week or month, no history view
 - A snapshot recorded before category tracking existed has no category
   breakdown for its days, only the original totals
 - The budget indicator only shows on Your Stats, not any single group's own
@@ -1669,3 +1762,17 @@ project, built as time and interest allow:
 - Group names and invite codes are only visible to members; joining a group
   goes through the `join_group_by_code()` Postgres function so `groups`
   itself doesn't need to be publicly readable.
+- None of the database functions can be called signed out, and trigger
+  functions can't be called through the API at all. Signed-in users can
+  call the rest, each of which checks group membership (or admin rights)
+  itself.
+- Writes are narrowed by column, not just by row: a member can only rename
+  a group (never change its admin, invite code, or personal flag directly),
+  can edit guests but no other real member's membership, and can only
+  change their own avatar in a group. Joining, leaving, claiming a guest,
+  and admin changes all go through the functions above — see
+  `supabase/migrations/20260925040000_security_hardening.sql`.
+- Supabase's leaked-password protection (checking new passwords against
+  HaveIBeenPwned) needs the Pro plan; on the Free plan, the minimum
+  password length and character rules under **Authentication → Providers →
+  Email** are what's available.
