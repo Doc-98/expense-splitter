@@ -36,10 +36,13 @@ expectations, etc.) — read that first, every session.
 ## Permissions
 
 - Everything is pre-approved in `.claude/settings.json` — shell, file
-  edits, and the Supabase, GitHub and session tools, including applying
-  migrations to production, deploying edge functions and merging PRs. Go
+  edits, subagents/skills/artifacts, and every connected service
+  (Supabase, GitHub, session tools, Trello, Vercel, Docs, Notion, Gmail,
+  Google Calendar/Drive), including applying migrations to production,
+  deploying edge functions, merging PRs and editing the Trello board. Go
   ahead with these without asking first — standing preference, confirmed
-  2026-09-25.
+  2026-09-25 and again 2026-09-28. A newly connected service needs adding
+  to that allow list (`"mcp__<ServerName>"`) or it will prompt.
 - The one exception is SQL that deletes something (`DELETE FROM`,
   `TRUNCATE`, or `DROP` of a table, column, policy, function, …): that
   still needs the user's one-click confirmation. The PreToolUse hook
