@@ -16,12 +16,7 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
-  "Swipe-to-remove is fixed: bills on the group page now slide all the way (they barely moved before), rows follow your finger smoothly, a quick flick is enough to reveal Remove, a row never gets stuck half-open, and the first tap after a swipe always registers",
-  'Removing an item is now a trash-can button on the right of the item\'s details',
-  'A bill\'s details (including who new items are split with) now start open',
-  'Double-tap someone in a "Split with" row to make them the only one splitting — on each item and on the bill\'s default for new items',
-  "Stats and Graphs now open instantly from a group page: they're filled from what the group page has already loaded, and refresh much faster in the background",
-  "Record a payment shows only current members by default — tick \"Show people who've left\" to settle up with someone who's left the group",
-  "Your Stats and Your Graphs load faster, and your overall balance shows right away instead of after your whole history has loaded",
-  "When something goes wrong, the app now says so and offers a way back instead of showing a blank screen or a button that silently does nothing",
+  "Invite links now work for friends who've never opened the app — they used to land on a \"page doesn't exist\" error",
+  "Opening an invite or guest-claim link while signed out now says why you're being asked to sign in, and takes you straight back to it afterwards — even when a new account has to confirm its email first",
+  "The Invite menu on a group's Members page now opens fully on screen",
 ]

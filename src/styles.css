@@ -411,6 +411,16 @@ input.bill-title-editable-input {
   margin-bottom: var(--space-lg);
 }
 
+/* Above the sign-in form when someone arrived from an invite/claim link. */
+.auth-invite-note {
+  margin: calc(-1 * var(--space-sm)) 0 var(--space-lg);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 10px;
+  background: var(--accent-light);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 .muted { color: var(--ink-soft); font-size: 14px; }
 
 .empty-state {
@@ -967,9 +977,13 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 
 .invite-menu-wrap { position: relative; }
 .invite-menu-popover {
+  /* Anchored to the button's right edge: the Invite button sits at the
+     right of the Members header, so opening rightwards (left: 0) pushed
+     most of the menu off-screen on a phone. */
   position: absolute;
-  left: 0;
+  right: 0;
   top: calc(100% + 6px);
+  max-width: calc(100vw - 2 * var(--space-md));
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;

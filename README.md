@@ -233,6 +233,15 @@ build`, output dir `dist` → add the two `VITE_SUPABASE_*` env vars in the
 host's dashboard → deploy → paste the resulting URL into Supabase's **Site
 URL** setting so magic links redirect correctly.
 
+It's a single-page app: every path (`/join/…`, `/claim/…`, `/groups/…`)
+is the same `index.html`, routed in the browser. `vercel.json` (Vercel) and
+`public/_redirects` (Netlify) tell the host so — without them, opening an
+invite link on a device that has never loaded the app gets the host's own
+404 page. (A device that *has* loaded it was fine, which is why this went
+unnoticed: the installed service worker answers every navigation with
+`index.html` itself.) `vercel.json` leaves `/assets/` out of the rewrite, so
+a missing script still fails as a 404 rather than coming back as HTML.
+
 ### 4. Install it on a phone
 
 - **iOS Safari**: Share button → *Add to Home Screen*
