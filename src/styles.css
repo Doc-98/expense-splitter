@@ -1130,6 +1130,11 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 .detail-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .detail-row-label { font-size: 12.5px; color: var(--ink-soft); flex: none; }
+/* "Next item split with": allowed to shrink, so on a narrow row "split
+   with" (kept together) drops onto its own line instead of squeezing the
+   avatars. */
+.detail-row-label.next-item-split-label { flex: 0 1 auto; min-width: 0; }
+.nowrap { white-space: nowrap; }
 
 /* ---------- Compact avatar picker ----------
    "Split with," as small initialed circles instead of full-name chips —
@@ -1244,6 +1249,9 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   text-align: center;
 }
 .amount-card-label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; }
+/* A one-item bill's "Split with", under the amount — edits that one item. */
+.amount-card-split { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border); }
+.amount-card-split .avatar-row { justify-content: center; }
 /* A <button> under the hood (InlineEditable's non-editing state) — same
    reset .item-editable already gives its own buttons (background/border/
    padding/margin cleared, replaced by just the dotted underline), which
