@@ -1706,7 +1706,6 @@ same list, plus what's in progress.
   needs it beyond what client-side computation and caching already handle
 - Group-level (shared) budgets, alongside the personal ones that
   exist today
-- AI-assisted category suggestions during a scan itself
 - Push notifications, once usage patterns make them worth the noise
 - Item price tracking across visits — a real fuzzy-matching problem (item
   names from a scan aren't perfectly consistent between visits), not a
