@@ -19,4 +19,6 @@ export const WHATS_NEW = [
   "Easier to read in both light and dark mode: text, links and amounts now have much stronger contrast (WCAG AAA), and outlines around fields, cards and tiles are clearly visible",
   "In dark mode, buttons now use dark text on brighter green and terracotta, so their labels stand out",
   "The selected tab, people who've left a group, and success or error messages no longer rely on a faint shade or fade to tell them apart",
+  "Using a keyboard? Every button, link, tab and row now shows the same clear green focus ring, including the guide's search and the amount filter slider, which had none",
+  "Prices and quantities you're typing line up digit for digit, and the day headings in the bill list use a proper bold instead of an artificially thickened one",
 ]

@@ -102,6 +102,21 @@ input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px preve
 
 .mono { font-family: var(--font-mono); }
 
+/* One keyboard focus ring for every control (buttons, links, chips, tabs,
+   list rows…) rather than each browser's own default, which varies and
+   can disappear against the accent green. :focus-visible only, so a tap
+   or click doesn't leave a ring behind. --accent holds ≥4.5:1 against
+   every surface in both themes. Text inputs keep their own :focus rule
+   below (a ring on every focus, tap included, is what a field wants). */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Inside a container that clips its overflow (swipe-to-delete rows, the
+   collapsible bill summary, scrolling modals and lists), a ring drawn
+   outside the element would be cut off — draw it just inside instead. */
+.bill-row-shell :focus-visible, .guest-row-shell :focus-visible,
+.item-row-head-shell :focus-visible, .bill-summary :focus-visible,
+.provider-item :focus-visible, .modal-panel :focus-visible,
+.stats-table :focus-visible { outline-offset: -2px; }
+
 code {
   font-family: var(--font-mono);
   background: var(--bg);
@@ -740,7 +755,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    just for this). */
 .bill-amount-block { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .bill-amount-total { font-size: inherit; font-weight: 600; }
-.bill-amount-status { font-size: 12px; font-style: italic; white-space: nowrap; }
+.bill-amount-status { font-size: 12px; font-style: italic; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .bill-amount-status-neutral { color: var(--ink-soft); }
 
 /* ---------- Bill list date dividers ---------- */
@@ -1448,8 +1463,11 @@ input.item-editable-input, textarea.item-editable-input {
   background: var(--surface);
 }
 .item-name-input { width: 140px; max-width: 40vw; }
-.item-money-input { width: 64px; text-align: right; }
-.item-qty-input { width: 44px; text-align: right; }
+/* Displayed amounts are set in the monospaced .mono face, so their digits
+   already line up; these editable ones stay in the body face, so they get
+   Inter's fixed-width digits instead. */
+.item-money-input { width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+.item-qty-input { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Still used by ImportBills.jsx's own review-wizard chips (see the
    .paid-by-row comment above) and Group View's category filter — not by
@@ -2199,6 +2217,9 @@ input.item-editable-input, textarea.item-editable-input {
   padding: 4px 2px;
 }
 .guide-search-input:focus { outline: none; }
+/* The field itself is borderless inside its torn-paper strip, so the
+   strip shows focus instead of the bare text. */
+.guide-search-tape:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .guide-search-input::placeholder { color: var(--ink-soft); }
 
 /* The compact/embedded-in-Settings group switcher (see GuideSection.jsx's
@@ -2329,7 +2350,7 @@ input.item-editable-input, textarea.item-editable-input {
 }
 .payer-row:last-of-type { border-bottom: none; }
 .payer-row span { flex: 1; font-size: 14px; }
-.payer-row input[type='text'] { width: 90px; text-align: right; }
+.payer-row input[type='text'] { width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
 .payer-row input[type='text']:disabled { opacity: 0.4; }
 .payer-total-row { margin-top: var(--space-md); font-size: 14px; font-weight: 600; text-align: center; }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--space-md); margin-top: var(--space-lg); }
@@ -2637,6 +2658,10 @@ input.item-editable-input, textarea.item-editable-input {
   appearance: none;
 }
 .range-slider-input:focus { outline: none; }
+/* The two stacked range inputs span the whole track, so an outline on the
+   input itself would ring both at once — ring just the thumb being moved. */
+.range-slider-input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.range-slider-input:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
 .range-slider-input::-webkit-slider-runnable-track { -webkit-appearance: none; background: none; height: 4px; }
 .range-slider-input::-moz-range-track { background: none; height: 4px; border: none; }
 .range-slider-input::-webkit-slider-thumb {
