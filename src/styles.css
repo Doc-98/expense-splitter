@@ -1,8 +1,8 @@
 /* ---------- Design tokens ---------- */
 /* Both themes meet WCAG AAA: every text color (--ink, --ink-soft,
-   --accent-dark, --warn) is at least 7:1 on every ground it can land on
-   (--bg, --surface, --surface-tint, --accent-light, and --warn-light for
-   --warn), labels on fills are 7:1 via --on-accent/--on-warn, and --border
+   --accent-dark, --negative, --warn) is at least 7:1 on every ground it
+   can land on (--bg, --surface, --surface-tint, --accent-light, and
+   --warn-light for --warn), labels on fills are 7:1 via --on-accent/--on-warn, and --border
    and --accent (focus ring, bar fills) are at least 3:1 on every surface.
    Check a new text/ground pairing against that before adding it. */
 :root {
@@ -23,7 +23,15 @@
   --accent: #2A6253;
   --accent-dark: #225448;
   --accent-light: #DCEDE6;
-  --warn: #7D3016;
+  /* Money going out — "You owe", "You borrowed", over budget, spending
+     up. A true red, the partner of --accent-dark's green for money coming
+     in. Deliberately not --warn: debts are normal, errors aren't. */
+  --negative: #961916;
+  /* Errors and destructive actions — a rust, pushed as far from
+     --negative as it can go while still reading as danger. At AAA
+     lightness two reds can't be told apart by hue alone, so errors also
+     differ by form: .status-error carries a warning icon and a box. */
+  --warn: #7B3702;
   --warn-light: #F5E3DB;
   /* Labels on --accent / --warn fills. Always use these rather than a
      literal white: dark mode flips them to near-black. */
@@ -53,7 +61,8 @@
   --accent: #4BB093;
   --accent-dark: #8FDCC4;
   --accent-light: #1B3129;
-  --warn: #EBAA93;
+  --negative: #FFA093;
+  --warn: #EBAB87;
   --warn-light: #2F2019;
   --on-accent: #0B1310;
   --on-warn: #0B1310;
@@ -518,13 +527,34 @@ input.bill-title-editable-input {
 /* The app-wide crash screen (ErrorBoundary.jsx). */
 .error-boundary-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-md); }
 .status-error {
+  position: relative;
   color: var(--warn);
   background: var(--warn-light);
   border: 1px solid var(--warn);
-  padding: var(--space-sm) var(--space-md);
+  /* Room on the left for the warning icon below. */
+  padding: var(--space-sm) var(--space-md) var(--space-sm) calc(var(--space-md) + 24px);
   border-radius: var(--radius);
   font-size: 14px;
+  line-height: 1.4;
   margin-top: var(--space-sm);
+}
+/* The warning triangle (DangerIcon in icons.jsx), in the message's own
+   color. An error never relies on its hue alone: --warn and --negative
+   are both reds, so the icon and the box are what mark an error. */
+.status-error::before {
+  content: '';
+  position: absolute;
+  left: var(--space-md);
+  /* centred on the first line: (14px × 1.4 − 16px) / 2 ≈ 2px */
+  top: calc(var(--space-sm) + 2px);
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  -webkit-mask: var(--icon-danger) center / contain no-repeat;
+  mask: var(--icon-danger) center / contain no-repeat;
+}
+:root {
+  --icon-danger: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M12 3.5L2 20.5h20L12 3.5z' stroke='%23000' stroke-width='1.8' stroke-linejoin='round'/%3E%3Cpath d='M12 9.5v5' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17.2' r='1.15' fill='%23000'/%3E%3C/svg%3E");
 }
 
 .status-success {
@@ -2094,7 +2124,7 @@ input.item-editable-input, textarea.item-editable-input {
   overflow: hidden;
 }
 .stats-bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
-.stats-bar-fill.over-budget { background: var(--warn); }
+.stats-bar-fill.over-budget { background: var(--negative); }
 .stats-bar-value { width: 70px; text-align: right; flex-shrink: 0; }
 .threshold-bar-value { width: 130px; text-align: right; flex-shrink: 0; }
 .stats-bar-group { margin-bottom: 8px; }
@@ -2186,7 +2216,11 @@ input.item-editable-input, textarea.item-editable-input {
 .pagination-inline { position: static; margin: var(--space-md) auto 0; }
 
 .balance-positive { color: var(--accent-dark); }
-.balance-negative { color: var(--warn); }
+.balance-negative { color: var(--negative); }
+/* The amount is the part of a balance that matters most: bold it in both
+   directions, whether the whole line is colored or only the amount. */
+.balance-line .mono,
+.balance-amount { font-weight: 600; }
 
 .stale-balance {
   display: inline-block;
@@ -2590,7 +2624,7 @@ input.item-editable-input, textarea.item-editable-input {
 }
 .settings-preview-budget-track { flex: 1; min-width: 30px; height: 8px; background: var(--surface); border-radius: 999px; overflow: hidden; }
 .settings-preview-budget-fill { height: 100%; border-radius: 999px; background: var(--accent); }
-.settings-preview-budget-fill.over-budget { background: var(--warn); }
+.settings-preview-budget-fill.over-budget { background: var(--negative); }
 .settings-preview-budget-value { flex: none; white-space: nowrap; }
 
 /* Spending thresholds / scan settings, collapsed by default on the

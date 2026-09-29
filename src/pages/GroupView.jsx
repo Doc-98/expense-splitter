@@ -1445,10 +1445,12 @@ export default function GroupView() {
                             </span>
                           ) : net < 0 ? (
                             <span className="bill-amount-status balance-negative">
-                              You borrowed {format(-net)}
+                              You borrowed <span className="balance-amount">{format(-net)}</span>
                             </span>
                           ) : (
-                            <span className="bill-amount-status balance-positive">You lent {format(net)}</span>
+                            <span className="bill-amount-status balance-positive">
+                              You lent <span className="balance-amount">{format(net)}</span>
+                            </span>
                           ))}
                       </span>
                     )

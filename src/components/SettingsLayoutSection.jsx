@@ -370,9 +370,9 @@ function LentBorrowedPreview({ on, format }) {
               <span className="mono bill-amount-total">{format(b.total)}</span>
               {on &&
                 (b.net < 0 ? (
-                  <span className="bill-amount-status balance-negative">You borrowed {format(-b.net)}</span>
+                  <span className="bill-amount-status balance-negative">You borrowed <span className="balance-amount">{format(-b.net)}</span></span>
                 ) : (
-                  <span className="bill-amount-status balance-positive">You lent {format(b.net)}</span>
+                  <span className="bill-amount-status balance-positive">You lent <span className="balance-amount">{format(b.net)}</span></span>
                 ))}
             </span>
           </div>
