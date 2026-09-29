@@ -1,0 +1,172 @@
+/* Design tokens: colours for both themes, category colours and the colour-blind palette, fonts, spacing, radius and shadows.
+   Layer: tokens (see src/styles.css for the order). */
+
+/* ---------- Design tokens ---------- */
+/* Both themes meet WCAG AAA: every text color (--ink, --ink-soft,
+   --accent-dark, --negative, --warn) is at least 7:1 on every ground it
+   can land on (--bg, --surface, --surface-tint, --accent-light, and
+   --warn-light for --warn), labels on fills are 7:1 via --on-accent/--on-warn, and --border
+   and --accent (focus ring, bar fills) are at least 3:1 on every surface.
+   Check a new text/ground pairing against that before adding it. */
+:root {
+  --bg: #FAF9F6;
+  --surface: #FFFFFF;
+  /* A faint tint of the app's own accent green, not a generic gray —
+     card rows (.card-list-item: the groups list, a group's bill list)
+     use this instead of plain --surface so they read as a distinct
+     surface against --bg, rather than only being defined by their own
+     border. --surface itself stays plain white/near-black — modals,
+     popovers, and everything else that isn't a list row are unaffected. */
+  --surface-tint: #EDF3F0;
+  --ink: #1F2A24;
+  --ink-soft: #434E49;
+  /* Strong enough (3:1 on every surface) that borders alone set inputs,
+     rows and tiles apart, not just a change of fill. */
+  --border: #8F8463;
+  --accent: #2A6253;
+  --accent-dark: #225448;
+  --accent-light: #DCEDE6;
+  /* Money going out — "You owe", "You borrowed", over budget, spending
+     up. A true red, the partner of --accent-dark's green for money coming
+     in. Deliberately not --warn: debts are normal, errors aren't. */
+  --negative: #961916;
+  /* Errors and destructive actions — a rust, pushed as far from
+     --negative as it can go while still reading as danger. At AAA
+     lightness two reds can't be told apart by hue alone, so errors also
+     differ by form: .status-error carries a warning icon and a box. */
+  --warn: #7B3702;
+  --warn-light: #F5E3DB;
+  /* Labels on --accent / --warn fills. Always use these rather than a
+     literal white: dark mode flips them to near-black. */
+  --on-accent: #FFFFFF;
+  --on-warn: #FFFFFF;
+
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --space-xs: 6px;
+  --space-sm: 10px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  /* Corner radius. --radius is THE radius (buttons, cards, tiles, modals). */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* Type scale, in rem so text follows the browser's own text-size
+     setting (1rem = 16px by default; nothing here sets the root size).
+     Roles, as in the design system: 2xs micro labels · xs captions ·
+     sm labels · md secondary text · base body and buttons · lg section
+     heads and inputs · xl sheet titles · 2xl stat figures · 3xl page
+     titles · 4xl the wordmark · 5xl the app mark. */
+  --text-2xs: 0.6875rem; /* 11px */
+  --text-xs: 0.75rem;    /* 12px */
+  --text-sm: 0.8125rem;  /* 13px */
+  --text-md: 0.875rem;   /* 14px */
+  --text-base: 0.9375rem; /* 15px */
+  --text-lg: 1rem;       /* 16px */
+  --text-xl: 1.125rem;   /* 18px */
+  --text-2xl: 1.25rem;   /* 20px */
+  --text-3xl: 1.375rem;  /* 22px */
+  --text-4xl: 1.75rem;   /* 28px */
+  --text-5xl: 2.125rem;  /* 34px */
+
+  /* Stacking order, lowest to highest. */
+  --z-sticky: 5;      /* sticky bars inside the page (pagination) */
+  --z-popover: 10;    /* dropdown menus and pickers */
+  --z-floating: 50;   /* the install banner */
+  --z-overlay: 100;   /* modal and bottom-sheet backdrops */
+
+  /* Shadows for the few things that float (see "Borders over shadows"):
+     the active tab, popover menus, the install banner. Dark mode needs
+     much stronger ones — at 8% black they vanish on a near-black page. */
+  --shadow-tab: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.14);
+  /* The browser/status bar (<meta name="theme-color">, set by
+     ThemeContext): the brand green in light, the page itself in dark. */
+  --browser-bar: #2A6253;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #111C17;
+  --surface: #16231D;
+  --surface-tint: #18261F;
+  --ink: #EDEAE2;
+  --ink-soft: #ADBDB4;
+  --border: #5A7E6C;
+  --accent: #4BB093;
+  --accent-dark: #8FDCC4;
+  --accent-light: #1B3129;
+  --negative: #FFA093;
+  --warn: #EBAB87;
+  --warn-light: #2F2019;
+  --on-accent: #0B1310;
+  --on-warn: #0B1310;
+  --shadow-tab: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-popover: 0 6px 20px rgba(0, 0, 0, 0.55);
+  --shadow-floating: 0 10px 28px rgba(0, 0, 0, 0.65);
+  --browser-bar: #111C17;
+
+  color-scheme: dark;
+}
+
+/* ---------- Category colours ----------
+   One variable per palette slot (src/lib/categories.js's CATEGORY_COLORS
+   order: Groceries, Eating out, Household, Bills & utilities, Transport,
+   Health, Other). categoryColor() turns a saved preset colour into its
+   var(--category-N), so what's painted follows the theme and the
+   colour-blind setting while the saved value never changes. Custom colours
+   bypass these entirely and show exactly as saved.
+
+   Default palette: every step clears 3:1 against bg/surface/surface-tint
+   in its theme, and any two stay ≥ 15 apart (OKLab ΔE×100, all pairs) for
+   full colour vision. Colour-blind readers get ~7 — distinguishable only
+   next to a label. */
+:root {
+  --category-1: #534195;
+  --category-2: #C77510;
+  --category-3: #359E59;
+  --category-4: #B572A0;
+  --category-5: #2384D8;
+  --category-6: #A52030;
+  --category-7: #6A6966;
+}
+[data-theme="dark"] {
+  --category-1: #725EC2;
+  --category-2: #D47C10;
+  --category-3: #20A857;
+  --category-4: #D465B5;
+  --category-5: #2997F5;
+  --category-6: #BE4149;
+  --category-7: #878683;
+}
+/* Colour-blind palette (Settings > Layout, stored per device — see
+   colorBlindPalette.js): same slots and colour families, re-stepped in
+   lightness so any two stay ≥ 8 apart under protanopia and deuteranopia
+   (Machado 2009 simulation, all pairs). The trade: full-colour-vision
+   separation drops to ~11, which is why it's opt-in rather than the
+   default. Still ≥ 3:1 on every surface. */
+:root[data-palette="colorblind"] {
+  --category-1: #4246A7;
+  --category-2: #8F5E01;
+  --category-3: #3C9A6B;
+  --category-4: #6C3A6F;
+  --category-5: #3C8DBB;
+  --category-6: #E26733;
+}
+[data-theme="dark"][data-palette="colorblind"] {
+  --category-1: #727EEC;
+  --category-2: #BB8A46;
+  --category-3: #287B53;
+  --category-4: #A34EAA;
+  --category-5: #4B9AC7;
+  --category-6: #C24B0E;
+}

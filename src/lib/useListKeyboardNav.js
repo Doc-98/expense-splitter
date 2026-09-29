@@ -52,6 +52,11 @@ export function useListKeyboardNav({ page, setPage, maxPage, itemCount, onOpen, 
 
   useEffect(() => {
     function onKeyDown(e) {
+      // A region marked data-own-keys (the open bill beside the list on a
+      // wide screen, see GroupSplit.jsx) handles its own keys: Enter on a
+      // button there must press that button, not open a bill from this
+      // list, and the arrows scroll that pane.
+      if (e.target instanceof Element && e.target.closest('[data-own-keys]')) return
       if (e.key === 'Tab') {
         setActive(false)
         return

@@ -1,5 +1,4 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readStylesheet } from '../testing/readStylesheet'
 import { describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { useSwipeToDelete } from './useSwipeToDelete'
@@ -202,7 +201,7 @@ describe('useSwipeToDelete — taps after a swipe', () => {
 // (ItemRow, GroupGuestsSection, GroupView, History) matches one of these.
 describe('useSwipeToDelete — stylesheet', () => {
   // Read from disk: Vitest stubs out CSS imports (even ?raw) as empty.
-  const css = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8')
+  const css = readStylesheet()
   const ruleBody = (selector) => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const match = css.match(new RegExp(`(^|\\n)${escaped}\\s*\\{([^}]*)\\}`))

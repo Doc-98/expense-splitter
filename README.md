@@ -142,8 +142,10 @@ expense-splitter/
 │   ├── App.jsx                 # The route table itself, plus top-level providers
 │   ├── main.jsx                # Entry point — mounts <App>, nothing else
 │   ├── supabaseClient.js       # The one Supabase client instance, imported wherever it's needed
-│   └── styles.css              # The entire app's CSS — one file, no CSS-in-JS, no per-component
-│                                #   stylesheets, no Tailwind
+│   ├── styles.css              # The app's CSS entry: the cascade-layer order plus one @import per file
+│   ├── styles/                 # The app's CSS, split by area (tokens, base, layout, components/, pages/,
+│   │                            #   utilities, print) — plain CSS, no CSS-in-JS, no Tailwind
+│   └── testing/                # Test-only helpers (e.g. readStylesheet for tests that check the CSS)
 ├── vercel.json                 # Sends every path to index.html (it's a single-page app) — see "Run it / deploy it"
 ├── vite.config.js              # Build config, plus deriving APP_VERSION from git history
 ├── vitest.config.js            # Deliberately its own file, not merged into vite.config.js —
@@ -182,13 +184,40 @@ adding a fifth provider to any one of them, or a fifth AI-calling
 feature altogether, means adding a file in a known shape rather than
 inventing a new pattern.
 
-**Why one `styles.css` instead of CSS-in-JS or per-component
+**Why plain CSS files instead of CSS-in-JS or per-component
 stylesheets.** Same reasoning as this app's charts being hand-rolled
 SVG instead of a charting library (see `PieChart.jsx`/`LineChart.jsx`'s
 own comments) — no build-time CSS tooling beyond what Vite already
-does out of the box, and one file means one set of design tokens
-(`:root` custom properties for color/spacing/type) that every component
-already shares rather than re-declaring.
+does out of the box, and one set of design tokens (`:root` custom
+properties for color/spacing/type/shadows, in `src/styles/tokens.css`)
+that every component shares rather than re-declaring. The CSS is split by
+area under `src/styles/` and ordered with cascade layers declared in
+`src/styles.css`: `tokens, base, layout, components, pages, utilities,
+print`. A later layer beats an earlier one whatever the selectors'
+specificity, so a page's rule never needs a longer selector to beat a
+component's, and a rule only competes with the rules in its own layer. Add
+a rule to the file for its area; `src/testing/readStylesheet.js` gives tests
+the whole stylesheet as one text, in cascade order.
+Sizes come from named scales in `tokens.css`, never literals: font sizes
+from `--text-2xs`…`--text-5xl` (in rem, so text follows the browser's and
+phone's own text-size setting; nothing sets a root font size), corners from
+`--radius-xs`…`--radius-pill`, stacking from `--z-sticky`/`--z-popover`/
+`--z-floating`/`--z-overlay`, and layout rhythm from `--space-xs`…`--space-lg`.
+Component-internal padding stays on an even-pixel grid; the only odd values
+are deliberate 1–3px optical nudges.
+
+**Phones first, wider screens where it helps.** Every page is a 560px
+reading column on a phone, and most stay one everywhere: forms and lists
+read worse stretched. Two exceptions use a tablet's or laptop's room. The
+stats and graphs pages (`.page-wide`) widen to 1000px from 768px up, and
+their sections (each a `.stats-section` in a `.stats-grid`) sit two to a
+row. The group page and an open bill share one layout route
+(`GroupSplit.jsx`): from 1024px (`SPLIT_MEDIA_QUERY`) the bill list stays
+on the left and the open bill fills the right, each pane scrolling on its
+own; narrower, it renders one page at a time exactly as before. Because
+the group page stays mounted while bills open beside it, it picks up
+router-state notices when they arrive rather than only on mount, and only
+one of the two pages renders a print recap at a time.
 
 **Why no top-level `tests/` directory.** Every test file sits directly
 next to what it tests — `Foo.jsx` → `Foo.test.jsx`,
@@ -1106,7 +1135,7 @@ than by eye: each clears 3:1 against the page in both themes, and any two
 stay clearly apart for full color vision — *any* two, because pie slices sort
 by amount, so any pair can end up side by side. What's saved on a category is
 the preset's hex; what's painted goes through `categoryColor()`, which turns a
-preset into `var(--category-N)`. `styles.css` defines those variables per
+preset into `var(--category-N)`. `src/styles/tokens.css` defines those variables per
 theme (dark mode gets its own lighter steps) and for the **color-blind
 palette** (Settings → Layout, per device): the same color families re-stepped
 in lightness so any two stay apart under the two common kinds of red-green

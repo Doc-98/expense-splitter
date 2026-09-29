@@ -293,7 +293,7 @@ export default function GroupStats() {
   }
 
   return (
-    <div className="page">
+    <div className="page page-wide">
       <header className="page-header">
         <BackButton to={`/groups/${groupId}`} />
         <div className="page-header-titles">
@@ -364,8 +364,11 @@ export default function GroupStats() {
             just you in a personal space the two columns are always
             identical, and the gap this table exists to surface (what the
             settle-up on the group page is for) doesn't exist here. */}
+        {/* One <section> per heading, so a tablet or laptop can set them
+            out two to a row (.stats-grid, see pages/stats.css). */}
+        <div className="stats-grid">
         {!isPersonal && (
-          <>
+          <section className="stats-section">
             <h2 className="settings-section-title">By person</h2>
             {peopleWithData.length === 0 && (
               <EmptyState icon={PieChartIcon} title="No spending in this period">
@@ -401,11 +404,11 @@ export default function GroupStats() {
               consumed — these rarely match, that gap is exactly what the settle-up on the group
               page is for.
             </p>
-        </>
+          </section>
       )}
 
       {categoryRows.length > 0 && (
-        <>
+        <section className="stats-section">
           <h2 className="settings-section-title">By category</h2>
           <div className="stats-bars">
             {categoryRows.map((c) => (
@@ -427,11 +430,11 @@ export default function GroupStats() {
               </div>
             ))}
           </div>
-        </>
+        </section>
       )}
 
       {showMonthly && monthlyRows.length > 0 && (
-        <>
+        <section className="stats-section">
           <h2 className="settings-section-title">By month</h2>
           <div className="stats-bars">
             {monthlyRows.map(([key, value]) => (
@@ -444,11 +447,11 @@ export default function GroupStats() {
               </div>
             ))}
           </div>
-        </>
+        </section>
       )}
 
       {biggestBills.length > 0 && (
-        <>
+        <section className="stats-section">
           <h2 className="settings-section-title">Biggest bills</h2>
           <ul className="settlement-list">
             {biggestBills.map((b) => (
@@ -469,8 +472,9 @@ export default function GroupStats() {
               </li>
             ))}
           </ul>
-        </>
+        </section>
       )}
+        </div>
 
         </>
       )}

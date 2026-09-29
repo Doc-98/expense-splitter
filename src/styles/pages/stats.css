@@ -1,0 +1,264 @@
+/* Stats and graphs: summary tiles, bars, tables, time range, line and pie charts.
+   Layer: pages (see src/styles.css for the order). */
+
+/* ---------- Group stats page ---------- */
+/* Each heading and what's under it is a .stats-section (inside a
+   .stats-grid), so the divider between sections belongs to the section
+   rather than to its heading: on a phone it's the same hairline above every
+   section after the first that .settings-section-title draws on its own
+   elsewhere, and on a tablet or laptop (below) two sections share a row. A
+   Budgets section placed at the top of Your Stats sits before the grid, so
+   the grid's first section then gets a divider too. */
+.stats-grid > .stats-section > .settings-section-title { margin-top: 0; padding-top: 0; border-top: none; }
+.stats-grid > .stats-section + .stats-section,
+.stats-section ~ .stats-grid > .stats-section:first-child {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border);
+}
+@media (min-width: 768px) {
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 40px;
+    align-items: start;
+  }
+  /* The first row sits right under the summary tiles: no divider. */
+  .stats-grid > .stats-section:nth-child(-n + 2) { margin-top: 0; padding-top: 0; border-top: none; }
+  /* The line chart scales with its width; past this height its labels
+     would grow oversized, so the drawing stays centred at this size. */
+  .page-wide .line-chart { max-height: 320px; }
+  /* Past this, a legend row's amount drifts too far from its name. */
+  .page-wide .pie-chart-legend { max-width: 440px; }
+}
+
+.stats-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+/* A 6em basis (not 0): at the default text size the tiles still share one
+   row equally, but with a large browser text size they wrap onto a second
+   row instead of pushing past the screen edge. */
+.stats-summary-item {
+  flex: 1 1 6em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+.stats-summary-value {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+}
+
+/* GroupView.jsx's "Quick stats" preview only — a smaller, tighter variant
+   for a tile that now sits right under the action row instead of at the
+   bottom of the page, where the full stats-page size (above) would
+   compete with the title/balance/actions above it rather than sit
+   quietly underneath them. */
+.stats-summary.is-slim { margin-bottom: var(--space-md); }
+.stats-summary.is-slim .stats-summary-item { padding: 10px 12px; gap: 2px; }
+.stats-summary.is-slim .stats-summary-value { font-size: var(--text-lg); }
+.stats-summary.is-slim .muted { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.03em; }
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.stats-table th, .stats-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.stats-table th { color: var(--ink-soft); font-weight: 500; font-size: var(--text-xs); }
+.stats-table tr:last-child td { border-bottom: none; }
+.stats-note { margin-top: 6px; }
+
+.stats-bars { display: flex; flex-direction: column; gap: 8px; }
+.stats-bar-row { display: flex; align-items: center; gap: 10px; font-size: var(--text-sm); }
+.stats-bar-label { width: 110px; flex-shrink: 0; color: var(--ink-soft); }
+.stats-bar-track {
+  flex: 1;
+  height: 10px;
+  background: var(--accent-light);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.stats-bar-fill { height: 100%; background: var(--accent); border-radius: var(--radius-pill); }
+.stats-bar-fill.over-budget { background: var(--negative); }
+.stats-bar-value { width: 70px; text-align: right; flex-shrink: 0; }
+.threshold-bar-value { width: 130px; text-align: right; flex-shrink: 0; }
+.stats-bar-group { margin-bottom: 8px; }
+.comparison-badge { display: block; text-align: right; font-size: var(--text-2xs); margin-top: 2px; }
+/* One amount never breaks in the middle ("€1,050.00 / €1,200.00" may wrap
+   at the slash, never inside a figure). */
+.stats-bar-amount { white-space: nowrap; }
+
+/* Where subgrid is supported (every current browser), a list of bars is
+   one grid and each row borrows its columns, so every row in a list
+   shares the same label and value widths and the tracks line up. The
+   columns size to their content instead of the fixed 110px/70px/130px
+   above, which cut off long category names and big amounts on a phone:
+   the label takes what it needs up to 40% (then wraps, indented past its
+   dot), the value takes what it needs up to 45%, and the track gets the
+   rest but never less than 40px. */
+@supports (grid-template-columns: subgrid) {
+  .stats-bars {
+    display: grid;
+    grid-template-columns: fit-content(40%) minmax(40px, 1fr) fit-content(45%);
+    column-gap: 10px;
+    row-gap: 8px;
+  }
+  .stats-bars > .stats-bar-row,
+  .stats-bars > .stats-bar-group,
+  .stats-bar-group > .stats-bar-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    align-items: center;
+  }
+  .stats-bar-group { margin-bottom: 0; }
+  .stats-bar-group > .comparison-badge { grid-column: 1 / -1; }
+  .stats-bar-label { width: auto; min-width: 0; display: flex; align-items: flex-start; gap: 6px; overflow-wrap: anywhere; }
+  /* the dot sits on the first line, centred on it (13px text, ~16px line) */
+  .stats-bar-label > .category-dot { margin: 3px 0 0; }
+  .stats-bar-value, .threshold-bar-value { width: auto; white-space: nowrap; }
+  .threshold-bar-value { white-space: normal; }
+}
+
+.time-range { margin-bottom: var(--space-lg); }
+/* A little breathing room between period tabs, and a bit less margin below
+   than plain .tab-row's default — scoped to .time-range-tabs specifically
+   (not plain .tab-row, shared with the sign-in/sign-up toggle on the login
+   screen) so that page's tabs are unaffected. */
+.time-range-tabs { margin-bottom: var(--space-sm); gap: var(--space-xs); }
+.time-range-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.time-range-label-stack { display: flex; flex-direction: column; align-items: center; min-width: 110px; }
+.time-range-year { font-size: var(--text-2xs); color: var(--ink-soft); line-height: 1.4; }
+.time-range-label { font-size: var(--text-md); font-weight: 500; text-align: center; }
+.time-range-nav .btn-icon {
+  font-size: var(--text-3xl); padding: 4px;
+  /* The arrows sit only 6px apart, too close for the invisible tap area
+     (see "Touch targets") to grow sideways without overlapping — so each
+     is a real 44px box instead, glyph unchanged. */
+  min-width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.time-range-nav .btn-icon::after { content: none; }
+/* Week view has six arrows (‹‹‹ ‹‹ ‹ · › ›› ›››): at 44px each the row
+   needs ~410px and would wrap on a 360px phone, so there they keep their
+   natural width and only the height goes to 44px. Month view (four
+   arrows, ~310px) keeps the full 44×44. */
+.time-range-nav:has(> .btn-icon:nth-of-type(6)) .btn-icon { min-width: 0; }
+.time-range-nav .btn-icon:disabled { opacity: 0.3; cursor: default; }
+/* The extra "jump ~1 month" / "jump ~1 year" tiers — smaller and softer
+   than the ordinary single-step ‹ / ›, which stays the biggest/clearest
+   tap target since it's the one actually used most often. Still large
+   enough to tell apart at a glance and tap accurately, which the first
+   pass at this (font-size 16px, 2px padding, no inter-button gap) wasn't. */
+.time-range-nav .btn-icon.time-range-jump { font-size: var(--text-2xl); color: var(--ink-soft); }
+
+.stale-balance {
+  display: inline-block;
+  font-size: var(--text-xs);
+  margin-left: 8px;
+}
+.stats-table .btn-link {
+  font-size: var(--text-xs);
+  margin-left: 6px;
+}
+
+/* ---------- Spending graphs (AccountGraphs.jsx / GroupGraphs.jsx) ----------
+   GraphsPeriodSelector itself reuses .time-range/.tab-row/.tab/
+   .time-range-nav/.btn-icon from TimeRangeSelector's own styles above —
+   nothing new needed just for that part. */
+.graphs-history-note { margin-bottom: var(--space-sm); }
+.graphs-category-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-md);
+  margin-bottom: var(--space-md);
+}
+.graphs-category-filter select { flex: 1; max-width: 260px; }
+.graphs-period-total { font-size: var(--text-base); margin-bottom: var(--space-sm); }
+
+.line-chart-wrap { width: 100%; margin-bottom: var(--space-lg); }
+.line-chart { width: 100%; height: auto; display: block; overflow: visible; }
+/* Same rough height a real chart would occupy, so the page doesn't jump
+   when a period with no bills renders this instead of the SVG. */
+.line-chart-empty { display: flex; align-items: center; justify-content: center; min-height: 140px; }
+.line-chart-max-label { font-size: var(--text-2xs); fill: var(--ink-soft); font-family: var(--font-mono); }
+.line-chart-baseline { stroke: var(--border); stroke-width: 1; }
+.line-chart-x-label { font-size: var(--text-2xs); fill: var(--ink-soft); }
+.line-chart-tooltip rect { fill: var(--ink); opacity: 0.92; }
+.line-chart-tooltip-label { font-size: var(--text-2xs); fill: var(--bg); text-anchor: middle; }
+.line-chart-tooltip-amount { font-size: var(--text-2xs); fill: var(--bg); text-anchor: middle; font-weight: 600; }
+
+.pie-chart-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+/* 192px for a 240-unit viewBox keeps the donut itself the 160px it always
+   was; the extra is the margin its percent labels sit in. Sizes inside the
+   SVG are in its own units, 0.8px each. */
+.pie-chart { width: 192px; height: 192px; flex-shrink: 0; overflow: visible; }
+/* A filled wedge (see donutWedgePath() in PieChart.jsx), so "highlight the
+   hovered one" is a transform now rather than the stroke-width bump a
+   stroked circle used — transform-origin at the donut's own center keeps
+   the pop centered on the ring instead of drifting toward a corner. The
+   highlighted wedge also gets an ink outline, so it doesn't rely on the
+   size change alone. */
+.pie-chart-slice { cursor: pointer; transform-origin: 120px 120px; transition: transform 0.1s ease; }
+.pie-chart-slice.active { transform: scale(1.05); stroke: var(--ink); stroke-width: 1.5; }
+@media (prefers-reduced-motion: reduce) { .pie-chart-slice { transition: none; } }
+.pie-chart-total-amount { font-size: var(--text-base); fill: var(--ink); font-weight: 600; }
+.pie-chart-total-label { font-size: var(--text-2xs); fill: var(--ink-soft); }
+.pie-chart-center-name { font-size: var(--text-sm); fill: var(--ink); font-weight: 600; }
+.pie-chart-percent { font-size: var(--text-md); fill: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.pie-chart-percent.active { fill: var(--ink); font-weight: 600; }
+.pie-chart-empty { flex-direction: column; align-items: flex-start; gap: var(--space-sm); }
+.pie-chart-empty-label { font-size: var(--text-md); }
+
+.pie-chart-legend { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 200px; }
+.pie-chart-legend-item { border-radius: var(--radius); outline: 1px solid transparent; }
+.pie-chart-legend-item.active { background: var(--surface-tint); outline-color: var(--border); }
+.pie-chart-legend-item.active .pie-chart-legend-name { font-weight: 600; }
+.pie-chart-legend-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  padding: 4px 6px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.pie-chart-legend-btn:disabled { cursor: default; }
+.pie-chart-legend-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pie-chart-legend-amount { flex-shrink: 0; }
+.pie-chart-legend-percent { flex-shrink: 0; width: 36px; text-align: right; }

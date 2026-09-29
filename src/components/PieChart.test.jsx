@@ -95,4 +95,53 @@ describe('PieChart — with data', () => {
     await user.click(within(foodRow).getByRole('button'))
     expect(onSelectCategory).toHaveBeenCalledWith('food')
   })
+
+  it('prints the percent outside the ring for slices big enough to label, and not for slivers', () => {
+    const { container } = render(
+      <PieChart slices={[...SLICES, { key: 'tip', name: 'Tip', color: '#0000ff', amount: 2 }]} format={format} />
+    )
+    const labels = [...container.querySelectorAll('.pie-chart-percent')].map((t) => t.textContent)
+    expect(labels).toEqual(['69%', '29%']) // Tip is 2% of 102: legend only
+    expect(screen.getByText('2%', { selector: '.pie-chart-legend-percent' })).toBeInTheDocument()
+  })
+
+  it('highlights a slice and its legend row together, and names it in the centre, on hover', async () => {
+    const user = userEvent.setup({ delay: null })
+    const { container } = render(<PieChart slices={SLICES} format={format} />)
+    const foodRow = screen.getByText('Food', { selector: '.pie-chart-legend-name' }).closest('li')
+
+    await user.hover(foodRow)
+    expect(foodRow).toHaveClass('active')
+    expect(container.querySelector('.pie-chart-slice.active')).toHaveAttribute('aria-label', 'Food: €30.00 (30%)')
+    expect(container.querySelector('.pie-chart-center-name')).toHaveTextContent('Food')
+    expect(screen.getByText('30% of €100.00')).toBeInTheDocument()
+
+    await user.unhover(foodRow)
+    expect(foodRow).not.toHaveClass('active')
+    expect(screen.getByText('Total')).toBeInTheDocument()
+  })
+
+  it('keeps the chosen category highlighted (no hover on a phone), and choosing it again clears it', async () => {
+    const user = userEvent.setup({ delay: null })
+    const onSelectCategory = vi.fn()
+    const { container } = render(
+      <PieChart slices={SLICES} format={format} selectedKey="drinks" onSelectCategory={onSelectCategory} />
+    )
+    const drinks = screen.getByRole('button', { name: 'Drinks: €70.00 (70%)' })
+    expect(drinks).toHaveClass('active')
+    expect(drinks).toHaveAttribute('aria-pressed', 'true')
+    expect(container.querySelector('.pie-chart-center-name')).toHaveTextContent('Drinks')
+
+    await user.click(drinks)
+    expect(onSelectCategory).toHaveBeenCalledWith('')
+  })
+
+  it('cuts a long category name to fit inside the ring', async () => {
+    const user = userEvent.setup({ delay: null })
+    const { container } = render(
+      <PieChart slices={[{ key: 'b', name: 'Bills & utilities and more', color: '#ff0000', amount: 5 }]} format={format} />
+    )
+    await user.hover(screen.getByText('Bills & utilities and more').closest('li'))
+    expect(container.querySelector('.pie-chart-center-name')).toHaveTextContent('Bills & utili…')
+  })
 })

@@ -36,8 +36,8 @@ describe('styles.css category variables', () => {
   // Each preset's saved value is also its light-theme default step, so a
   // category shows the colour it saves. Guards the two copies against drift.
   it('light default steps match CATEGORY_COLORS', async () => {
-    const { readFileSync } = await import('node:fs')
-    const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8')
+    const { readStylesheet } = await import('../testing/readStylesheet')
+    const css = readStylesheet()
     const block = css.match(/\/\* ---------- Category colours[\s\S]*?:root \{([^}]*)\}/)[1]
     const steps = [...block.matchAll(/--category-(\d): (#[0-9A-Fa-f]{6});/g)].map((m) => m[2].toLowerCase())
     expect(steps).toEqual(CATEGORY_COLORS)

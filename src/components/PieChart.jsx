@@ -1,12 +1,29 @@
 import { useState } from 'react'
 import { categoryColor } from '../lib/categoryPalette'
 
-const SIZE = 200
+// The donut itself spans 200 units; the extra 20 on each side is room for
+// the percent labels outside the ring (see LABEL_MIN_PERCENT).
+const SIZE = 240
 const CENTER = SIZE / 2
 const RADIUS = 70
 const STROKE = 30
 const OUTER_R = RADIUS + STROKE / 2
 const INNER_R = RADIUS - STROKE / 2
+const LABEL_R = OUTER_R + 13
+
+// Slices at least this big get their percent printed just outside the ring,
+// in ink rather than on the slice (text on a category colour can't reach
+// the 7:1 the rest of the app's text does). The same percent is in the
+// legend, so a slice can be matched to its name by number, not colour.
+// Below this, neighbouring labels would collide; the legend still has them.
+const LABEL_MIN_PERCENT = 6
+
+// The centre shows the highlighted slice's name; long names are cut to fit
+// inside the ring (the legend right beside it has the full name).
+const CENTER_NAME_MAX = 14
+function shortName(name) {
+  return name.length > CENTER_NAME_MAX ? `${name.slice(0, CENTER_NAME_MAX - 1).trimEnd()}…` : name
+}
 
 function polarPoint(angleDeg, r) {
   // angleDeg measured clockwise from 12 o'clock, matching how everyone
@@ -55,10 +72,26 @@ function donutWedgePath(startAngle, endAngle) {
 // is optional — when given, clicking a slice or its legend row calls it
 // with that slice's key, letting a page sync its line chart's own
 // category filter to whatever the pie was just clicked on; omit it for a
-// purely read-only chart.
-export default function PieChart({ slices, format, onSelectCategory }) {
+// purely read-only chart. `selectedKey` is that same filter handed back:
+// its slice and legend row stay highlighted (the only highlight a phone
+// gets, having no hover), and choosing it again clears the filter
+// (onSelectCategory('')).
+//
+// A slice and its legend row always highlight together, whichever one is
+// hovered, focused or chosen, and the centre of the donut then names the
+// highlighted category with its amount and share instead of the total, so
+// a colour never has to be matched to the legend by eye.
+export default function PieChart({ slices, format, onSelectCategory, selectedKey = '' }) {
   const [hoveredKey, setHoveredKey] = useState(null)
   const total = slices.reduce((sum, s) => sum + s.amount, 0)
+
+  const select = onSelectCategory ? (key) => onSelectCategory(key === selectedKey ? '' : key) : undefined
+  const hoverProps = (key) => ({
+    onMouseEnter: () => setHoveredKey(key),
+    onMouseLeave: () => setHoveredKey((cur) => (cur === key ? null : cur)),
+    onFocus: () => setHoveredKey(key),
+    onBlur: () => setHoveredKey((cur) => (cur === key ? null : cur)),
+  })
 
   if (total <= 0) {
     return (
@@ -81,6 +114,11 @@ export default function PieChart({ slices, format, onSelectCategory }) {
     return arc
   })
 
+  // Hover/focus wins over the chosen filter, so pointing at another slice
+  // previews it; the filter's own slice comes back when the pointer leaves.
+  const activeKey = arcs.some((a) => a.key === hoveredKey) ? hoveredKey : selectedKey
+  const active = arcs.find((a) => a.key === activeKey)
+
   return (
     <div className="pie-chart-wrap">
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="pie-chart" role="img" aria-label="Spending by category">
@@ -89,36 +127,78 @@ export default function PieChart({ slices, format, onSelectCategory }) {
             key={arc.key}
             d={donutWedgePath(arc.startAngle, arc.endAngle)}
             style={{ fill: categoryColor(arc.color) }}
-            className={`pie-chart-slice ${hoveredKey === arc.key ? 'active' : ''}`}
-            onMouseEnter={() => setHoveredKey(arc.key)}
-            onMouseLeave={() => setHoveredKey((cur) => (cur === arc.key ? null : cur))}
-            onClick={() => onSelectCategory?.(arc.key)}
+            className={`pie-chart-slice ${activeKey === arc.key ? 'active' : ''}`}
+            {...hoverProps(arc.key)}
+            onClick={() => (select ? select(arc.key) : setHoveredKey(arc.key))}
             role={onSelectCategory ? 'button' : undefined}
             tabIndex={onSelectCategory ? 0 : undefined}
+            aria-pressed={onSelectCategory ? arc.key === selectedKey : undefined}
             aria-label={`${arc.name}: ${format(arc.amount)} (${Math.round(arc.percent)}%)`}
           />
         ))}
-        <text x={CENTER} y={CENTER - 4} textAnchor="middle" className="pie-chart-total-amount mono">
-          {format(total)}
-        </text>
-        <text x={CENTER} y={CENTER + 14} textAnchor="middle" className="pie-chart-total-label muted">
-          Total
-        </text>
+        {arcs
+          .filter((arc) => arc.percent >= LABEL_MIN_PERCENT)
+          .map((arc) => {
+            const mid = (arc.startAngle + arc.endAngle) / 2
+            const { x, y } = polarPoint(mid, LABEL_R)
+            // Labels on the left and right sides grow away from the ring;
+            // those near the top and bottom sit centred on their slice.
+            const side = Math.sin((mid * Math.PI) / 180)
+            const anchor = side > 0.35 ? 'start' : side < -0.35 ? 'end' : 'middle'
+            return (
+              <text
+                key={arc.key}
+                x={x}
+                y={y}
+                textAnchor={anchor}
+                dominantBaseline="central"
+                className={`pie-chart-percent ${activeKey === arc.key ? 'active' : ''}`}
+                aria-hidden="true"
+              >
+                {Math.round(arc.percent)}%
+              </text>
+            )
+          })}
+        {active ? (
+          <g className="pie-chart-center" aria-hidden="true">
+            <text x={CENTER} y={CENTER - 16} textAnchor="middle" className="pie-chart-center-name">
+              {shortName(active.name)}
+            </text>
+            <text x={CENTER} y={CENTER + 4} textAnchor="middle" className="pie-chart-total-amount mono">
+              {format(active.amount)}
+            </text>
+            <text x={CENTER} y={CENTER + 22} textAnchor="middle" className="pie-chart-total-label">
+              {Math.round(active.percent)}% of {format(total)}
+            </text>
+          </g>
+        ) : (
+          <>
+            <text x={CENTER} y={CENTER - 4} textAnchor="middle" className="pie-chart-total-amount mono">
+              {format(total)}
+            </text>
+            <text x={CENTER} y={CENTER + 14} textAnchor="middle" className="pie-chart-total-label muted">
+              Total
+            </text>
+          </>
+        )}
       </svg>
 
       <ul className="pie-chart-legend">
         {arcs.map((arc) => (
           <li
             key={arc.key}
-            className={`pie-chart-legend-item ${hoveredKey === arc.key ? 'active' : ''}`}
+            className={`pie-chart-legend-item ${activeKey === arc.key ? 'active' : ''}`}
             onMouseEnter={() => setHoveredKey(arc.key)}
             onMouseLeave={() => setHoveredKey((cur) => (cur === arc.key ? null : cur))}
           >
             <button
               type="button"
               className="pie-chart-legend-btn"
-              onClick={() => onSelectCategory?.(arc.key)}
+              onClick={() => select?.(arc.key)}
+              onFocus={() => setHoveredKey(arc.key)}
+              onBlur={() => setHoveredKey((cur) => (cur === arc.key ? null : cur))}
               disabled={!onSelectCategory}
+              aria-pressed={onSelectCategory ? arc.key === selectedKey : undefined}
             >
               <span className="category-dot" style={{ background: categoryColor(arc.color) }} />
               <span className="pie-chart-legend-name">{arc.name}</span>

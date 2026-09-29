@@ -1,0 +1,156 @@
+/* Loading placeholders, spinners, status messages, empty states.
+   Layer: components (see src/styles.css for the order). */
+
+.page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100vh;
+  color: var(--ink-soft);
+}
+
+/* A small spinning ring for a loading state that has visible text next to
+   it, unlike BootSplash's own full-screen one below — same spin
+   animation, reused rather than duplicated, just smaller and inline.
+   Left spinning through prefers-reduced-motion same as BootSplash's own
+   ring — see the reasoning by that media query below, this one is the
+   same case: the motion here is what tells someone work is still
+   happening, not a decorative flourish. */
+.inline-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: boot-splash-spin 0.8s linear infinite;
+}
+
+.empty-state {
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+  padding: var(--space-md) 0;
+  text-align: center;
+}
+
+/* ---------- Empty states (EmptyState.jsx) ----------
+   An empty screen or section: icon, title, one line, and a button to the
+   next step, in a dashed frame so it never reads as a real row or card.
+   Primary button when it starts something, secondary when it only takes
+   you somewhere (see EmptyState.jsx). The older one-line .empty-state
+   above stays for small in-context notes. */
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: var(--space-lg) var(--space-md);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  margin: var(--space-sm) 0;
+}
+.empty-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  color: var(--accent-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.empty-card-title { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 600; color: var(--ink); margin: 0; overflow-wrap: anywhere; }
+.empty-card-text { font-size: var(--text-md); line-height: 1.45; color: var(--ink-soft); margin: 0; max-width: 32ch; overflow-wrap: anywhere; }
+.empty-card-action { margin-top: 8px; display: flex; flex-wrap: wrap; gap: var(--space-sm); justify-content: center; }
+.empty-card-action .btn-primary,
+.empty-card-action .btn-secondary { padding: 10px 16px; font-size: var(--text-md); }
+.empty-card-note { font-size: var(--text-sm); color: var(--ink-soft); margin: 6px 0 0; }
+
+/* ---------- Loading placeholders (Skeleton.jsx) ----------
+   A pale outline of the content about to load, sized like the real thing
+   so nothing jumps. The shapes are the page's own ink-soft at 20%, so
+   they read on every ground in both themes, and pulse gently (still under
+   prefers-reduced-motion). Only shown after a short delay: see
+   LOADING_DELAY_MS. */
+.skeleton {
+  display: block;
+  border-radius: var(--radius-xs);
+  background: var(--accent-light);
+  background: color-mix(in srgb, var(--ink-soft) 20%, transparent);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+.skeleton-title { height: 15px; }
+.skeleton-line { height: 12px; }
+.skeleton-amount { height: 15px; width: 64px; flex: none; }
+.skeleton-page-title { height: 22px; width: 55%; margin: 4px 0 var(--space-lg); }
+.skeleton-rows { display: flex; flex-direction: column; gap: var(--space-sm); }
+.skeleton-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: 52px;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.skeleton-row-main { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.skeleton-lines { display: flex; flex-direction: column; gap: 10px; margin: var(--space-sm) 0; }
+.skeleton-tile { align-items: center; }
+.skeleton-tile-value { height: 20px; width: 70%; margin-bottom: 4px; }
+.skeleton-bars { display: flex; flex-direction: column; gap: 12px; }
+.skeleton-bar-row { display: flex; align-items: center; gap: 10px; }
+.skeleton-bar-label { width: 80px; flex: none; }
+.skeleton-bar { height: 10px; flex: 1; border-radius: var(--radius-pill); }
+.skeleton-bar-value { width: 56px; flex: none; margin-left: auto; }
+.skeleton-chart { height: 200px; border-radius: var(--radius); margin-bottom: var(--space-md); }
+
+/* The app-wide crash screen (ErrorBoundary.jsx). */
+.error-boundary-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-md); }
+.status-error {
+  position: relative;
+  color: var(--warn);
+  background: var(--warn-light);
+  border: 1px solid var(--warn);
+  /* Room on the left for the warning icon below. */
+  padding: var(--space-sm) var(--space-md) var(--space-sm) calc(var(--space-md) + 24px);
+  border-radius: var(--radius);
+  font-size: var(--text-md);
+  line-height: 1.4;
+  margin-top: var(--space-sm);
+}
+/* The warning triangle (DangerIcon in icons.jsx), in the message's own
+   color. An error never relies on its hue alone: --warn and --negative
+   are both reds, so the icon and the box are what mark an error. */
+.status-error::before {
+  content: '';
+  position: absolute;
+  left: var(--space-md);
+  /* centred on the first line: (14px × 1.4 − 16px) / 2 ≈ 2px */
+  top: calc(var(--space-sm) + 2px);
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  -webkit-mask: var(--icon-danger) center / contain no-repeat;
+  mask: var(--icon-danger) center / contain no-repeat;
+}
+:root {
+  --icon-danger: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M12 3.5L2 20.5h20L12 3.5z' stroke='%23000' stroke-width='1.8' stroke-linejoin='round'/%3E%3Cpath d='M12 9.5v5' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17.2' r='1.15' fill='%23000'/%3E%3C/svg%3E");
+}
+
+.status-success {
+  color: var(--accent-dark);
+  background: var(--accent-light);
+  border: 1px solid var(--accent);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius);
+  font-size: var(--text-md);
+  margin-top: var(--space-sm);
+}

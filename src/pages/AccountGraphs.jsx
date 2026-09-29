@@ -221,7 +221,7 @@ export default function AccountGraphs() {
   const lineColor = categoryFilter && selectedCategory?.color ? categoryColor(selectedCategory.color) : 'var(--accent)'
 
   return (
-    <div className="page">
+    <div className="page page-wide">
       <header className="page-header">
         <BackButton to="/stats" />
         <h1>Graphs</h1>
@@ -264,7 +264,12 @@ export default function AccountGraphs() {
           <LineChart points={points} format={format} color={lineColor} />
 
           <h2 className="settings-section-title">By category</h2>
-          <PieChart slices={pieSlices} format={format} onSelectCategory={(key) => setCategoryFilter(key)} />
+          <PieChart
+            slices={pieSlices}
+            format={format}
+            selectedKey={categoryFilter}
+            onSelectCategory={(key) => setCategoryFilter(key)}
+          />
         </>
       )}
     </div>

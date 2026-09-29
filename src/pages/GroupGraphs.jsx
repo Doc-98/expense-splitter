@@ -167,7 +167,7 @@ export default function GroupGraphs() {
   const lineColor = categoryFilter === 'uncategorized' ? categoryColor(null) : selectedCategory?.color ? categoryColor(selectedCategory.color) : 'var(--accent)'
 
   return (
-    <div className="page">
+    <div className="page page-wide">
       <header className="page-header">
         <BackButton to={`/groups/${groupId}/stats`} />
         <h1>Graphs{groupName ? ` — ${groupName}` : ''}</h1>
@@ -211,7 +211,12 @@ export default function GroupGraphs() {
           <LineChart points={points} format={format} color={lineColor} />
 
           <h2 className="settings-section-title">By category</h2>
-          <PieChart slices={pieSlices} format={format} onSelectCategory={(key) => setCategoryFilter(key)} />
+          <PieChart
+            slices={pieSlices}
+            format={format}
+            selectedKey={categoryFilter}
+            onSelectCategory={(key) => setCategoryFilter(key)}
+          />
         </>
       )}
     </div>

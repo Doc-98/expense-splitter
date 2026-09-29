@@ -79,7 +79,8 @@ expectations, etc.) — read that first, every session.
   (https://claude.ai/artifact/MS1SXZnKufV5iFF3qXPj2n) mirrors the app's
   design and is kept in sync with it — standing preference, confirmed
   2026-09-28. Any change that affects the design (colour or other tokens
-  in `src/styles.css`, a component's styling or states, fonts or weights
+  in `src/styles/tokens.css`, any rule in `src/styles/**` (a component's
+  styling or states), fonts or weights
   loaded in `index.html`, `CATEGORY_COLORS`, `icons.jsx`, the logo or app
   icons, the PWA theme colour) gets mirrored into the artifact in the
   same round of work as the commit, not left for later: `tokens.json`,
