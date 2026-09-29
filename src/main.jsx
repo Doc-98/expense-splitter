@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import './fonts.css'
 import './styles.css'
 import App from './App.jsx'
 import { applyColorBlindPalette, getColorBlindPalette } from './lib/colorBlindPalette'

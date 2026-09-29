@@ -24,4 +24,5 @@ export const WHATS_NEW = [
   "Easier to tap: the \"Split with\" avatars are bigger (all three sizes in Settings went up a step), and icon buttons, links, tabs, switches and the send arrow in text fields now respond to a full fingertip-sized area around them, even where they look the same",
   "New category colors that are easier to see in light and dark mode and easier to tell apart — existing groups using the default colors switch over automatically; custom colors stay as you picked them",
   "Settings > Layout has a new \"Color-blind friendly category colors\" switch, just for this device",
+  "The installed app keeps its own typefaces when you're offline, instead of falling back to plain system fonts",
 ]
