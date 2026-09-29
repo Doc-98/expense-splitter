@@ -1,6 +1,6 @@
 /* Dropdown menus and popovers: bill and row actions, invite, share.
-   Imported before buttons.css: a few "Remove" links carry both .btn-link and
-   .dropdown-item-warn, and .btn-link has always won their colour.
+   Imported after buttons.css, so a "Remove" link that is also a .btn-link
+   (members, guests) still gets .dropdown-item-warn's warning colour.
    Layer: components (see src/styles.css for the order). */
 
 /* .dropdown-item/.dropdown-item-warn stay — BillActionsMenu.jsx's own "⋮"
