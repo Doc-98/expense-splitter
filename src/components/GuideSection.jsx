@@ -8,8 +8,10 @@ import {
   SettingsIcon,
   ProfileIcon,
   MenuIcon,
+  SearchIcon,
 } from './icons'
 import SettingsNav from './SettingsNav'
+import EmptyState from './EmptyState'
 
 // A small inline glyph dropped into a sentence right where it names a
 // real on-screen control (the Stats icon, the Share icon, a bill's ⋮
@@ -847,10 +849,17 @@ export default function GuideSection({ compact = false }) {
 
       {isSearching ? (
         searchResults.length === 0 ? (
-          <p className="empty-state">
-            Nothing matches "{query}" — try a different word, or clear the search to browse
-            everything.
-          </p>
+          <EmptyState
+            icon={SearchIcon}
+            title={`Nothing matches "${query.trim()}"`}
+            action={
+              <button type="button" className="btn-secondary" onClick={() => setQuery('')}>
+                Clear search
+              </button>
+            }
+          >
+            Try a different word, or clear the search to browse everything.
+          </EmptyState>
         ) : (
           searchResults.map((group) => (
             <div key={group.id} className="guide-group">

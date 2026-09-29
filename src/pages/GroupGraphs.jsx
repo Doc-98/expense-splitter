@@ -16,6 +16,7 @@ import LineChart from '../components/LineChart'
 import PieChart from '../components/PieChart'
 import BackButton from '../components/BackButton'
 import { isNotFoundError } from '../lib/notFound'
+import { ChartSkeleton } from '../components/Skeleton'
 
 // tab -> the chart's own point granularity — a whole calendar month has
 // too many days to plot meaningfully next to a whole year's worth of
@@ -175,7 +176,7 @@ export default function GroupGraphs() {
       {error && <p className="status-error">{error}</p>}
 
       {loading ? (
-        <p className="page-loading">Loading…</p>
+        <ChartSkeleton />
       ) : (
         <>
           <GraphsPeriodSelector tab={tab} setTab={setTab} offset={offset} setOffset={setOffset} label={range.label} />

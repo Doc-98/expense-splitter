@@ -21,8 +21,10 @@ import ComparisonBadge from '../components/ComparisonBadge'
 import ShareButton from '../components/ShareButton'
 import { PrintableGroupStatsRecap } from '../components/PrintableRecap'
 import BackButton from '../components/BackButton'
-import { LineChartIcon } from '../components/icons'
+import { LineChartIcon, PieChartIcon } from '../components/icons'
 import { isNotFoundError } from '../lib/notFound'
+import { StatsSkeleton } from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
 
 function monthKey(dateStr) {
   const d = new Date(dateStr)
@@ -68,6 +70,10 @@ export default function GroupStats() {
   // *current* rawBills data was fetched from — needed by isViewCovered
   // below to know whether the selected period is fully within it.
   const [historyStatus, setHistoryStatus] = useState('loading')
+  // False until there's something real to show (the cache, the first
+  // fetch, or an error): before that every figure below would read as a
+  // confident zero. Shows a placeholder instead.
+  const [loaded, setLoaded] = useState(false)
   const [historyWindowStart, setHistoryWindowStart] = useState(null)
 
   const nameOf = (id) => members.find((m) => m.id === id)?.name || 'Someone'
@@ -124,6 +130,7 @@ export default function GroupStats() {
       }
       applyRawBills(billsData)
       setError(null)
+      setLoaded(true)
       if (hadCompleteHistory) {
         setHistoryStatus('complete')
         return
@@ -141,6 +148,8 @@ export default function GroupStats() {
       }
     } catch (err) {
       setError(loadErrorMessage(err))
+    } finally {
+      setLoaded(true)
     }
   }, [groupId, navigate])
 
@@ -166,6 +175,7 @@ export default function GroupStats() {
       setRawShares(cached.rawShares)
       setHistoryStatus(cached.historyStatus)
       setHistoryWindowStart(toWindowStart(cached.historyWindowStart))
+      setLoaded(true)
     }
     load()
   }, [groupId, load])
@@ -320,69 +330,77 @@ export default function GroupStats() {
         </p>
       )}
 
-      <TimeRangeSelector
-        granularity={granularity}
-        setGranularity={setGranularity}
-        offset={offset}
-        setOffset={setOffset}
-        label={label}
-        yearLabel={yearLabel}
-      />
-
-      <div className="stats-summary">
-        <div className="stats-summary-item">
-          <span className="stats-summary-value mono">{format(groupTotal)}</span>
-          <span className="muted">total spent</span>
-          {overallComparison && <ComparisonBadge comparison={overallComparison} />}
-        </div>
-        <div className="stats-summary-item">
-          <span className="stats-summary-value mono">{billCount}</span>
-          <span className="muted">bills</span>
-        </div>
-        <div className="stats-summary-item">
-          <span className="stats-summary-value mono">{format(avgBill)}</span>
-          <span className="muted">avg. bill</span>
-        </div>
-      </div>
-
-      {/* "Fronted" vs. "their share" only ever tells you something once
-          there's more than one person for them to differ between — with
-          just you in a personal space the two columns are always
-          identical, and the gap this table exists to surface (what the
-          settle-up on the group page is for) doesn't exist here. */}
-      {!isPersonal && (
+      {!loaded ? (
+        <StatsSkeleton label="Loading stats…" />
+      ) : (
         <>
-          <h2 className="settings-section-title">By person</h2>
-          {peopleWithData.length === 0 && <p className="empty-state">No spending recorded for this period.</p>}
-          {peopleWithData.length > 0 && (
-            <table className="stats-table">
-              <thead>
-                <tr>
-                  <th>Person</th>
-                  <th>Fronted</th>
-                  <th>Their share</th>
-                </tr>
-              </thead>
-              <tbody>
-                {peopleWithData.map((m) => (
-                  <tr key={m.id}>
-                    <td>
-                      {m.name}
-                      {m.isGuest && <span className="muted"> (guest)</span>}
-                      {!m.active && <span className="muted"> (left)</span>}
-                    </td>
-                    <td className="mono">{format(totals[m.id]?.paid || 0)}</td>
-                    <td className="mono">{format(totals[m.id]?.consumed || 0)}</td>
+        <TimeRangeSelector
+          granularity={granularity}
+          setGranularity={setGranularity}
+          offset={offset}
+          setOffset={setOffset}
+          label={label}
+          yearLabel={yearLabel}
+        />
+
+        <div className="stats-summary">
+          <div className="stats-summary-item">
+            <span className="stats-summary-value mono">{format(groupTotal)}</span>
+            <span className="muted">total spent</span>
+            {overallComparison && <ComparisonBadge comparison={overallComparison} />}
+          </div>
+          <div className="stats-summary-item">
+            <span className="stats-summary-value mono">{billCount}</span>
+            <span className="muted">bills</span>
+          </div>
+          <div className="stats-summary-item">
+            <span className="stats-summary-value mono">{format(avgBill)}</span>
+            <span className="muted">avg. bill</span>
+          </div>
+        </div>
+
+        {/* "Fronted" vs. "their share" only ever tells you something once
+            there's more than one person for them to differ between — with
+            just you in a personal space the two columns are always
+            identical, and the gap this table exists to surface (what the
+            settle-up on the group page is for) doesn't exist here. */}
+        {!isPersonal && (
+          <>
+            <h2 className="settings-section-title">By person</h2>
+            {peopleWithData.length === 0 && (
+              <EmptyState icon={PieChartIcon} title="No spending in this period">
+                Pick another period above to see who spent what.
+              </EmptyState>
+            )}
+            {peopleWithData.length > 0 && (
+              <table className="stats-table">
+                <thead>
+                  <tr>
+                    <th>Person</th>
+                    <th>Fronted</th>
+                    <th>Their share</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <p className="muted stats-note">
-            "Fronted" is what they've paid at checkout. "Their share" is what they've actually
-            consumed — these rarely match, that gap is exactly what the settle-up on the group
-            page is for.
-          </p>
+                </thead>
+                <tbody>
+                  {peopleWithData.map((m) => (
+                    <tr key={m.id}>
+                      <td>
+                        {m.name}
+                        {m.isGuest && <span className="muted"> (guest)</span>}
+                        {!m.active && <span className="muted"> (left)</span>}
+                      </td>
+                      <td className="mono">{format(totals[m.id]?.paid || 0)}</td>
+                      <td className="mono">{format(totals[m.id]?.consumed || 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <p className="muted stats-note">
+              "Fronted" is what they've paid at checkout. "Their share" is what they've actually
+              consumed — these rarely match, that gap is exactly what the settle-up on the group
+              page is for.
+            </p>
         </>
       )}
 
@@ -451,6 +469,9 @@ export default function GroupStats() {
               </li>
             ))}
           </ul>
+        </>
+      )}
+
         </>
       )}
 

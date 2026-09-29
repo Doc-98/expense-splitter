@@ -8,9 +8,10 @@ import { useListKeyboardNav } from '../lib/useListKeyboardNav'
 import { getCachedPersonalGroupId, setCachedPersonalGroupId } from '../lib/personalGroupCache'
 import { getRecentGroupIds } from '../lib/recentGroups'
 import { warmUpTopGroups } from '../lib/prefetchGroup'
-import BootSplash from '../components/BootSplash'
 import { groupsListCache, GROUPS_LIST_CACHE_KEY } from '../lib/groupsListCache'
-import { PieChartIcon, ArrowRightIcon } from '../components/icons'
+import { PieChartIcon, ArrowRightIcon, GroupsNavIcon } from '../components/icons'
+import { LoadingState, SkeletonRows } from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
 
 const GROUPS_PAGE_SIZE = 10
 
@@ -50,6 +51,8 @@ export default function Groups() {
   // re-renders before the initial load settles — see the comment on
   // loadGroups' use of it below.
   const startedWithNothingCachedRef = useRef(groups === null)
+  // The empty state's "Create a group" just moves you to this field.
+  const newGroupInputRef = useRef(null)
 
   const visibleGroups = groups
     ? groups.slice(groupsPage * GROUPS_PAGE_SIZE, (groupsPage + 1) * GROUPS_PAGE_SIZE)
@@ -181,12 +184,22 @@ export default function Groups() {
     setCreating(false)
   }
 
-  // Nothing cached and the real fetch hasn't resolved yet — the only case
-  // left where there's truly nothing worth painting. Once this fires even
-  // once, `groups` is never null again for the life of this component (see
-  // loadGroups above), so this can never reappear later just because a
-  // reload is in flight.
-  if (groups === null) return <BootSplash />
+  // Nothing cached and the real fetch hasn't resolved yet: the page's own
+  // title over placeholder rows (see Skeleton.jsx). Once `groups` is set
+  // it's never null again for the life of this component (see loadGroups
+  // above), so this can't reappear just because a reload is in flight.
+  if (groups === null) {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <h1 className="page-title">Your groups</h1>
+        </div>
+        <LoadingState label="Loading your groups…">
+          <SkeletonRows count={4} />
+        </LoadingState>
+      </div>
+    )
+  }
 
   return (
     <div className="page">
@@ -210,9 +223,18 @@ export default function Groups() {
       {error && <p className="status-error">{error}</p>}
 
       {groups?.length === 0 && (
-        <p className="empty-state">
-          No groups yet — create one below, or open an invite link a friend sent you.
-        </p>
+        <EmptyState
+          icon={GroupsNavIcon}
+          title="No groups yet"
+          action={
+            <button type="button" className="btn-primary" onClick={() => newGroupInputRef.current?.focus()}>
+              Create a group
+            </button>
+          }
+          note="Got an invite link? Just open it."
+        >
+          A group is anyone you share costs with: a trip, a flat, a dinner.
+        </EmptyState>
       )}
 
       <ul className="card-list" onMouseMove={groupNav.onListMouseMove}>
@@ -234,9 +256,11 @@ export default function Groups() {
       <form onSubmit={createGroup} className="inline-form">
         <div className="input-with-submit">
           <input
+            ref={newGroupInputRef}
             value={newGroupName}
             onChange={(e) => setNewGroupName(e.target.value)}
             placeholder="New group name (e.g. Flat 3B)"
+            aria-label="New group name"
           />
           <button type="submit" className="input-submit-btn" disabled={creating || !newGroupName.trim()} aria-label="Create group">
             <ArrowRightIcon size={16} />

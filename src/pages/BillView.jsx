@@ -14,7 +14,7 @@ import ShareButton from '../components/ShareButton'
 import MultiPayerModal from '../components/MultiPayerModal'
 import { PrintableBillRecap } from '../components/PrintableRecap'
 import BackButton from '../components/BackButton'
-import { ArrowRightIcon, ChevronIcon, PlusIcon } from '../components/icons'
+import { ArrowRightIcon, ChevronIcon, PlusIcon, ReceiptIcon } from '../components/icons'
 import { useCurrency } from '../context/CurrencyContext'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
 import BuyerPicker from '../components/BuyerPicker'
@@ -25,6 +25,8 @@ import { useCoalescedRunner } from '../lib/coalescedRunner'
 import { createKeyedQueue } from '../lib/keyedQueue'
 import { createRealtimeRelevance } from '../lib/realtimeRelevance'
 import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
+import { LoadingState, SkeletonLines } from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
@@ -921,7 +923,11 @@ export default function BillView() {
                 onUpdate={(field, value) => updateItemField(item, field, value)}
               />
             ))}
-            {items.length === 0 && itemsStatus === 'loading' && <p className="empty-state">Loading items…</p>}
+            {items.length === 0 && itemsStatus === 'loading' && (
+              <LoadingState label="Loading items…">
+                <SkeletonLines count={3} />
+              </LoadingState>
+            )}
             {items.length === 0 && itemsStatus === 'error' && (
               <p className="empty-state">
                 Couldn't load this bill's items.{' '}
@@ -931,7 +937,17 @@ export default function BillView() {
               </p>
             )}
             {items.length === 0 && itemsStatus === 'ready' && (
-              <p className="empty-state">No items yet — scan a receipt or add one below.</p>
+              <EmptyState
+                icon={ReceiptIcon}
+                title="No items yet"
+                action={
+                  <button type="button" className="btn-primary" onClick={() => nameRef.current?.focus()}>
+                    Add an item
+                  </button>
+                }
+              >
+                Scan the receipt, or type the items in one by one.
+              </EmptyState>
             )}
             <div className="receipt-total-row">
               <span>Total</span>

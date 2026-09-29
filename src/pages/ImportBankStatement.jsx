@@ -23,6 +23,9 @@ import { getBankCategoryMappings, saveBankCategoryMappings } from '../lib/bankCa
 import { initialReviewEntry, resolveCategoryHints } from '../lib/bankStatementReview'
 import InlineEditable from '../components/InlineEditable'
 import BackButton from '../components/BackButton'
+import { LoadingState, SkeletonLines } from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
+import { ImportIcon } from '../components/icons'
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -776,13 +779,24 @@ Date,Description,Amount,Category`
 
       {error && <p className="status-error">{error}</p>}
 
-      {step === 'loading' && <p className="page-loading">Loading…</p>}
+      {step === 'loading' && (
+        <LoadingState label="Loading…">
+          <SkeletonLines count={3} />
+        </LoadingState>
+      )}
 
       {step !== 'loading' && isPersonal === false && (
-        <p className="empty-state">
-          Bank statement import is only available for your Personal space right now.{' '}
-          <Link to={`/groups/${groupId}`}>Back to this group</Link>
-        </p>
+        <EmptyState
+          icon={ImportIcon}
+          title="Only in your Personal space"
+          action={
+            <Link to={`/groups/${groupId}`} className="btn-secondary">
+              Back to this group
+            </Link>
+          }
+        >
+          Bank statement import is only available for your Personal space right now.
+        </EmptyState>
       )}
 
       {step === 'draft-found' && (

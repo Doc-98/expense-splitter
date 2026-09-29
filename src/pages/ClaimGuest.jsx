@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { LoadingState, SkeletonLines } from '../components/Skeleton'
 
 export default function ClaimGuest() {
   const { token } = useParams()
@@ -37,7 +38,9 @@ export default function ClaimGuest() {
   if (status === 'loading') {
     return (
       <div className="page">
-        <p className="muted">Loading…</p>
+        <LoadingState label="Loading…">
+          <SkeletonLines count={3} />
+        </LoadingState>
       </div>
     )
   }

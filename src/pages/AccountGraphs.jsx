@@ -15,6 +15,7 @@ import GraphsPeriodSelector from '../components/GraphsPeriodSelector'
 import LineChart from '../components/LineChart'
 import PieChart from '../components/PieChart'
 import BackButton from '../components/BackButton'
+import { ChartSkeleton } from '../components/Skeleton'
 
 // tab -> the chart's own point granularity — same reasoning (and the same
 // reverted-back-to-this-from-finer-points history) as GroupGraphs.jsx's
@@ -229,7 +230,7 @@ export default function AccountGraphs() {
       {error && <p className="status-error">{error}</p>}
 
       {loading ? (
-        <p className="page-loading">Loading…</p>
+        <ChartSkeleton />
       ) : (
         <>
           <GraphsPeriodSelector tab={tab} setTab={setTab} offset={offset} setOffset={setOffset} label={range.label} />

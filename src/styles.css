@@ -538,6 +538,83 @@ input.bill-title-editable-input {
   text-align: center;
 }
 
+/* ---------- Empty states (EmptyState.jsx) ----------
+   An empty screen or section: icon, title, one line, and a button to the
+   next step, in a dashed frame so it never reads as a real row or card.
+   Primary button when it starts something, secondary when it only takes
+   you somewhere (see EmptyState.jsx). The older one-line .empty-state
+   above stays for small in-context notes. */
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: var(--space-lg) var(--space-md);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  margin: var(--space-sm) 0;
+}
+.empty-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  color: var(--accent-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.empty-card-title { font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--ink); margin: 0; overflow-wrap: anywhere; }
+.empty-card-text { font-size: 14px; line-height: 1.45; color: var(--ink-soft); margin: 0; max-width: 32ch; overflow-wrap: anywhere; }
+.empty-card-action { margin-top: 8px; display: flex; flex-wrap: wrap; gap: var(--space-sm); justify-content: center; }
+.empty-card-action .btn-primary,
+.empty-card-action .btn-secondary { padding: 10px 16px; font-size: 14px; }
+.empty-card-note { font-size: 13px; color: var(--ink-soft); margin: 6px 0 0; }
+
+/* ---------- Loading placeholders (Skeleton.jsx) ----------
+   A pale outline of the content about to load, sized like the real thing
+   so nothing jumps. The shapes are the page's own ink-soft at 20%, so
+   they read on every ground in both themes, and pulse gently (still under
+   prefers-reduced-motion). Only shown after a short delay: see
+   LOADING_DELAY_MS. */
+.skeleton {
+  display: block;
+  border-radius: 6px;
+  background: var(--accent-light);
+  background: color-mix(in srgb, var(--ink-soft) 20%, transparent);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+.skeleton-title { height: 15px; }
+.skeleton-line { height: 12px; }
+.skeleton-amount { height: 15px; width: 64px; flex: none; }
+.skeleton-page-title { height: 22px; width: 55%; margin: 4px 0 var(--space-lg); }
+.skeleton-rows { display: flex; flex-direction: column; gap: var(--space-sm); }
+.skeleton-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: 52px;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.skeleton-row-main { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.skeleton-lines { display: flex; flex-direction: column; gap: 10px; margin: var(--space-sm) 0; }
+.skeleton-tile { align-items: center; }
+.skeleton-tile-value { height: 20px; width: 70%; margin-bottom: 4px; }
+.skeleton-bars { display: flex; flex-direction: column; gap: 12px; }
+.skeleton-bar-row { display: flex; align-items: center; gap: 10px; }
+.skeleton-bar-label { width: 80px; flex: none; }
+.skeleton-bar { height: 10px; flex: 1; border-radius: 999px; }
+.skeleton-bar-value { width: 56px; flex: none; margin-left: auto; }
+.skeleton-chart { height: 200px; border-radius: var(--radius); margin-bottom: var(--space-md); }
+
 /* The app-wide crash screen (ErrorBoundary.jsx). */
 .error-boundary-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-md); }
 .status-error {

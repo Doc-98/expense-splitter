@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useClickOutside } from '../lib/useClickOutside'
@@ -7,6 +8,9 @@ import { fetchSettingsGroupsRows } from '../lib/prefetchSettings'
 import { settingsGroupsCache, SETTINGS_GROUPS_CACHE_KEY } from '../lib/settingsGroupsCache'
 import { getGroupViewPreferences, setGroupViewPreferences } from '../lib/groupViewPreferences'
 import ConfirmSheet from './ConfirmSheet'
+import { LoadingState, SkeletonRows } from './Skeleton'
+import EmptyState from './EmptyState'
+import { GroupsNavIcon } from './icons'
 
 // The "⋮" per-row menu — same shape as BillActionsMenu.jsx's, just with
 // one item so far (see the .row-menu-* rules in styles.css, a copy of
@@ -128,9 +132,21 @@ export default function SettingsGroupsSection() {
       {error && <p className="status-error">{error}</p>}
 
       {groups === null ? (
-        <p className="muted">Loading…</p>
+        <LoadingState label="Loading your groups…">
+          <SkeletonRows count={3} />
+        </LoadingState>
       ) : groups.length === 0 ? (
-        <p className="empty-state">You're not in any groups yet.</p>
+        <EmptyState
+          icon={GroupsNavIcon}
+          title="You're not in any groups yet"
+          action={
+            <Link to="/" className="btn-secondary">
+              Go to your groups
+            </Link>
+          }
+        >
+          Create one, or open an invite link a friend sent you.
+        </EmptyState>
       ) : (
         <ul className="card-list">
           {groups.map((g) => (

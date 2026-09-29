@@ -31,4 +31,6 @@ export const WHATS_NEW = [
   "The date at the bottom of a printed recap is now dark enough to read",
   "In dark mode, menus and the install banner cast a visible shadow, and the phone's status bar turns dark to match instead of staying green",
   "A fresh app icon in the current green, with a crisper \"S\"; iPhones now get a proper home-screen icon, and Android can shape it to fit your launcher",
+  "While a page loads you now see a faint outline of what's coming instead of a bare \"Loading…\", and Your Stats no longer briefly says you have no stats while it loads",
+  "Empty screens now say what to do next, with a button that takes you there: create your first group, add a bill, head back once everyone's even, and more",
 ]
