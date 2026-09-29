@@ -128,7 +128,7 @@
   flex-shrink: 0;
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--on-accent);
   font-family: var(--font-display);
@@ -139,7 +139,7 @@
   justify-content: center;
 }
 .install-banner-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.install-banner-text strong { font-size: 13.5px; }
+.install-banner-text strong { font-size: var(--text-md); }
 .install-banner-text .muted { font-size: var(--text-xs); margin: 0; }
 .install-banner-dismiss {
   flex-shrink: 0;

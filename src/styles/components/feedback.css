@@ -78,7 +78,7 @@
    LOADING_DELAY_MS. */
 .skeleton {
   display: block;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: var(--accent-light);
   background: color-mix(in srgb, var(--ink-soft) 20%, transparent);
   animation: skeleton-pulse 1.4s ease-in-out infinite;

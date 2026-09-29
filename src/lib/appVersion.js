@@ -18,4 +18,6 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 export const WHATS_NEW = [
   "The \"Remove\" links for members and guests now show in the warning colour, like every other destructive action",
   "The version number in the header is back to its intended small size",
+  "Text now follows your phone's or browser's own text-size setting, so a larger system font makes the whole app easier to read",
+  "A few in-between text sizes and spacings are tidied onto one consistent scale, so labels and rows line up more evenly",
 ]

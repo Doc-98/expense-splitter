@@ -34,7 +34,7 @@
    "Split-with avatar size" picker in Settings > Profile (avatarSizeSpec()
    in groupViewPreferences.js is the one place that decides both this
    class and the icon's own px, so they can't drift). */
-.avatar.avatar-md { width: 42px; height: 42px; font-size: 17px; }
+.avatar.avatar-md { width: 42px; height: 42px; font-size: var(--text-xl); }
 .avatar.avatar-lg { width: 48px; height: 48px; font-size: var(--text-2xl); }
 
 /* The size picker itself — three buttons, each previewing its size with a

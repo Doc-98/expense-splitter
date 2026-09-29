@@ -27,7 +27,7 @@
    flex: 1 1 auto (not 0 1 auto) so the three buttons actually grow to fill
    the row's full width — content-hugging alone left a dead gap after
    "History" on any phone wider than the narrowest target. */
-.settle-actions { display: flex; flex-wrap: nowrap; gap: 5px; margin-bottom: var(--space-lg); }
+.settle-actions { display: flex; flex-wrap: nowrap; gap: var(--space-xs); margin-bottom: var(--space-lg); }
 .settle-actions .btn-primary, .settle-actions .btn-secondary {
   flex: 1 1 auto;
   min-width: 0;
@@ -50,7 +50,7 @@
    the icon row actually gets to be a flex container (and justify-content
    below actually has something to act on) regardless of where either rule
    sits in the file. */
-.settle-actions .btn-with-icon { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.settle-actions .btn-with-icon { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); }
 
 /* ---------- Settlement ---------- */
 .settlement { margin-top: var(--space-lg); }

@@ -198,6 +198,13 @@ specificity, so a page's rule never needs a longer selector to beat a
 component's, and a rule only competes with the rules in its own layer. Add
 a rule to the file for its area; `src/testing/readStylesheet.js` gives tests
 the whole stylesheet as one text, in cascade order.
+Sizes come from named scales in `tokens.css`, never literals: font sizes
+from `--text-2xs`…`--text-5xl` (in rem, so text follows the browser's and
+phone's own text-size setting; nothing sets a root font size), corners from
+`--radius-xs`…`--radius-pill`, stacking from `--z-sticky`/`--z-popover`/
+`--z-floating`/`--z-overlay`, and layout rhythm from `--space-xs`…`--space-lg`.
+Component-internal padding stays on an even-pixel grid; the only odd values
+are deliberate 1–3px optical nudges.
 
 **Why no top-level `tests/` directory.** Every test file sits directly
 next to what it tests — `Foo.jsx` → `Foo.test.jsx`,

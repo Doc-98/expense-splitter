@@ -113,7 +113,7 @@
 }
 .guide-demo-label { margin: 0 0 4px; font-size: var(--text-xs); }
 .guide-settle-demo .guide-demo-label:not(:first-child) { margin-top: 8px; }
-.guide-settle-row { margin: 0 0 2px; font-size: 13.5px; }
+.guide-settle-row { margin: 0 0 2px; font-size: var(--text-md); }
 /* The bare "⋮" glyph reference inline in a sentence — same look as the
    real row menu button, but inert (no popover, not focusable) since it's
    only ever standing in for the character itself. */

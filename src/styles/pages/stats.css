@@ -31,7 +31,7 @@
 .stats-summary.is-slim { margin-bottom: var(--space-md); }
 .stats-summary.is-slim .stats-summary-item { padding: 10px 12px; gap: 2px; }
 .stats-summary.is-slim .stats-summary-value { font-size: var(--text-lg); }
-.stats-summary.is-slim .muted { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; }
+.stats-summary.is-slim .muted { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.03em; }
 
 .stats-table {
   width: 100%;
@@ -108,7 +108,7 @@
    than plain .tab-row's default — scoped to .time-range-tabs specifically
    (not plain .tab-row, shared with the sign-in/sign-up toggle on the login
    screen) so that page's tabs are unaffected. */
-.time-range-tabs { margin-bottom: var(--space-sm); gap: 5px; }
+.time-range-tabs { margin-bottom: var(--space-sm); gap: var(--space-xs); }
 .time-range-nav {
   display: flex;
   align-items: center;
@@ -120,7 +120,7 @@
 .time-range-year { font-size: var(--text-2xs); color: var(--ink-soft); line-height: 1.4; }
 .time-range-label { font-size: var(--text-md); font-weight: 500; text-align: center; }
 .time-range-nav .btn-icon {
-  font-size: 24px; padding: 4px 5px;
+  font-size: var(--text-3xl); padding: 4px;
   /* The arrows sit only 6px apart, too close for the invisible tap area
      (see "Touch targets") to grow sideways without overlapping — so each
      is a real 44px box instead, glyph unchanged. */
@@ -173,9 +173,9 @@
 .line-chart-empty { display: flex; align-items: center; justify-content: center; min-height: 140px; }
 .line-chart-max-label { font-size: var(--text-2xs); fill: var(--ink-soft); font-family: var(--font-mono); }
 .line-chart-baseline { stroke: var(--border); stroke-width: 1; }
-.line-chart-x-label { font-size: 10px; fill: var(--ink-soft); }
+.line-chart-x-label { font-size: var(--text-2xs); fill: var(--ink-soft); }
 .line-chart-tooltip rect { fill: var(--ink); opacity: 0.92; }
-.line-chart-tooltip-label { font-size: 10px; fill: var(--bg); text-anchor: middle; }
+.line-chart-tooltip-label { font-size: var(--text-2xs); fill: var(--bg); text-anchor: middle; }
 .line-chart-tooltip-amount { font-size: var(--text-2xs); fill: var(--bg); text-anchor: middle; font-weight: 600; }
 
 .pie-chart-wrap {

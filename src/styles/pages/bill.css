@@ -70,7 +70,7 @@ input.bill-title-editable-input {
 .bill-summary-head {
   width: 100%; display: flex; align-items: center; gap: 10px;
   background: none; border: none; padding: 12px 14px; cursor: pointer;
-  text-align: left; font-family: inherit; color: var(--ink); font-size: 13.5px;
+  text-align: left; font-family: inherit; color: var(--ink); font-size: var(--text-md);
 }
 .bill-summary-text { flex: 1; }
 .bill-summary-chev { color: var(--ink-soft); flex: none; transition: transform 0.2s ease; }
@@ -80,7 +80,7 @@ input.bill-title-editable-input {
   display: flex; flex-direction: column; gap: 12px;
 }
 .detail-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.detail-row-label { font-size: 12.5px; color: var(--ink-soft); flex: none; }
+.detail-row-label { font-size: var(--text-sm); color: var(--ink-soft); flex: none; }
 /* "Next item split with": allowed to shrink, so on a narrow row "split
    with" (kept together) drops onto its own line instead of squeezing the
    avatars. */
@@ -101,7 +101,7 @@ input.bill-title-editable-input {
 }
 .amount-card-label { display: block; font-size: var(--text-xs); color: var(--ink-soft); margin-bottom: 6px; }
 /* A one-item bill's "Split with", under the amount — edits that one item. */
-.amount-card-split { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border); }
+.amount-card-split { margin-top: var(--space-md); padding-top: 14px; border-top: 1px dashed var(--border); }
 .amount-card-split .avatar-row { justify-content: center; }
 /* A <button> under the hood (InlineEditable's non-editing state) — same
    reset .item-editable already gives its own buttons (background/border/
@@ -127,7 +127,7 @@ input.amount-card-value-input {
   width: 100%;
   color: inherit;
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
 }
 
@@ -145,7 +145,7 @@ input.amount-card-value-input {
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
   padding: 10px 12px;
-  margin-bottom: 28px;
+  margin-bottom: var(--space-lg);
   background: none;
   color: var(--ink-soft);
   font-size: var(--text-sm);
@@ -160,7 +160,7 @@ input.amount-card-value-input {
   border: 1px solid var(--border);
   border-bottom: none;
   padding: var(--space-md);
-  margin-bottom: 28px;
+  margin-bottom: var(--space-lg);
 }
 .receipt-tape::after {
   content: "";
@@ -201,11 +201,11 @@ input.amount-card-value-input {
 .item-row-head {
   position: relative; width: 100%; display: flex; align-items: center; gap: 8px;
   background: var(--surface); border: none; padding: 10px 12px; cursor: pointer;
-  text-align: left; font-family: inherit; color: var(--ink); font-size: 13.5px;
+  text-align: left; font-family: inherit; color: var(--ink); font-size: var(--text-md);
   touch-action: pan-y;
 }
 .item-name { font-weight: 500; }
-.item-qty-badge { font-size: 10.5px; color: var(--ink-soft); background: var(--surface-tint); border-radius: 5px; padding: 1px 5px; flex: none; }
+.item-qty-badge { font-size: var(--text-2xs); color: var(--ink-soft); background: var(--surface-tint); border-radius: var(--radius-xs); padding: 1px 4px; flex: none; }
 .item-dots {
   flex: 1;
   border-bottom: 1px dotted var(--border);
@@ -226,7 +226,7 @@ input.amount-card-value-input {
 .item-row-head .item-price { line-height: 20px; }
 .item-row-head .item-warn-dot { margin-top: 7px; }
 .item-row-head .item-row-chevron { margin-top: 2px; }
-.item-row-category { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--ink-soft); }
+.item-row-category { display: inline-flex; align-items: center; gap: var(--space-xs); font-size: var(--text-xs); color: var(--ink-soft); }
 .item-row-category .category-dot { width: 8px; height: 8px; margin: 0; }
 .item-row-category-none { font-style: italic; }
 /* "Grouped by category" (Settings > Layout): a header per category, with
@@ -250,7 +250,7 @@ input.amount-card-value-input {
   display: flex; flex-direction: column; gap: 10px;
 }
 .item-body-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.item-body-label { font-size: 11.5px; color: var(--ink-soft); flex: none; }
+.item-body-label { font-size: var(--text-xs); color: var(--ink-soft); flex: none; }
 .item-body-row select { font-size: var(--text-xs); padding: 4px 6px; }
 /* Icon-only, bottom-right of the expanded item — the swipe's own delete
    strip is on the right too, so both ways to remove an item live on the
