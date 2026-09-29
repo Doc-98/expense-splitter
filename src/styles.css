@@ -2129,6 +2129,41 @@ input.item-editable-input, textarea.item-editable-input {
 .threshold-bar-value { width: 130px; text-align: right; flex-shrink: 0; }
 .stats-bar-group { margin-bottom: 8px; }
 .comparison-badge { display: block; text-align: right; font-size: 11px; margin-top: 2px; }
+/* One amount never breaks in the middle ("€1,050.00 / €1,200.00" may wrap
+   at the slash, never inside a figure). */
+.stats-bar-amount { white-space: nowrap; }
+
+/* Where subgrid is supported (every current browser), a list of bars is
+   one grid and each row borrows its columns, so every row in a list
+   shares the same label and value widths and the tracks line up. The
+   columns size to their content instead of the fixed 110px/70px/130px
+   above, which cut off long category names and big amounts on a phone:
+   the label takes what it needs up to 40% (then wraps, indented past its
+   dot), the value takes what it needs up to 45%, and the track gets the
+   rest but never less than 40px. */
+@supports (grid-template-columns: subgrid) {
+  .stats-bars {
+    display: grid;
+    grid-template-columns: fit-content(40%) minmax(40px, 1fr) fit-content(45%);
+    column-gap: 10px;
+    row-gap: 8px;
+  }
+  .stats-bars > .stats-bar-row,
+  .stats-bars > .stats-bar-group,
+  .stats-bar-group > .stats-bar-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    align-items: center;
+  }
+  .stats-bar-group { margin-bottom: 0; }
+  .stats-bar-group > .comparison-badge { grid-column: 1 / -1; }
+  .stats-bar-label { width: auto; min-width: 0; display: flex; align-items: flex-start; gap: 6px; overflow-wrap: anywhere; }
+  /* the dot sits on the first line, centred on it (13px text, ~16px line) */
+  .stats-bar-label > .category-dot { margin: 3px 0 0; }
+  .stats-bar-value, .threshold-bar-value { width: auto; white-space: nowrap; }
+  .threshold-bar-value { white-space: normal; }
+}
 
 .time-range { margin-bottom: var(--space-lg); }
 /* A little breathing room between period tabs, and a bit less margin below
@@ -2285,7 +2320,9 @@ input.item-editable-input, textarea.item-editable-input {
      just pushing the whole row onto the next page a little early. */
   .print-table tr { break-inside: avoid; }
   .print-total { font-size: 16px; font-weight: 700; margin-top: 16px; text-align: right; }
-  .print-footer { margin-top: 32px; font-size: 11px; color: #888; }
+  /* #444 on paper white is 9.7:1 (AAA); #888 was 3.5:1, fainter than
+     anything on screen. */
+  .print-footer { margin-top: 32px; font-size: 11px; color: #444; }
 }
 
 /* ---------- CSV import ---------- */

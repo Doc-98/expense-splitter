@@ -27,4 +27,6 @@ export const WHATS_NEW = [
   "The installed app keeps its own typefaces when you're offline, instead of falling back to plain system fonts",
   "What you owe is now a clear red, the partner of the green for what you're owed, and the amount is in bold on both, whether you color the whole balance line or just the amount",
   "Error messages carry a warning sign and use their own rust color, so they never look like a debt; delete buttons use the rust too",
+  "Stats bars no longer cut off long category names or big amounts on a phone, and the bars in each list line up",
+  "The date at the bottom of a printed recap is now dark enough to read",
 ]

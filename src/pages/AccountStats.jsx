@@ -517,7 +517,8 @@ export default function AccountStats() {
               />
             </div>
             <span className={`mono threshold-bar-value ${t.over ? 'balance-negative' : ''}`}>
-              {format(t.spent)} / {format(t.amount)}
+              <span className="stats-bar-amount">{format(t.spent)}</span> /{' '}
+              <span className="stats-bar-amount">{format(t.amount)}</span>
             </span>
           </div>
         ))}
