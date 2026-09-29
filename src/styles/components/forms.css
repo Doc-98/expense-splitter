@@ -1,0 +1,197 @@
+/* Inline editing (InlineEditable), field hints, stacked forms, switches, the dual-thumb range slider.
+   Layer: components (see src/styles.css for the order). */
+
+/* The one deliberate exception to .item-editable's own dotted-underline
+   "this is editable" signal (every other InlineEditable in the app keeps
+   it) — a page's own title, set in the display serif at 22px, reads as
+   busy/decorated with a dotted rule sitting right under it; still exactly
+   as clickable/editable as before, just without the visual cue. Needs the
+   two classes combined as one selector (not just repeating
+   .bill-title-editable on its own) to out-specificity .item-editable's
+   own border-bottom below, which otherwise wins on source order alone —
+   this rule and .item-editable's own would each be a single class
+   selector, and .item-editable's comes later in this file. */
+.item-editable.bill-title-editable { border-bottom: none; }
+/* A short caption directly under one field, not a whole form — tighter
+   than .auth-magic-link-hint (which sits under the whole magic-link
+   form), pulled up close to the input it's describing rather than
+   getting .auth-form .btn-link's own spacing rules. */
+.field-hint { margin: 4px 0 0; font-size: 12px; }
+
+/* Every click-to-edit value (name, unit price, quantity, total price) gets
+   the same dotted-underline treatment — deliberately the same visual
+   language as .item-dots' dotted receipt-leader just above, so "dotted
+   means editable/structural" reads as one consistent idea on this row
+   rather than a new UI convention on top of it. A <button> under the
+   hood (for real keyboard/click semantics), stripped back to look like
+   plain text. */
+.item-editable {
+  /* Deliberately doesn't touch font-family/size/weight — the button
+     reset above already inherits family/size, and each use combines this
+     class with the one that already carries the right look (.item-name,
+     .item-price/.mono, .item-price-detail), same as the plain text these
+     buttons replaced. Redeclaring font here would fight those on cascade
+     order for no benefit. */
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--ink-soft);
+}
+.item-editable:hover { border-bottom-color: var(--ink); }
+/* `input.item-editable-input` (element + class), not just `.item-editable-input`
+   — needs to match the specificity of the global input[type="text"] /
+   input:not([type]) rule (styles.css line 57) to actually win on source
+   order; a bare class selector alone loses that fight and every property
+   below gets silently overridden. font-size deliberately isn't touched
+   here (unlike the tighter padding/border) — inputs stay at the global
+   16px so focusing one doesn't trigger iOS's zoom-on-focus, even though
+   that reads a little larger than the display text it replaces. */
+/* textarea.item-editable-input alongside it — InlineEditable's
+   `multiline` mode (see ImportBankStatement.jsx's description field)
+   renders a <textarea> instead, which needs the same look but has no
+   competing global reset rule to out-specificity in the first place
+   (styles.css's own input/select reset above doesn't touch textarea) —
+   still written as an element+class selector for consistency with the
+   input rule right next to it. */
+input.item-editable-input, textarea.item-editable-input {
+  color: inherit;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 0 4px;
+  background: var(--surface);
+}
+
+/* A real sliding toggle (checkbox underneath, visually hidden) rather than
+   the plain "Switch to light/dark mode" text button this used to be —
+   requested specifically for dark mode once it moved off the account
+   dropdown and onto its own settings row. */
+.switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+.switch input { position: absolute; opacity: 0; left: 0; top: 50%; width: 100%; height: 44px; transform: translateY(-50%); margin: 0; cursor: pointer; }
+.switch-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
+  pointer-events: none;
+}
+.switch-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: var(--surface);
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.switch input:checked + .switch-slider { background: var(--accent); }
+.switch input:checked + .switch-slider::before { transform: translateX(20px); }
+.switch input:focus-visible + .switch-slider { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- Stacked multi-field form (fading submit) ----------
+   For a form whose submit control can't live inside one field the way
+   Create group/Add bill's own input-with-submit does — several fields
+   gate it at once here — so it stays a normal labeled button at the end
+   of the form instead, genuinely hidden (not just dimmed) until valid.
+   Each field/row gets its own line via `gap`, full width via
+   `align-items: stretch`. Originally built for "Add recurring bill";
+   Group Settings' Categories tab reuses the same shape for its own
+   multi-field "New category" form. */
+.stacked-form { display: flex; flex-direction: column; gap: var(--space-sm); align-items: stretch; }
+.stacked-form-row { display: flex; gap: var(--space-md); }
+.stacked-form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  flex: 1;
+}
+.stacked-form-row select,
+.stacked-form-row input[type='date'] { font-size: 14px; }
+.stacked-form-actions { display: flex; align-items: center; gap: var(--space-md); }
+.form-submit-btn { transition: opacity 0.22s ease, transform 0.22s ease; }
+.btn-primary.form-submit-btn:disabled { opacity: 0; transform: translateY(4px); pointer-events: none; }
+.form-submit-hint { font-size: 12.5px; color: var(--ink-soft); }
+
+/* ---------- Dual-thumb range slider (bill amount filter) ----------
+   Two overlapping native range inputs rather than a library or a
+   custom-drawn control — each stays a real, keyboard-operable input.
+   Both inputs' own track painting is hidden; a plain div pair
+   (.range-slider-track/.range-slider-fill) draws the visible track and
+   the filled span between the two handles underneath. pointer-events is
+   disabled on each input everywhere except its own thumb (re-enabled via
+   the ::-webkit-slider-thumb/::-moz-range-thumb rules below), so a click
+   passes through to whichever handle's thumb is actually under the
+   pointer rather than always hitting whichever input is on top. Known,
+   accepted limitation of this dependency-free technique: only dragging a
+   thumb moves it — clicking elsewhere on the track doesn't jump a handle
+   to that point, since enabling that would mean enabling pointer-events
+   on the full-width track too, which brings back the "which input catches
+   the click" ambiguity this whole approach exists to avoid. */
+.range-slider { position: relative; padding-top: 4px; }
+.range-slider-track {
+  position: relative;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 14px 9px;
+}
+.range-slider-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.range-slider-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  margin: 14px 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.range-slider-input:focus { outline: none; }
+/* The two stacked range inputs span the whole track, so an outline on the
+   input itself would ring both at once — ring just the thumb being moved. */
+.range-slider-input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.range-slider-input:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.range-slider-input::-webkit-slider-runnable-track { -webkit-appearance: none; background: none; height: 4px; }
+.range-slider-input::-moz-range-track { background: none; height: 4px; border: none; }
+.range-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  cursor: pointer;
+}
+.range-slider-input::-moz-range-thumb {
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  cursor: pointer;
+}
+.range-slider-labels { display: flex; justify-content: space-between; margin-top: 4px; font-size: 13px; color: var(--ink-soft); }
+/* .item-editable (the dotted-underline click-to-edit look shared with
+   ItemRow's name/price/quantity) already handles the look — this just
+   gives the label a bit of hit-target padding, since a bare number is a
+   small tap target otherwise. */
+.range-slider-label { padding: 2px 0; }

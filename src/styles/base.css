@@ -1,0 +1,94 @@
+/* Element defaults (body, labels and form controls, code, selection), the focus ring, the collapse pattern (.xwrap/.xinner) and general text helpers (.mono, .muted).
+   Layer: base (see src/styles.css for the order). */
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  /* Backstop, not the fix: this bug class (a flex item's automatic
+     min-width trap letting some unbreakable/long bit of content force a
+     row, and with it the whole page, wider than the viewport) has now
+     shown up twice in two different nesting levels of the same bill row.
+     Each real instance still gets fixed at its source (min-width: 0 on
+     the actual offending flex item) rather than relying on this alone,
+     but this keeps any future recurrence from making the *entire app*
+     scroll sideways while it's tracked down — it only clips overflow at
+     the document edge, and has no effect on elements that scroll
+     horizontally within their own container (e.g. .chip-row, .tab-row). */
+  overflow-x: hidden;
+}
+
+button { font-family: inherit; font-size: inherit; }
+input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px prevents iOS zoom-on-focus */
+/* The browser's default placeholder grey is too faint for AAA, especially
+   in dark mode — --ink-soft holds 7:1 on every surface an input sits on. */
+::placeholder { color: var(--ink-soft); opacity: 1; }
+
+/* Themed text-selection highlight — without this, selecting/auto-selecting
+   text (e.g. InlineEditable's select() on entering edit mode, see that
+   component) falls back to the browser's own default selection color,
+   which reads as a jarring grey/light box against this app's dark theme
+   (most visible on the simple bill view's big .amount-card-value-input,
+   auto-selected the moment you tap it). */
+::selection { background: var(--accent); color: var(--on-accent); }
+
+.mono { font-family: var(--font-mono); }
+
+/* One keyboard focus ring for every control (buttons, links, chips, tabs,
+   list rows…) rather than each browser's own default, which varies and
+   can disappear against the accent green. :focus-visible only, so a tap
+   or click doesn't leave a ring behind. --accent holds ≥4.5:1 against
+   every surface in both themes. Text inputs keep their own :focus rule
+   below (a ring on every focus, tap included, is what a field wants). */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Inside a container that clips its overflow (swipe-to-delete rows, the
+   collapsible bill summary, scrolling modals and lists), a ring drawn
+   outside the element would be cut off — draw it just inside instead. */
+.bill-row-shell :focus-visible, .guest-row-shell :focus-visible,
+.item-row-head-shell :focus-visible, .bill-summary :focus-visible,
+.provider-item :focus-visible, .modal-panel :focus-visible,
+.stats-table :focus-visible { outline-offset: -2px; }
+
+code {
+  font-family: var(--font-mono);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.9em;
+}
+
+.muted { color: var(--ink-soft); font-size: 14px; }
+
+label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-soft); margin-bottom: var(--space-sm); }
+
+input[type="text"], input[type="email"], input[type="password"], input:not([type]), select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--ink);
+}
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* A CSS-only expand/collapse — a `grid-template-rows: 0fr -> 1fr` animates
+   to the content's real height exactly, no guessed max-height. The pair
+   goes on any element the caller marks `.is-open` (a `.xwrap` inside it,
+   an `.xinner` inside that to actually clip the collapsed overflow) — one
+   shared pattern rather than a bespoke one per feature; the bill summary
+   and each item row below both use it, same as Scan Settings' provider
+   picker before them. */
+.xwrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.22s ease; }
+.is-open .xwrap { grid-template-rows: 1fr; }
+.xinner { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .xwrap { transition: none; }
+}

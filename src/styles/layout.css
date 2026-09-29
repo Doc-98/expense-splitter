@@ -1,0 +1,141 @@
+/* The page frame: app header, page column, page header and title, boot splash.
+   Layer: layout (see src/styles.css for the order). */
+
+/* ---------- Layout ---------- */
+.page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--space-lg) var(--space-md) 64px;
+}
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 var(--space-lg);
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--space-md) var(--space-md) 0;
+}
+.app-header-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent-dark);
+  text-decoration: none;
+  line-height: 1.2;
+}
+.app-header-version {
+  font-family: var(--font-body);
+  font-weight: 400;
+}
+
+/* ---------- Boot splash ---------- */
+.boot-splash {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-lg);
+  background: var(--bg);
+}
+
+.boot-splash-mark {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--bg);
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Same soft "breathing" as the ring below, just slower and subtler —
+     together they read as one animation, not two competing ones. */
+  animation: boot-splash-breathe 1.8s ease-in-out infinite;
+}
+
+.boot-splash-ring {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  animation: boot-splash-spin 0.8s linear infinite;
+}
+
+@keyframes boot-splash-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes boot-splash-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* Motion is purely decorative here — the ring spinning is what
+   communicates "still loading," not the mark breathing, so only that one
+   needs to keep moving for someone who's asked for less of it. */
+@media (prefers-reduced-motion: reduce) {
+  .boot-splash-mark { animation: none; }
+}
+
+/* align-items: center, not baseline. Two compounding problems with
+   baseline: a bare SVG icon button has no real baseline of its own, so
+   the browser synthesizes one from the icon's own bottom edge — two
+   differently-sized icons (LineChartIcon vs ShareIcon, say) then always
+   land at different heights, matched-outer-footprint or not. Separately,
+   a title that wraps to two lines (a long group name — see GroupView.jsx)
+   uses its *first* line's baseline for this purpose, which sits near the
+   very top of that two-line block — so the exact same icon buttons land
+   in a noticeably different spot next to a wrapped title than next to a
+   one-line one. An earlier fix opted individual icons out of baseline one
+   at a time (align-self: center on just whichever button visibly needed
+   it) but that just drifts the fixed ones out of line with whichever
+   siblings didn't get the same treatment — see GroupView.jsx's header
+   (Share/Stats/Settings) for exactly that. Centering everything in the
+   row against its own cross-axis is the one rule that holds regardless of
+   icon size or how many lines the title wraps to. */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.page-header h1 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+}
+
+/* Wraps a title + a smaller subtitle line together as one flex item, for
+   pages that need both (currently just Group Stats: "Group Stats" plus
+   the group's own name underneath) — .page-header h1's own flex: 1 above
+   still applies to the nested <h1> here (it's a descendant of
+   .page-header either way), it's just inert since the <h1> itself isn't
+   a direct flex child of .page-header anymore; this wrapper is. */
+.page-header-titles { flex: 1; min-width: 0; }
+.page-header-subtitle { margin: 2px 0 0; font-size: 13px; font-weight: 400; color: var(--ink-soft); }
+
+/* The single explicit flex: 1 spacer in GroupView.jsx's own header row —
+   claims the row's remaining width so Search/Share/Stats/Settings sit
+   flush against the right edge, at the row's normal gap, regardless of
+   which of those actually render (Search/Share are both conditional).
+   min-width keeps it from fully collapsing to 0 if every icon after it is
+   ever hidden at once, though that's not a real case today. */
+.header-spacer { flex: 1; min-width: 4px; }

@@ -1,0 +1,571 @@
+/* Settings and group settings: sections, rows and previews, scan providers, categories and import, subscriptions, updates.
+   Layer: pages (see src/styles.css for the order). */
+
+/* Which strategy a scan will actually use — a small chip rather than the
+   plain "Using: X — change" text line this used to be, and reusing the
+   same badge icon (device/cloud/network) ScanSettingsSection.jsx's own
+   provider rows use, so the two visually point at each other. */
+.scan-method-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 6px 6px 10px;
+  margin-top: 8px;
+}
+.scan-method-chip-left { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); font-weight: 500; }
+.scan-method-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  color: var(--accent-dark);
+  flex: none;
+}
+
+/* ---------- Scan settings page ---------- */
+/* Now only used by ImportBankStatement.jsx's single standalone checkbox
+   ("double-check column detection with AI") — ScanSettingsSection.jsx's
+   own provider choice moved to the .provider-* rows below, which replaced
+   what used to be one .scan-option card per provider. */
+.scan-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+  cursor: pointer;
+}
+.scan-option input[type='radio'], .scan-option input[type='checkbox'] { margin-top: 4px; }
+.scan-option strong { display: block; margin-bottom: 4px; }
+.scan-option p { margin: 0; font-size: 13px; }
+.scan-option-detail {
+  margin: 0 0 var(--space-lg) var(--space-md);
+  padding-left: var(--space-md);
+  border-left: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.scan-option-detail input { width: 100%; }
+
+/* ---------- Scan settings: provider picker (expand-in-place list) ----------
+   Replaces the old radio-card-per-provider layout — the only place in the
+   app still using bare native radio buttons, and the only one keeping all
+   four providers' full descriptions (and fields, where relevant) expanded
+   at once regardless of which one is actually in use. Now: one compact
+   row per provider, and only the selected one expands to show its own
+   description and fields — the same "pick a method, see just its fields"
+   pattern Stripe/PayPal use for payment methods. Each row keeps a real
+   <input type="radio"> (see .provider-radio below), just visually hidden
+   the same way .switch above hides its own checkbox — so keyboard/screen-
+   reader users still get real radio-group behavior (arrow keys move both
+   focus and selection) rather than a reimplemented one. */
+.provider-list { margin-bottom: var(--space-sm); }
+.provider-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.provider-item.is-open { border-color: var(--accent); }
+.provider-head {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin: 0;
+  font-size: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+.provider-head:focus-within { outline: 2px solid var(--accent-dark); outline-offset: 2px; }
+.provider-radio { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.provider-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-tint);
+  color: var(--accent-dark);
+  flex: none;
+}
+.provider-head-text { flex: 1; min-width: 0; }
+.provider-head-text strong { display: block; font-size: 14px; }
+.provider-head-text span { display: block; font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
+.provider-check { color: var(--accent); flex: none; }
+.provider-chevron { color: var(--ink-soft); flex: none; transition: transform 0.2s ease; }
+.provider-item.is-open .provider-chevron { transform: rotate(90deg); color: var(--accent); }
+/* The expand/collapse itself — a CSS-only grid-rows trick (0fr collapsed,
+   1fr open) rather than max-height, since it animates to the content's
+   real height exactly instead of a guessed cap. */
+.provider-body-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.22s ease; }
+.provider-item.is-open .provider-body-wrap { grid-template-rows: 1fr; }
+.provider-body-inner { overflow: hidden; }
+.provider-body { padding: 0 14px 14px; border-top: 1px solid var(--border); margin-top: 2px; padding-top: 10px; }
+.provider-body input[type='text'], .provider-body input[type='password'] { width: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  .provider-body-wrap, .provider-chevron { transition: none; }
+}
+
+/* ---------- Group settings page (and, via the same shared class, Your
+   Stats / Group Stats' own section headings) ---------- */
+.settings-section-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  margin: var(--space-lg) 0 var(--space-sm);
+}
+.settings-section-title:first-of-type:not(.section-always-divided) { margin-top: 0; }
+/* A thin divider above every section after the first, on Group Settings
+   and both stats pages — the first section sits at the top of the page
+   with nothing above it to separate from, same reasoning (and exception)
+   as the bill list's month dividers just above. :first-of-type correctly
+   tracks whichever section actually renders first even when that varies
+   (Your Stats' "Spending thresholds" can render at the top or the
+   bottom, per that page's own preference), since every .settings-section-title
+   here is a plain, unwrapped sibling of the others — unlike the bill-month
+   case, nothing needs a dedicated wrapper. GroupView.jsx's own "Quick
+   stats" heading reuses this same class for its font treatment and relies
+   on this exact :first-of-type behavior too — it's the only
+   .settings-section-title on that page, so it always renders divider-free
+   right under the action row, never as a section boundary.
+   :not(.section-always-divided) excludes a section that's the *only*
+   .settings-section-title on its page (so it'd otherwise trivially count
+   as "first") but still sits below real content above it — Groups.jsx's
+   "Create a new group", below the group list — and so still wants its
+   divider despite having no sibling section to be "not the first"
+   relative to. */
+.settings-section-title:not(.section-always-divided) {
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border);
+}
+.settings-section-title:first-of-type:not(.section-always-divided) {
+  padding-top: 0;
+  border-top: none;
+}
+/* A lighter-weight heading for grouping a few related controls *within*
+   one .settings-section-title section — Danger Zone's "Delete all bills"
+   and "Delete group" each need their own explanation/button under one
+   roof, but don't each deserve a full section (with its own divider) the
+   way Danger Zone itself does. No border-top of its own — that divider
+   language is reserved for actual section boundaries. */
+.settings-subsection-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: var(--space-lg) 0 4px;
+}
+/* margin-top already comes from .settings-section-title's own base rule
+   (var(--space-lg)) now that the zeroing rule above excludes this class —
+   only padding-top/border-top need setting here. */
+.section-always-divided { padding-top: var(--space-lg); border-top: 1px solid var(--border); }
+/* GroupSettings.jsx's "Members" heading, now sharing its row with the
+   Invite button — the divider/spacing that would normally come from
+   .settings-section-title itself moves to this wrapper (and gets reset on
+   the h2 nested inside it), since wrapping the h2 in a flex row takes it
+   out of the plain sibling chain :first-of-type above relies on to know
+   whether a section is the page's very first (Members never actually is —
+   "Group name" always precedes it — this just says so explicitly instead
+   of leaning on a selector that no longer sees it as a sibling). */
+.settings-section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin: var(--space-lg) 0 var(--space-sm);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border);
+}
+.settings-section-title-row .settings-section-title { margin: 0; padding-top: 0; border-top: none; }
+
+/* CategorizeBills.jsx's review rows — a bill title can run considerably
+   longer than a member/category name (the only other things this list
+   style has shown so far), so unlike every other .member-list-item this
+   one actually needs to handle overflow: the title truncates with an
+   ellipsis instead of pushing its row's <select> off screen. */
+.categorize-row-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.categorize-row-select { flex-shrink: 0; max-width: 45%; margin-left: var(--space-sm); }
+
+.categorize-hint-label { display: block; font-size: 13px; margin: var(--space-sm) 0 var(--space-lg); }
+.categorize-hint { width: 100%; margin-top: 6px; resize: vertical; }
+
+/* ImportBankStatement.jsx's one-at-a-time review card — a single
+   transaction at a time (see the page's own comment on why: a full list
+   of 200 rows felt overwhelming, and made a long statement's genuine
+   bottleneck — hundreds of sequential insert round trips — hard to avoid
+   without either batching blindly or losing the ability to go back and
+   fix a mistake). Styled like .member-list-item (same surface/border/
+   radius) but as a standalone block, not a list row. */
+.bank-tx-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: var(--space-md);
+  margin: var(--space-sm) 0;
+}
+/* Deliberately NOT .categorize-row-title's usual single-line ellipsis —
+   this is the review screen's whole job (confirm every transaction is
+   right before it becomes a bill), so the description needs to be fully
+   readable, not clipped. Wraps across as many lines as it needs instead;
+   most cards (short merchant names) don't even notice, only the
+   occasional long one gets taller. Block, not inline-block, so it
+   actually takes the card's full width to wrap into instead of
+   shrink-wrapping its own content first. */
+.bank-tx-card-title {
+  display: block;
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+  font-size: 16px;
+  font-weight: 500;
+}
+/* Editing uses a <textarea> (InlineEditable's `multiline`), not a
+   single-line <input> — same reasoning as the read-mode wrap above: a
+   90+ character description needs to stay fully visible and easy to
+   edit, not scrolled sideways inside a narrow box. */
+.bank-tx-card-title-input {
+  display: block;
+  width: 100%;
+  min-height: 4.6em;
+  resize: vertical;
+  line-height: 1.3;
+}
+.bank-tx-card-include { display: flex; flex-direction: row; align-items: center; gap: 8px; margin-bottom: 0; }
+.bank-tx-card-category { width: 100%; }
+
+/* The "Match bank categories" step, ahead of the one-at-a-time review
+   above — one card per distinct bank category name found in the
+   statement, same visual language as .bank-tx-card since it's the same
+   wizard, just a different question ("what does the bank's own wording
+   mean?" instead of "is this transaction right?"). */
+.category-mapping-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: var(--space-md);
+  margin: var(--space-sm) 0;
+}
+.category-mapping-card-label { font-size: 16px; font-weight: 500; }
+.category-mapping-card select { width: 100%; }
+
+/* The wizard's own progress — how far into *this* statement's reviewable
+   (debit) transactions the current card is, not a generic loading
+   indicator. Native <progress>, styled to match the app's own accent
+   rather than the browser default. */
+.bank-tx-progress { width: 100%; height: 8px; accent-color: var(--accent); margin: 4px 0 var(--space-sm); }
+
+/* Sits inline next to a "Common patterns" row's Apply button — the only
+   feedback that a click actually did something, since the effect itself
+   (rows further down the page changing) is easy to miss entirely. */
+.categorize-cluster-applied { color: var(--accent-dark); font-size: 12px; white-space: nowrap; }
+
+.threshold-row { gap: var(--space-sm); }
+.threshold-input-wrap { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.threshold-input-wrap input { width: 90px; text-align: right; font-family: var(--font-mono); }
+
+/* ---------- CSV import ---------- */
+/* Group Settings' Data section — a proper row per action, replacing what
+   used to be a bare text link (no room to say what it actually does):
+   an icon in its own tinted circle, a title, and a real description, same
+   idea as .card-list-item but built for a couple of lines of explanation
+   instead of one short note. */
+.settings-action-list { display: flex; flex-direction: column; gap: var(--space-sm); margin-bottom: var(--space-lg); }
+.settings-action-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  text-decoration: none;
+  color: var(--ink);
+}
+.settings-action-row:hover { border-color: var(--accent); }
+.settings-action-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  color: var(--accent-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.settings-action-body { flex: 1; min-width: 0; }
+.settings-action-title { display: block; font-weight: 600; font-size: 14.5px; }
+.settings-action-desc { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }
+.settings-action-row .chevron { flex-shrink: 0; }
+.import-mapping-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+.import-mapping-row select { max-width: 60%; }
+
+/* ---------- Settings page ---------- */
+/* A plain label + control row — Appearance's dark-mode switch, Currency's
+   select — both simple enough not to need their own dedicated layout each. */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: var(--space-sm);
+}
+.settings-row select { font-size: 14px; }
+
+/* Settings > Layout's own live previews — a row's label doubles as the
+   button that opens/closes a small example of what the setting actually
+   does (see SettingsLayoutSection.jsx's own comment for why). Same
+   disclosure-chevron convention as .item-row-chevron/.provider-chevron
+   elsewhere (a plain, unscoped `.is-open` ancestor rather than a
+   dedicated modifier class, so this reads the exact same way those do)
+   and the same .xwrap/.xinner smooth-height collapse every other
+   reveal-on-open panel in this app already uses — nothing new invented
+   for either mechanic, just a new thing they're both applied to. */
+.settings-row-label-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.settings-row-label-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.settings-row-chevron { color: var(--ink-soft); flex: none; transition: transform 0.2s ease; }
+.is-open .settings-row-chevron { transform: rotate(90deg); color: var(--accent); }
+
+/* The preview itself — tinted background, an accent rule down the left
+   edge, and a small "Preview" eyebrow, deliberately unlike any real
+   settings row or card in this app so it never reads as another control
+   to interact with, just an example. */
+.settings-preview-box {
+  background: var(--accent-light);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+  padding: 10px 12px 12px;
+  margin: 8px 0 6px;
+}
+.settings-preview-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+  margin: 0 0 8px;
+}
+.settings-preview-eyebrow::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none; }
+.settings-preview-empty-note { margin: 0; font-size: 13px; color: var(--ink-soft); font-style: italic; }
+/* Settings > Layout's color-blind palette preview: the seven default
+   categories, each dot beside its name. */
+.settings-preview-categories { list-style: none; margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 13px; }
+/* Settings > Layout's "Item categories on a bill" preview: real item rows. */
+.settings-preview-items > div + div .item-group-head { margin-top: var(--space-sm); }
+.settings-preview-categories li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+
+/* The Budgets position preview's own bar rows — same colors/shape as the
+   real .stats-bar-row on Your Stats (accent fill, warn when over budget),
+   but with flexible rather than fixed label/value column widths: those
+   fixed widths (110px/130px) are sized for the full-width Stats page and
+   would force this preview box wider than a phone's settings page ever
+   gets, or overflow it, if reused as-is here. */
+.settings-preview-stats-mock { display: flex; flex-direction: column; gap: 8px; }
+.settings-preview-budgets-block { background: var(--surface); border-radius: 8px; padding: 9px 10px; }
+.settings-preview-budgets-title { font-family: var(--font-display); font-size: 12px; font-weight: 600; margin: 0 0 7px; }
+.settings-preview-budget-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 7px; }
+.settings-preview-budget-row:last-child { margin-bottom: 0; }
+.settings-preview-budget-label {
+  flex: 0 1 80px; min-width: 0; color: var(--ink-soft); display: flex; align-items: center; gap: 5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.settings-preview-budget-track { flex: 1; min-width: 30px; height: 8px; background: var(--surface); border-radius: 999px; overflow: hidden; }
+.settings-preview-budget-fill { height: 100%; border-radius: 999px; background: var(--accent); }
+.settings-preview-budget-fill.over-budget { background: var(--negative); }
+.settings-preview-budget-value { flex: none; white-space: nowrap; }
+
+/* Spending thresholds / scan settings, collapsed by default on the
+   Settings page — same visual language as .guide-section (Guide.jsx) but
+   kept as its own rule rather than sharing that class, since the two
+   features aren't otherwise related and shouldn't end up coupled just
+   because they happen to look alike. */
+.collapsible-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+.collapsible-section summary {
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+}
+.collapsible-section[open] summary { margin-bottom: var(--space-sm); }
+
+/* "Bring your own AI chat" section, ImportBankStatement.jsx — the prompt
+   text is shown read-only (pre-wrap so it's actually readable, not one
+   unbroken line) alongside a one-click copy button, then a paste box for
+   whatever CSV comes back. */
+.byo-ai-prompt {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-sm);
+  margin: var(--space-sm) 0;
+}
+.byo-ai-paste-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+}
+.byo-ai-paste {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  font-family: inherit;
+  font-size: 13px;
+}
+/* Group settings > Subscriptions: title + details as one flowing line,
+   the category's dot and name on a line of their own underneath. */
+.subscription-summary { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+
+/* ---------- Settings page ---------- */
+/* Breaks out of .page's own horizontal padding so the nav rail and the
+   vertical divider between it and content can run flush to both edges,
+   the way a settings sidebar reads as one — .settings-nav/.settings-content
+   each carry their own inner padding back in below instead. */
+.settings-shell {
+  display: flex;
+  align-items: flex-start;
+  margin: 0 calc(var(--space-md) * -1);
+}
+.settings-nav {
+  width: 52px;
+  flex-shrink: 0;
+  background: var(--surface-tint);
+  border-right: 1px solid var(--border);
+  padding: var(--space-sm) 6px var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Stays in view as the content column scrolls past it, same idea as
+     .pagination staying anchored while everything else moves — nav is
+     short and fixed (7 sections + Sign Out), content can run much longer. */
+  position: sticky;
+  top: 0;
+  align-self: stretch;
+  transition: width 0.15s ease;
+}
+.settings-shell.expanded .settings-nav { width: 148px; }
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 8px;
+  border-radius: 9px;
+  cursor: pointer;
+  text-align: left;
+  justify-content: center;
+}
+.settings-shell.expanded .nav-item { justify-content: flex-start; }
+.nav-item .label {
+  display: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.settings-shell.expanded .nav-item .label { display: inline; }
+.nav-item:hover { background: var(--surface-tint); }
+.nav-item.active { background: var(--accent-light); color: var(--accent-dark); }
+.nav-spacer { flex: 1; }
+.nav-item.signout {
+  color: var(--warn);
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding-top: 14px;
+}
+.nav-item.signout:hover { background: var(--warn-light); }
+/* Group Settings' own Danger Zone tab — same warm slot/divider as
+   .signout above, but (unlike Sign Out) a real, selectable section, so
+   this needs its own active state rather than inheriting .nav-item.active
+   (which is styled for the ordinary accent palette, wrong color here). */
+.nav-item.danger {
+  color: var(--warn);
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding-top: 14px;
+}
+.nav-item.danger:hover { background: var(--warn-light); }
+.nav-item.danger.active { background: var(--warn-light); color: var(--warn); }
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--space-md);
+}
+
+/* A row-count-scale "budget" glyph next to Settings' own version pill —
+   see version-row below — reusing the same font-family as everywhere else
+   numbers line up (mono, tabular by nature). */
+.version-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: var(--space-sm); }
+.version-pill { font-size: 14px; background: var(--surface-tint); padding: 3px 10px; border-radius: 999px; }
+.whats-new { list-style: none; margin: var(--space-sm) 0 var(--space-lg); padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.whats-new li { font-size: 13.5px; padding-left: 18px; position: relative; line-height: 1.5; }
+.whats-new li::before { content: '—'; position: absolute; left: 0; color: var(--accent); }
+.update-check-box { border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-md); }
+.update-check-btn { margin-top: 10px; }
+.update-status { display: flex; align-items: center; gap: 8px; font-size: 13.5px; margin-top: 10px; min-height: 20px; }
+.update-ok { color: var(--accent-dark); font-weight: 600; }
+.update-available { color: var(--warn); font-weight: 600; }

@@ -11,7 +11,7 @@ printf '%s' "$cmd" | grep -qE '\bgit[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:s
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 changed=$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null) || exit 0
 
-hits=$(printf '%s\n' "$changed" | grep -E '^(src/styles\.css|index\.html|src/lib/categories\.js|src/components/icons\.jsx|public/favicon\.svg|public/icon-[^/]*\.png)$')
+hits=$(printf '%s\n' "$changed" | grep -E '^(src/styles\.css|src/styles/.*\.css|index\.html|src/lib/categories\.js|src/components/icons\.jsx|public/favicon\.svg|public/icon-[^/]*\.png)$')
 # vite.config.js only counts when the PWA theme/background colour changed.
 if printf '%s\n' "$changed" | grep -qx 'vite.config.js' &&
    git show HEAD -- vite.config.js | grep -qE '^[+-][^+-].*(theme_color|background_color)'; then

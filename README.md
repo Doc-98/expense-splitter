@@ -142,8 +142,10 @@ expense-splitter/
 │   ├── App.jsx                 # The route table itself, plus top-level providers
 │   ├── main.jsx                # Entry point — mounts <App>, nothing else
 │   ├── supabaseClient.js       # The one Supabase client instance, imported wherever it's needed
-│   └── styles.css              # The entire app's CSS — one file, no CSS-in-JS, no per-component
-│                                #   stylesheets, no Tailwind
+│   ├── styles.css              # The app's CSS entry: the cascade-layer order plus one @import per file
+│   ├── styles/                 # The app's CSS, split by area (tokens, base, layout, components/, pages/,
+│   │                            #   utilities, print) — plain CSS, no CSS-in-JS, no Tailwind
+│   └── testing/                # Test-only helpers (e.g. readStylesheet for tests that check the CSS)
 ├── vercel.json                 # Sends every path to index.html (it's a single-page app) — see "Run it / deploy it"
 ├── vite.config.js              # Build config, plus deriving APP_VERSION from git history
 ├── vitest.config.js            # Deliberately its own file, not merged into vite.config.js —
@@ -182,13 +184,20 @@ adding a fifth provider to any one of them, or a fifth AI-calling
 feature altogether, means adding a file in a known shape rather than
 inventing a new pattern.
 
-**Why one `styles.css` instead of CSS-in-JS or per-component
+**Why plain CSS files instead of CSS-in-JS or per-component
 stylesheets.** Same reasoning as this app's charts being hand-rolled
 SVG instead of a charting library (see `PieChart.jsx`/`LineChart.jsx`'s
 own comments) — no build-time CSS tooling beyond what Vite already
-does out of the box, and one file means one set of design tokens
-(`:root` custom properties for color/spacing/type) that every component
-already shares rather than re-declaring.
+does out of the box, and one set of design tokens (`:root` custom
+properties for color/spacing/type/shadows, in `src/styles/tokens.css`)
+that every component shares rather than re-declaring. The CSS is split by
+area under `src/styles/` and ordered with cascade layers declared in
+`src/styles.css`: `tokens, base, layout, components, pages, utilities,
+print`. A later layer beats an earlier one whatever the selectors'
+specificity, so a page's rule never needs a longer selector to beat a
+component's, and a rule only competes with the rules in its own layer. Add
+a rule to the file for its area; `src/testing/readStylesheet.js` gives tests
+the whole stylesheet as one text, in cascade order.
 
 **Why no top-level `tests/` directory.** Every test file sits directly
 next to what it tests — `Foo.jsx` → `Foo.test.jsx`,
@@ -1106,7 +1115,7 @@ than by eye: each clears 3:1 against the page in both themes, and any two
 stay clearly apart for full color vision — *any* two, because pie slices sort
 by amount, so any pair can end up side by side. What's saved on a category is
 the preset's hex; what's painted goes through `categoryColor()`, which turns a
-preset into `var(--category-N)`. `styles.css` defines those variables per
+preset into `var(--category-N)`. `src/styles/tokens.css` defines those variables per
 theme (dark mode gets its own lighter steps) and for the **color-blind
 palette** (Settings → Layout, per device): the same color families re-stepped
 in lightness so any two stay apart under the two common kinds of red-green

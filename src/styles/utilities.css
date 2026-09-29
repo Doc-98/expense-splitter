@@ -1,0 +1,18 @@
+/* The few classes that must win over everything else: .visually-hidden, .nowrap.
+   Layer: utilities (see src/styles.css for the order). */
+
+/* Visible only to screen readers — same pattern most component libraries
+   ship, kept here as a shared utility rather than one-off inline styles
+   since BootSplash isn't the last place this'll be useful. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.nowrap { white-space: nowrap; }

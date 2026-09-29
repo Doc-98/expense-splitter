@@ -1,0 +1,151 @@
+/* Dropdown menus and popovers: bill and row actions, invite, share.
+   Imported before buttons.css: a few "Remove" links carry both .btn-link and
+   .dropdown-item-warn, and .btn-link has always won their colour.
+   Layer: components (see src/styles.css for the order). */
+
+/* .dropdown-item/.dropdown-item-warn stay — BillActionsMenu.jsx's own "⋮"
+   popover still uses them, independent of the account dropdown they were
+   first built for (now gone). */
+.dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 8px 4px;
+  border-top: 1px solid var(--border);
+}
+.dropdown-item:first-of-type { border-top: none; }
+.dropdown-item-warn { color: var(--warn); }
+/* GroupGuestsSection's "Get claim link…" while its token is still being
+   fetched (see ensureClaimToken) — muted and inert rather than hidden, so
+   the menu's layout doesn't jump the instant it opens. */
+.dropdown-item:disabled { color: var(--ink-soft); cursor: default; }
+
+.bill-menu-wrap { position: relative; display: flex; align-items: center; }
+.bill-menu-btn {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.bill-menu-btn:hover { color: var(--ink); }
+.bill-menu-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px var(--space-md);
+  min-width: 140px;
+  box-shadow: var(--shadow-popover);
+  z-index: 10;
+}
+
+/* Same "⋮" pattern as .bill-menu-* above, under its own name rather than
+   reused directly — this one's on the Settings page's Groups list (see
+   SettingsGroupsSection.jsx), not a bill row. */
+.row-menu-wrap { position: relative; }
+.row-menu-btn {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.row-menu-btn:hover { color: var(--ink); }
+.row-menu-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px var(--space-md);
+  min-width: 140px;
+  box-shadow: var(--shadow-popover);
+  z-index: 10;
+}
+
+.invite-menu-wrap { position: relative; }
+.invite-menu-popover {
+  /* Anchored to the button's right edge: the Invite button sits at the
+     right of the Members header, so opening rightwards (left: 0) pushed
+     most of the menu off-screen on a phone. */
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  max-width: calc(100vw - 2 * var(--space-md));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: var(--space-md);
+  min-width: 220px;
+  box-shadow: var(--shadow-popover);
+  z-index: 10;
+  text-align: center;
+}
+.invite-qr {
+  display: block;
+  width: 160px;
+  height: 160px;
+  margin: 0 auto var(--space-sm);
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  border: 1px solid var(--border);
+}
+.invite-hint { margin: 0 0 var(--space-sm); font-size: 13px; }
+
+.share-button-wrap { position: relative; display: flex; align-items: center; gap: 10px; margin-top: var(--space-sm); }
+/* Icon mode (GroupView.jsx's header, alongside the plain .icon-btn Stats/
+   Settings links) — no margin-top to throw it out of line with its icon
+   siblings, and no gap needed since there's nothing but the trigger button
+   itself most of the time (the copy-status message is positioned off to
+   the side, not inline — see .share-status-icon below). */
+.share-button-wrap-icon { margin-top: 0; gap: 0; }
+.share-menu-popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px var(--space-md);
+  min-width: 180px;
+  box-shadow: var(--shadow-popover);
+  z-index: 10;
+}
+/* Right-anchored variant — for a trigger sitting near the right edge of a
+   narrow header (GroupView.jsx's Share icon), where the default left:0
+   anchor would push the menu's right edge past the viewport instead of
+   opening safely inward. */
+.share-menu-popover-right { left: auto; right: 0; }
+.share-status { font-size: 13px; }
+/* Icon mode's own copy-status message — a header packed tight with three
+   icon buttons has no spare inline room for this without shoving Stats/
+   Settings around every time it briefly appears, so it floats below the
+   trigger instead, same idea as .share-menu-popover-right. */
+.share-status-icon {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  z-index: 10;
+}

@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Guards the contrast rules stated at the top of src/styles.css (and in the
+// Guards the contrast rules stated in src/styles/tokens.css (and in the
 // design system's brand book), in both themes, reading the colours straight
 // from the stylesheet so a changed token can't slip past:
 //   - every text colour is ≥ 7:1 (WCAG AAA) on every ground it can land on
@@ -8,9 +8,9 @@
 //   - category colours (both palettes) are ≥ 3:1 as marks
 //   - every text colour in the print styles is ≥ 7:1 on paper white
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readStylesheet } from '../testing/readStylesheet'
 
-const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+const css = readStylesheet().replace(/\/\*[\s\S]*?\*\//g, '')
 
 // Top-level `selector { body }` rules, braces matched so @media bodies stay whole.
 function rules(src) {

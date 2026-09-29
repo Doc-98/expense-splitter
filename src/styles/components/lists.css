@@ -1,0 +1,389 @@
+/* Card lists and bill rows (dividers, search, filters, bulk select), member and guest lists, pagination.
+   Layer: components (see src/styles.css for the order). */
+
+/* ---------- Card lists (groups, bills) ---------- */
+.card-list { list-style: none; padding: 0; margin: 0; }
+.card-list li + li { margin-top: var(--space-sm); }
+
+.card-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 500;
+}
+.card-list-item:hover { border-color: var(--accent); }
+/* Instant feedback the moment a press starts — whether it turns into a
+   plain tap or gets held long enough to trigger useLongPress.js's own
+   select-mode gesture, so there's never a dead stretch where nothing on
+   screen has reacted yet. */
+.card-list-item:active { border-color: var(--accent); background: var(--accent-light); }
+/* The ↑/↓-selected row (src/lib/useListKeyboardNav.js, shared by
+   GroupView.jsx's bill list and Groups.jsx's group list) — same accent
+   used for hover/focus elsewhere in the app, just on the whole row
+   instead of only the border, so it's readable at a glance while
+   scanning down the list with the keyboard rather than a mouse. */
+.list-row-focused .card-list-item { border-color: var(--accent); background: var(--accent-light); }
+.chevron { color: var(--ink-soft); }
+.card-list-item-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* A title/name with no spaces at all (one long merchant name typed
+   without them, a group name someone ran together) has no natural place
+   to wrap — by default a flex item won't shrink below its own content's
+   min-content width regardless of a *container* like .card-list-item-main
+   setting min-width: 0 on itself, so that single unbroken run just
+   overflows its row instead of wrapping. That overflow doesn't stay
+   contained to the row: with nothing to shrink it, it widens the row,
+   which widens the page itself past the viewport, which is how one long
+   bill title turns into the *whole app* scrolling sideways on a phone.
+   min-width: 0 here lets this element shrink to fit at all;
+   overflow-wrap: anywhere is what then actually breaks the text (only
+   where a normal word-break can't) instead of just clipping or
+   overflowing it. Shared by both places a title/name sits directly next
+   to a chevron or an amount with no wrapper of its own — a bill's title
+   (GroupView.jsx) and a group's name (Groups.jsx). */
+.card-list-item-title { min-width: 0; overflow-wrap: anywhere; }
+.card-list-item-note {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+/* "(admin)" next to a group's name in Settings' Groups list — same idea as
+   GroupSettings.jsx's own member-list admin label, just inline with a
+   title instead of a whole row. */
+.role-tag { font-size: 12px; font-weight: 500; color: var(--accent-dark); }
+
+/* Right side of a bill row: the total/personal-status block, then
+   whichever trailing control the row actually has (the chevron, or the
+   select-mode checkbox) — grouped in their own flex row so
+   .card-list-item's own space-between still only ever sees two children
+   (the name/note block on the left, this group on the right), same as
+   before this existed. flex-shrink: 0 keeps this side at its natural
+   width under a long title/note — .card-list-item-main's own min-width:0
+   is what lets the *left* side shrink/ellipsize instead. */
+.bill-row-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+/* Two lines pairing with .card-list-item-main's own two (name/note) —
+   the total sized to match the name (font-size: inherit, same ambient
+   size, just bold for emphasis as the headline figure), the status line
+   sized to match the note (12px, italic, colored by
+   balance-negative/balance-positive — the same two classes the group's
+   own overall balance already uses elsewhere, not new colors invented
+   just for this). */
+.bill-amount-block { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.bill-amount-total { font-size: inherit; font-weight: 600; }
+.bill-amount-status { font-size: 12px; font-weight: 400; font-style: italic; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bill-amount-status-neutral { color: var(--ink-soft); }
+
+/* ---------- Bill list date dividers ---------- */
+.bill-month-divider {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: var(--space-lg) 0 var(--space-sm);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border);
+}
+/* .bill-month-group wrapper divs are siblings of nothing but each other
+   (see .bill-groups in GroupView.jsx) — .bill-month-divider itself can't
+   use :first-of-type for this, since each one is the lone h3 inside its
+   own wrapper div and would trivially match every time. The current
+   month sits at the top of the list with nothing above it to separate
+   from, so it's the one exception: no line, no extra gap. */
+.bill-month-group:first-child > .bill-month-divider { margin-top: 0; padding-top: 0; border-top: none; }
+.bill-day-divider {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin: var(--space-sm) 2px 6px;
+}
+
+/* No display/width rule needed here on purpose — .bill-list-item (this
+   <li>) is left as an ordinary block box precisely so its one child
+   (.bill-row-outer normally, or .card-list-item.bill-select-row in
+   select mode — always exactly one, never both) fills its full width
+   for free, the same way GroupGuestsSection's plain (non-flex) .guest-row
+   lets .guest-row-outer fill it. This used to be `display: flex;
+   align-items: center; gap: 8px`, back when this <li> really did lay out
+   two flex siblings side by side: .card-list-item (given flex: 1 to
+   claim the remaining width) and a separate .bill-menu-wrap floating
+   after it. That's exactly what regressed the whole row back down to a
+   content-width box, each one a different narrow size instead of a
+   uniform full-width rectangle: the two-sibling layout became today's
+   single .bill-row-outer child, but nothing carried flex: 1 over to
+   *it* — a flex item with no flex-grow of its own just sizes to its
+   content and leaves the container's remaining space empty, silently,
+   with no error to catch it. Removing the now-pointless display: flex
+   here instead of chasing it with another flex: 1 closes off that whole
+   failure mode: an ordinary block child can't under-fill its container
+   the way an unstretched flex item can, so there's nothing for a future
+   restructure of this <li>'s child to forget. */
+.bill-list-item .card-list-item {
+  width: 100%;
+  /* This row is a real <a> with two gestures bound to it — press-and-
+     hold (enters select mode, see useLongPress.js/enterSelectModeWith)
+     and swipe-to-delete (see bindBillRow/useSwipeToDelete.js), both in
+     GroupView.jsx. Without this, iOS Safari's own long-press-on-a-link
+     callout ("Open in New Tab" / "Share" / "Copy") pops up and fights
+     both gestures for the same press. -webkit-user-select stops a stray
+     text-selection magnifier from doing the same. (Android's equivalent
+     is a real, preventable `contextmenu` event — see useLongPress.js's
+     own onContextMenu for that half.) */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* The whole row as one bordered rectangle, ⋮ menu included — replaces a
+   chevron that didn't do anything with the same .bill-menu-wrap every
+   other row action already used, now living inside the card instead of
+   floating to the right of it. Only the swipe shell clips (it has to,
+   to hide the reveal strip off-screen until dragged into view); the
+   outer rectangle itself doesn't, so the menu's popover — a fixed
+   sibling of the shell, not nested inside it — is never at risk of
+   being clipped along with the sliding content next to it (same
+   reasoning as GroupGuestsSection's .guest-row-outer). */
+.bill-row-outer {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding-right: 6px;
+}
+.bill-row-outer:hover { border-color: var(--accent); }
+.bill-row-outer:active { border-color: var(--accent); background: var(--accent-light); }
+.list-row-focused .bill-row-outer { border-color: var(--accent); background: var(--accent-light); }
+.bill-row-shell { position: relative; overflow: hidden; flex: 1; min-width: 0; border-radius: var(--radius) 0 0 var(--radius); }
+/* .card-list-item's own border/radius would just double up on
+   .bill-row-outer's identical treatment one level up, so those are
+   turned back off — but NOT its background: this Link is the sliding
+   foreground inside the shell, and its background is what visually
+   covers .item-row-delete-action (same shell, positioned absolute
+   underneath) until swiped away — see .item-row-head's own identical
+   comment in the item list. Dropping the background here too would
+   leave the delete strip showing through at rest instead of hidden.
+   Scoped to .bill-row-shell specifically (not .bill-list-item
+   generally) so the select-mode checkbox row — .card-list-item
+   .bill-select-row, never inside a shell — keeps its own border
+   exactly as it already did. */
+.bill-row-shell .card-list-item {
+  border: none;
+  border-radius: 0;
+  /* The swipe-to-delete foreground (bills here, payments in History):
+     vertical scrolling stays with the browser, horizontal drags are
+     left to the swipe — without this the browser claims the drag part-way
+     and the row stops following the finger. Same as .item-row-head. */
+  touch-action: pan-y;
+}
+
+/* The ⋮ menu's own "Rename" (GroupView.jsx) swaps a bill row for this
+   form entirely rather than editing in place — same choice
+   GroupCategoriesSection/GroupGuestsSection already made for their own
+   rename, and .guest-rename-form itself is exactly the class Categories
+   already reuses for its own version, so this is a third reuse, not a
+   new one. Its own border/background/radius/padding here matches
+   .bill-row-outer/.card-list-item exactly (down to the same padding) so
+   a row swapping into "renaming" and back doesn't change size against
+   its still-normal siblings in the same list. */
+.bill-list-item > .guest-rename-form {
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+/* Reuses the same "receipt tape" search bar treatment as the in-app
+   guide's own search (.guide-search-input) — same torn-edge look, same
+   plain substring/case-insensitive matching underneath. */
+.bill-search-tape { display: flex; align-items: center; gap: var(--space-sm); }
+.bill-search-tape .guide-search-input { flex: 1; width: auto; }
+.bill-filter-toggle { flex-shrink: 0; white-space: nowrap; }
+.bill-filter-toggle-active { color: var(--accent-dark); font-weight: 600; }
+/* Retracts the whole search section (GroupView.jsx) — sits at the tape's
+   own right edge, after Filters, rather than a separate header row just
+   for it. */
+.bill-search-collapse { flex-shrink: 0; }
+.bill-filters-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  margin: 0 0 var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.bill-filters-group { display: flex; flex-direction: column; gap: 8px; }
+.bill-filters-group-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); flex-wrap: wrap; }
+/* Compact and inline rather than the full-width stretch .tab-row/.tab
+   normally have (built for TimeRangeSelector's 4-way granularity picker)
+   — this is a plain two-way switch sitting in a header row, not its own
+   section. */
+.bill-filters-tag-mode { display: inline-flex; width: auto; margin-bottom: 0; }
+.bill-filters-tag-mode .tab { flex: none; padding: 4px 10px; font-size: 13px; }
+
+.bulk-select-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  flex-wrap: wrap;
+}
+.bulk-select-actions { display: flex; align-items: center; gap: var(--space-sm); }
+.bulk-select-hint { width: 100%; margin: 4px 0 0; font-size: 13px; }
+
+/* A checkbox row reuses .card-list-item's card look as-is — same
+   space-between/align-items:center it already uses to pin the title on
+   the left and a trailing control (there, the chevron; here, the
+   checkbox) on the right, vertically centered against the name+note
+   block regardless of whether the note is present. gap is a *minimum*
+   spacing on top of space-between's own distribution, so the checkbox
+   never sits flush against a long title/note that's been ellipsized down
+   to fill the row. min-width: 0 on .card-list-item-main (its own rule)
+   is what lets that ellipsis actually happen instead of the checkbox
+   getting pushed off the row's edge or the row wrapping.
+   flex-direction/font-size/margin-bottom are not redundant with
+   .card-list-item here — this is the one .card-list-item usage that's a
+   <label> rather than a <Link>, and the plain `label { ... }` rule
+   further up this file (meant for a field-name-above-its-input form
+   layout: flex-direction: column, a smaller muted font-size, and a
+   margin-bottom to separate one labeled field from the next) otherwise
+   wins for every property it sets that neither .card-list-item nor
+   .bill-select-row also set themselves — CSS cascades per property, not
+   per rule, so .card-list-item's higher-specificity `display: flex`
+   winning doesn't help flex-direction, font-size, or margin-bottom stay
+   correct unless something here sets those same properties too. Left
+   unset, that's what stacked the checkbox under the name/note instead of
+   beside it, shrank and grayed the title text, and added an oversized
+   gap below each row on top of .card-list's own spacing between rows. */
+.bill-select-row { flex-direction: row; gap: 12px; font-size: inherit; margin-bottom: 0; cursor: pointer; }
+.bill-select-row input[type='checkbox'] { flex-shrink: 0; width: 18px; height: 18px; }
+
+.member-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.member-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+.member-list-item.former { border-style: dashed; }
+.member-list-actions { display: flex; gap: 10px; }
+.guest-rename-form { display: flex; gap: 8px; align-items: center; flex: 1; }
+.guest-rename-form input { flex: 1; }
+/* Active guest rows (GroupGuestsSection.jsx) — swipe-to-delete, same red
+   strip/width as .item-row-delete-action (reused verbatim). This list
+   isn't expandable the way an item row is, so there's no equivalent of
+   .item-row-head being a <button> — but it does have something ItemRow
+   never had to deal with: a "⋮" menu whose popover needs to escape this
+   row's own bounds. That can't live inside the swipe shell — overflow:
+   hidden, needed to clip the sliding name/delete-strip pair — or the
+   popover would get clipped right along with them. So .guest-row-shell
+   only wraps the part that actually slides (the delete strip + name);
+   .guest-row-outer is the real card (background/border/radius) and the
+   actual flex row, with the menu as a fixed sibling next to the shell,
+   immune to its clipping and never itself sliding. The editing (rename)
+   state bypasses both entirely, same as ItemRow's own expanded body only
+   ever showing on the non-swiping state — needs its own border/padding
+   here since .member-list-item no longer styles these rows (only the
+   *other* lists that don't swipe: Members, Categories, archived guests
+   below). */
+.guest-row-outer {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding-right: 6px;
+}
+.guest-row-shell { position: relative; overflow: hidden; flex: 1; min-width: 0; border-radius: 10px 0 0 10px; }
+.guest-row-name {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface);
+  padding: 10px 14px;
+  font-size: 14px;
+  touch-action: pan-y;
+}
+.guest-row > .guest-rename-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+/* Sticky to the bottom of the viewport rather than sitting inline at the
+   end of the list — a page's worth of bills can run from a couple of rows
+   to a full screen depending on how many day/month dividers fall on it, so
+   an inline pager landed in a different spot (sometimes off-screen below
+   the fold) every time you flipped pages. Floats as its own pill (same
+   border/shadow language as .account-dropdown) while there's more page
+   below to scroll to, then docks into its ordinary in-flow spot — right
+   after the bill list — once you've actually reached the bottom, same as
+   any other sticky-footer pattern.
+   This briefly went to `position: fixed` instead (permanently pinned,
+   never docking) to chase a real bug: switching pages via this pill's own
+   buttons while it was docked could make it jump, since docking depends
+   on in-flow position, which depends on how tall that page's bill list
+   is — and a new page is almost always a different height. Fixed
+   sidestepped that by never docking at all, which also gave up the actual
+   goal (dock at the real bottom of a long page) even when nothing was
+   being clicked. The jump is fixed at the source instead now — see
+   Pagination.jsx's own scroll handling on Prev/Next — so this goes back
+   to `sticky`. */
+.pagination {
+  position: sticky;
+  bottom: calc(var(--space-md) + env(safe-area-inset-bottom, 0px));
+  z-index: 5;
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  margin: var(--space-md) auto var(--space-lg);
+  padding: 6px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-popover);
+}
+.pagination-label { font-size: 13px; color: var(--ink-soft); min-width: 90px; text-align: center; }
+.pagination .btn-icon { font-size: 22px; }
+.pagination .btn-icon:disabled { opacity: 0.3; cursor: default; }
+/* The non-floating variant (see Pagination.jsx's `floating` prop) — a
+   payment history list already tucked inside a collapsed <details> has
+   no need to chase you down the page, and two independently-floating
+   pills on the same page would have no way to avoid landing on top of
+   each other if both ever ended up stuck at once. Plain in-flow
+   positioning sidesteps that; everything else about the pill (border,
+   padding, shape) stays the same. */
+.pagination-inline { position: static; margin: var(--space-md) auto 0; }
+
+/* ---------- Recurring bills ---------- */
+/* The row currently populating the form below — an accent outline, same
+   idea as GroupSettings.jsx's own "this row is mid-action" treatments,
+   so it's obvious at a glance which template "Edit recurring bill" is
+   actually pointed at once you've scrolled down to the form itself. */
+.member-list-item.row-editing { outline: 2px solid var(--accent); outline-offset: -1px; }

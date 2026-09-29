@@ -1,0 +1,301 @@
+/* A bill: editable title, summary, simple amount view, receipt and item rows, scanning.
+   Layer: pages (see src/styles.css for the order). */
+
+/* BillView.jsx's own title — an InlineEditable <button> inside the <h1>
+   above rather than a plain text node, so the page can be renamed right
+   where it's read instead of only from a group's bill list (see
+   GroupView.jsx's ⋮ menu). Redeclares the same font-family/size/weight
+   .page-header h1 already sets, deliberately not left to inherit them:
+   .item-editable's own reset (shared by every other InlineEditable button
+   in the app) intentionally leaves font untouched so each use can combine
+   it with whatever class already carries the right look, same reasoning
+   as .item-name/.amount-card-value — a <button> has no free ride to a
+   parent <h1>'s styling the way a plain text node would. display: block +
+   width: 100% + text-align: left makes it wrap and lay out exactly like
+   the plain text node it replaces (a bare <button> is inline-block and
+   shrinks to fit its own content otherwise). */
+.bill-title-editable {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+}
+input.bill-title-editable-input {
+  display: block;
+  width: 100%;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+/* ---------- Receipt / bill view ---------- */
+/* Still used by ImportBills.jsx's own "Paid by"/"Split with" review-wizard
+   rows (a separate flow, its own Multiple-payer/custom-split links) —
+   BillView.jsx's own bill-level fields moved to .detail-row below, so
+   these two no longer appear there, but stay for that other consumer. */
+.paid-by-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+.default-buyers-row { margin-bottom: var(--space-lg); }
+.default-buyers-row .muted { display: block; margin-bottom: 6px; }
+
+.bill-note {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+}
+.note-saved { margin-left: 6px; }
+
+.confirm-btn { display: block; width: 100%; margin-top: var(--space-lg); text-align: center; }
+
+/* ---------- Bill summary (collapsed by default) ----------
+   Note/Paid by/Category/default split/Date used to be five separate
+   always-visible rows above the receipt — now one summary line ("Paid by
+   You · Groceries · Sep 10"), tap to expand into the same fields. Same
+   CSS-only grid-rows expand as Scan Settings' provider picker (see
+   .provider-body-wrap there) and the item rows below — three places now
+   share the technique, worth a shared class pair if a fourth comes along. */
+.bill-summary { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: var(--space-md); overflow: hidden; }
+.bill-summary-head {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  background: none; border: none; padding: 12px 14px; cursor: pointer;
+  text-align: left; font-family: inherit; color: var(--ink); font-size: 13.5px;
+}
+.bill-summary-text { flex: 1; }
+.bill-summary-chev { color: var(--ink-soft); flex: none; transition: transform 0.2s ease; }
+.bill-summary.is-open .bill-summary-chev { transform: rotate(90deg); color: var(--accent); }
+.bill-summary-body {
+  padding: 0 14px 14px; border-top: 1px solid var(--border); margin-top: 2px; padding-top: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.detail-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.detail-row-label { font-size: 12.5px; color: var(--ink-soft); flex: none; }
+/* "Next item split with": allowed to shrink, so on a narrow row "split
+   with" (kept together) drops onto its own line instead of squeezing the
+   avatars. */
+.detail-row-label.next-item-split-label { flex: 0 1 auto; min-width: 0; }
+
+/* ---------- Simple bill view ----------
+   Shown instead of .receipt-tape when a bill has exactly one item and
+   hasn't been itemized in this session (see BillView.jsx's isSimpleView) —
+   no stored mode, purely items.length === 1. The item's own name stays
+   hidden here; there's nothing yet to disambiguate it from. */
+.amount-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px var(--space-md);
+  margin-bottom: 12px;
+  text-align: center;
+}
+.amount-card-label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; }
+/* A one-item bill's "Split with", under the amount — edits that one item. */
+.amount-card-split { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border); }
+.amount-card-split .avatar-row { justify-content: center; }
+/* A <button> under the hood (InlineEditable's non-editing state) — same
+   reset .item-editable already gives its own buttons (background/border/
+   padding/margin cleared, replaced by just the dotted underline), which
+   this was missing: without it, the browser's own default button chrome
+   showed through as a flat grey box behind the amount. */
+.amount-card-value {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font-size: 34px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--ink-soft);
+}
+.amount-card-value:hover { border-bottom-color: var(--ink); }
+input.amount-card-value-input {
+  font-size: 34px;
+  font-weight: 500;
+  text-align: center;
+  width: 100%;
+  color: inherit;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+/* The one way from the simple view into itemizing — tapping it reveals
+   the existing add-item form (and the item list, showing this bill's one
+   item alongside whatever gets added) rather than being a second, bespoke
+   entry point of its own. A dashed "not filled in yet" treatment, matching
+   how empty/add-new rows read elsewhere in the app. */
+.ghost-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 28px;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.ghost-row:hover { border-color: var(--accent); color: var(--accent-dark); }
+
+.receipt-tape {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  padding: var(--space-md);
+  margin-bottom: 28px;
+}
+.receipt-tape::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -10px;
+  height: 14px;
+  background:
+    linear-gradient(-45deg, var(--surface) 6px, transparent 0) 0 0,
+    linear-gradient(45deg, var(--surface) 6px, transparent 0) 0 0;
+  background-size: 14px 14px;
+  background-repeat: repeat-x;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.04));
+}
+
+/* ---------- Item rows ----------
+   Collapsed to one line by default (dot, name, a qty badge when it's not
+   1, the total) — tap to expand into the actual editable fields plus
+   split-with/category, rather than every item permanently showing its
+   full buyer row and category picker. Each is its own bordered card
+   (was a flat dashed-divided row) since it's independently interactive
+   now, same reasoning as Scan Settings' provider rows. */
+.item-row { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; }
+.item-row:last-child { margin-bottom: 0; }
+.item-row.is-open { border-color: var(--accent); }
+
+/* Clips .item-row-delete-action to the card's own rounded corners until
+   swiped into view — see useSwipeToDelete.js for the gesture itself.
+   .item-row-head is the sliding foreground: opaque (matches .receipt-tape's
+   own background) so it fully covers the delete strip until dragged away.
+   touch-action: pan-y leaves vertical scrolling to the browser natively
+   and tells it not to also try to handle the horizontal drag itself. */
+.item-row-head-shell { position: relative; overflow: hidden; border-radius: 8px; }
+.item-row-delete-action {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 76px;
+  background: var(--warn); color: var(--on-warn); border: none;
+  font-size: 12px; font-weight: 500; cursor: pointer;
+}
+.item-row-head {
+  position: relative; width: 100%; display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: none; padding: 10px 12px; cursor: pointer;
+  text-align: left; font-family: inherit; color: var(--ink); font-size: 13.5px;
+  touch-action: pan-y;
+}
+.item-name { font-weight: 500; }
+.item-qty-badge { font-size: 10.5px; color: var(--ink-soft); background: var(--surface-tint); border-radius: 5px; padding: 1px 5px; flex: none; }
+.item-dots {
+  flex: 1;
+  border-bottom: 1px dotted var(--border);
+  margin-bottom: 4px;
+}
+.item-warn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex: none; }
+.item-price { font-size: 14px; flex-shrink: 0; }
+.item-row-chevron { color: var(--ink-soft); flex: none; transition: transform 0.2s ease; }
+/* Two-line items: the name (and qty badge) on the first line, the
+   category's dot and name on a small second line (ItemRow.jsx). Price,
+   leader, warning dot and chevron all line up with the first line, like a
+   receipt's detail line tucked under the entry. */
+.item-row-head { align-items: flex-start; }
+.item-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.item-row-name-line { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.item-row-head .item-name { line-height: 20px; overflow-wrap: anywhere; }
+.item-row-head .item-dots { align-self: flex-start; height: 15px; margin-bottom: 0; min-width: 12px; }
+.item-row-head .item-price { line-height: 20px; }
+.item-row-head .item-warn-dot { margin-top: 7px; }
+.item-row-head .item-row-chevron { margin-top: 2px; }
+.item-row-category { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.item-row-category .category-dot { width: 8px; height: 8px; margin: 0; }
+.item-row-category-none { font-style: italic; }
+/* "Grouped by category" (Settings > Layout): a header per category, with
+   its subtotal, over that category's items. */
+.item-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin: var(--space-sm) 2px 6px;
+}
+.item-group-head:first-child { margin-top: 0; }
+.item-group-head .category-dot { width: 8px; height: 8px; margin: 0; }
+.item-group-total { margin-left: auto; font-weight: 500; }
+.item-row.is-open .item-row-chevron { transform: rotate(90deg); color: var(--accent); }
+
+.item-row-body {
+  padding: 0 12px 12px; border-top: 1px solid var(--border); margin-top: 2px; padding-top: 10px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.item-body-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.item-body-label { font-size: 11.5px; color: var(--ink-soft); flex: none; }
+.item-body-row select { font-size: 12px; padding: 4px 6px; }
+/* Icon-only, bottom-right of the expanded item — the swipe's own delete
+   strip is on the right too, so both ways to remove an item live on the
+   same side. */
+.item-remove-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  align-self: flex-end;
+  color: var(--warn); background: none; border: none; cursor: pointer;
+  padding: 8px; margin: -6px -8px -8px 0; border-radius: 8px;
+}
+.item-remove-btn:hover { background: var(--warn-light); }
+.item-name-input { width: 140px; max-width: 40vw; }
+/* Displayed amounts are set in the monospaced .mono face, so their digits
+   already line up; these editable ones stay in the body face, so they get
+   Inter's fixed-width digits instead. */
+.item-money-input { width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+.item-qty-input { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+
+.item-warning {
+  font-size: 12px;
+  color: var(--warn);
+  margin: 6px 0 0;
+}
+
+.receipt-total-row {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  padding-top: 10px;
+  margin-top: 4px;
+  border-top: 1px solid var(--ink);
+}
+
+.add-item-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-md);
+}
+.add-item-form input:first-child { flex: 2; }
+.add-item-form input { flex: 1; min-width: 0; }
+
+.scan-row { display: flex; flex-direction: column; margin-top: var(--space-sm); }
+.scan-buttons { display: flex; gap: 8px; }
+.scan-buttons .btn-secondary { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.scan-status { text-align: center; margin: 0; }
+
+.sample-link { display: block; text-align: center; margin: var(--space-xs) auto 0; }
