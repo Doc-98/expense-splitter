@@ -142,6 +142,10 @@ export default function GroupView({ activeBillId = null, printable = true }) {
     setNotice(location.state.notice)
     navigate(location.pathname, { replace: true, state: {} })
   }, [location.state, location.pathname, navigate])
+  // ...and it's about the bill that was open, so it goes once another is.
+  useEffect(() => {
+    if (activeBillId) setNotice(null)
+  }, [activeBillId])
   // Which bill (if any) is mid-rename via the ⋮ menu's own "Rename" —
   // same two-state shape (an id + a draft string) as GroupCategoriesSection/
   // GroupGuestsSection's own editing*Id/editing*Name pairs, and the same

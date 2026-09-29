@@ -33,7 +33,9 @@ export default function GroupSplit() {
             there is one, else the group's own. */}
         <GroupView activeBillId={activeBillId} printable={!activeBillId} />
       </div>
-      <div className="group-split-detail">
+      {/* data-own-keys: the list's ↑/↓/Enter/←/→ shortcuts leave keys
+          pressed in here alone (see useListKeyboardNav.js). */}
+      <div className="group-split-detail" data-own-keys>
         {activeBillId ? (
           // Keyed by bill, so switching bills starts the bill page fresh
           // (its own drafts and open rows) exactly as navigating between
