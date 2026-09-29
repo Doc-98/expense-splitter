@@ -1,0 +1,27 @@
+<!-- @dsCard height=288 -->
+<!doctype html><html><head><style>
+html,body{margin:0;background:var(--bg);}
+.cover{position:relative;width:960px;height:288px;overflow:hidden;background:var(--bg);}
+svg{position:absolute;inset:0;}
+.accent{fill:var(--accent);} .warn{fill:var(--warn);} .tint{fill:var(--accent-light);} .ink{fill:var(--ink);} .ground{fill:var(--bg);}
+.r{rx:var(--radius);}
+.text{position:absolute;left:40px;bottom:32px;max-width:440px;}
+.name{font-family:var(--font-display);font-weight:600;font-size:120px;line-height:.92;color:var(--ink);margin:0;letter-spacing:-0.01em;}
+.tag{font-family:var(--font-body);font-size:14px;color:var(--ink-soft);margin:16px 0 0;}
+</style></head><body><div class="cover">
+<!--
+  blocks: accent 160x240 receipt half + warn 112x192 receipt half (space-md × 10 / × 7; space-lg × 10 / × 8), accent-light 96x240 slab (space-lg × 4 / × 10), ink 48x48 square (space-lg × 2).
+  arrangement: one bill torn in two — two slabs hanging from the top edge, split by a space-md gap; the tint slab bleeds off the right and bottom, the ink square sits low as a satellite.
+  pattern: receipt scallops — ground-coloured discs of r = space-sm cut the bottom edge of each half; "a literal motif (ticket)": Spesa splits receipts.
+  scales: space-sm 10 (disc r, pitch 20), space-md 16 (gap), space-lg 24 (all block sides), radius 12 on the tint and ink blocks.
+-->
+<svg width="960" height="288" viewBox="0 0 960 288" aria-hidden="true">
+  <rect class="accent" x="560" y="0" width="160" height="240"/>
+  <circle class="ground" cx="570" cy="240" r="10"/><circle class="ground" cx="590" cy="240" r="10"/><circle class="ground" cx="610" cy="240" r="10"/><circle class="ground" cx="630" cy="240" r="10"/><circle class="ground" cx="650" cy="240" r="10"/><circle class="ground" cx="670" cy="240" r="10"/><circle class="ground" cx="690" cy="240" r="10"/><circle class="ground" cx="710" cy="240" r="10"/>
+  <rect class="warn" x="736" y="0" width="112" height="192"/>
+  <circle class="ground" cx="746" cy="192" r="10"/><circle class="ground" cx="766" cy="192" r="10"/><circle class="ground" cx="786" cy="192" r="10"/><circle class="ground" cx="806" cy="192" r="10"/><circle class="ground" cx="826" cy="192" r="10"/><circle class="ground" cx="846" cy="192" r="10"/>
+  <rect class="tint r" x="864" y="48" width="120" height="264"/>
+  <rect class="ink r" x="496" y="216" width="48" height="48"/>
+</svg>
+<div class="text"><p class="name">Spesa</p><p class="tag">Split receipts and expenses with your group, in real time.</p></div>
+</div></body></html>

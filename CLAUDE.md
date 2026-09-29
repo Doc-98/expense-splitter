@@ -88,6 +88,14 @@ expectations, etc.) — read that first, every session.
   component's README/preview, and assets. Read the artifact's
   `project/design-system.json` and each file before changing it, and set
   `lastChange.via` to `GitHub · doc-98/expense-splitter@<sha>`.
+- The repo carries an identical copy of the artifact's text files in
+  `docs/design-system/` (same paths as the artifact's `project/`, minus
+  `design-system.json` and the image/font files, which live in `public/`,
+  `src/assets/fonts/` and `icons.jsx`), so people and tools without access
+  to the artifact can read it. Every artifact change is copied there in
+  the same commit, byte for byte. `src/lib/designSystemTokens.test.js`
+  fails if `docs/design-system/tokens.json` and `src/styles/tokens.css`
+  drift apart, so a new or changed token must land in both.
 - The PostToolUse hook `.claude/hooks/remind-design-system-sync.sh`
   flags any commit touching those files, but it only reminds — the rule
   above applies whether or not it fires (e.g. a design change made in a

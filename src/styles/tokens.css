@@ -92,6 +92,9 @@
      ThemeContext): the brand green in light, the page itself in dark. */
   --browser-bar: #2A6253;
 
+  /* The dim behind a modal or bottom sheet: the same in both themes. */
+  --scrim: rgba(0, 0, 0, 0.5);
+
   color-scheme: light;
 }
 
