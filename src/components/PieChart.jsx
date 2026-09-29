@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { categoryColor } from '../lib/categoryPalette'
 
 const SIZE = 200
 const CENTER = SIZE / 2
@@ -87,7 +88,7 @@ export default function PieChart({ slices, format, onSelectCategory }) {
           <path
             key={arc.key}
             d={donutWedgePath(arc.startAngle, arc.endAngle)}
-            fill={arc.color}
+            style={{ fill: categoryColor(arc.color) }}
             className={`pie-chart-slice ${hoveredKey === arc.key ? 'active' : ''}`}
             onMouseEnter={() => setHoveredKey(arc.key)}
             onMouseLeave={() => setHoveredKey((cur) => (cur === arc.key ? null : cur))}
@@ -119,7 +120,7 @@ export default function PieChart({ slices, format, onSelectCategory }) {
               onClick={() => onSelectCategory?.(arc.key)}
               disabled={!onSelectCategory}
             >
-              <span className="category-dot" style={{ background: arc.color }} />
+              <span className="category-dot" style={{ background: categoryColor(arc.color) }} />
               <span className="pie-chart-legend-name">{arc.name}</span>
               <span className="mono pie-chart-legend-amount">{format(arc.amount)}</span>
               <span className="muted pie-chart-legend-percent">{Math.round(arc.percent)}%</span>

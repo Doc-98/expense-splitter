@@ -38,20 +38,9 @@ export async function deleteCategory(categoryId) {
   if (error) throw error
 }
 
-// A small preset palette rather than a full color picker — keeps adding a
-// category a one-tap affair instead of a whole UI of its own.
-export const CATEGORY_COLORS = [
-  '#4a86e8',
-  '#e69138',
-  '#6aa84f',
-  '#a479e2',
-  '#45818e',
-  '#cc4125',
-  '#999999',
-  '#f1c232',
-  '#c27ba0',
-  '#3d85c6',
-]
+// The preset color palette and categoryColor() live in categoryPalette.js,
+// which has no Supabase import, so components and tests can use them
+// without pulling in this module's client.
 
 // The exact starter set create_group() seeds into every new group's own
 // categories table (see supabase/schema.sql) — duplicated here as plain
@@ -60,13 +49,13 @@ export const CATEGORY_COLORS = [
 // schema.sql ever changes, this needs updating to match by hand — there's
 // no single source of truth shared between SQL and JS here.
 export const DEFAULT_CATEGORIES = [
-  { name: 'Groceries', color: '#4a86e8' },
-  { name: 'Eating out', color: '#e69138' },
-  { name: 'Household', color: '#6aa84f' },
-  { name: 'Bills & utilities', color: '#a479e2' },
-  { name: 'Transport', color: '#45818e' },
-  { name: 'Health', color: '#cc4125' },
-  { name: 'Other', color: '#999999' },
+  { name: 'Groceries', color: '#534195' },
+  { name: 'Eating out', color: '#c77510' },
+  { name: 'Household', color: '#359e59' },
+  { name: 'Bills & utilities', color: '#b572a0' },
+  { name: 'Transport', color: '#2384d8' },
+  { name: 'Health', color: '#a52030' },
+  { name: 'Other', color: '#6a6966' },
 ]
 
 // Merges categories from any number of groups into one list, deduped by

@@ -4,6 +4,7 @@ import { parseNumber, parseAmount } from '../lib/parseNumber'
 import BuyerPicker from './BuyerPicker'
 import InlineEditable from './InlineEditable'
 import { ChevronIcon, TrashIcon } from './icons'
+import { categoryColor } from '../lib/categoryPalette'
 
 // onUpdate(field, value) is called with one of 'name' | 'unit_price' |
 // 'quantity' | 'total_price' and the raw new value — BillView.jsx's
@@ -88,7 +89,7 @@ export default function ItemRow({
         </button>
         <button type="button" className="item-row-head" onClick={() => setOpen((o) => !o)} {...swipe.row}>
           {effectiveCategory && (
-            <span className="category-dot" style={{ background: effectiveCategory.color }} title={effectiveCategory.name} />
+            <span className="category-dot" style={{ background: categoryColor(effectiveCategory.color) }} title={effectiveCategory.name} />
           )}
           <span className="item-name">{item.name}</span>
           {quantity !== 1 && <span className="item-qty-badge">{quantity}&times;</span>}

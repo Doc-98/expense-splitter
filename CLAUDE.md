@@ -73,6 +73,28 @@ expectations, etc.) — read that first, every session.
   commit's own "(#123)" suffix), so unlike `WHATS_NEW` there's nothing
   about it that can drift out of sync by hand.
 
+## Design system
+
+- The Spesa design system artifact
+  (https://claude.ai/artifact/MS1SXZnKufV5iFF3qXPj2n) mirrors the app's
+  design and is kept in sync with it — standing preference, confirmed
+  2026-09-28. Any change that affects the design (colour or other tokens
+  in `src/styles.css`, a component's styling or states, fonts or weights
+  loaded in `index.html`, `CATEGORY_COLORS`, `icons.jsx`, the logo or app
+  icons, the PWA theme colour) gets mirrored into the artifact in the
+  same round of work as the commit, not left for later: `tokens.json`,
+  `components/bundle.css`, the brand book `README.md`, the affected
+  component's README/preview, and assets. Read the artifact's
+  `project/design-system.json` and each file before changing it, and set
+  `lastChange.via` to `GitHub · doc-98/expense-splitter@<sha>`.
+- The PostToolUse hook `.claude/hooks/remind-design-system-sync.sh`
+  flags any commit touching those files, but it only reminds — the rule
+  above applies whether or not it fires (e.g. a design change made in a
+  file it doesn't watch).
+- Values stay exact and verified: check contrast for any new text/ground
+  pair against the AAA rules in the brand book, and render a changed
+  preview before republishing.
+
 ## Product conventions
 
 - "Spent" / "expenses" — for a *personal* figure, unless a request

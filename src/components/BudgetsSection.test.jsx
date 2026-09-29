@@ -28,13 +28,13 @@ vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'user-m
 // of reaching for vi.importActual().
 vi.mock('../lib/categories', () => ({
   DEFAULT_CATEGORIES: [
-    { name: 'Groceries', color: '#4a86e8' },
-    { name: 'Eating out', color: '#e69138' },
-    { name: 'Household', color: '#6aa84f' },
-    { name: 'Bills & utilities', color: '#a479e2' },
-    { name: 'Transport', color: '#45818e' },
-    { name: 'Health', color: '#cc4125' },
-    { name: 'Other', color: '#999999' },
+    { name: 'Groceries', color: '#534195' },
+    { name: 'Eating out', color: '#c77510' },
+    { name: 'Household', color: '#359e59' },
+    { name: 'Bills & utilities', color: '#b572a0' },
+    { name: 'Transport', color: '#2384d8' },
+    { name: 'Health', color: '#a52030' },
+    { name: 'Other', color: '#6a6966' },
   ],
 }))
 

@@ -1,4 +1,10 @@
 /* ---------- Design tokens ---------- */
+/* Both themes meet WCAG AAA: every text color (--ink, --ink-soft,
+   --accent-dark, --negative, --warn) is at least 7:1 on every ground it
+   can land on (--bg, --surface, --surface-tint, --accent-light, and
+   --warn-light for --warn), labels on fills are 7:1 via --on-accent/--on-warn, and --border
+   and --accent (focus ring, bar fills) are at least 3:1 on every surface.
+   Check a new text/ground pairing against that before adding it. */
 :root {
   --bg: #FAF9F6;
   --surface: #FFFFFF;
@@ -10,13 +16,27 @@
      popovers, and everything else that isn't a list row are unaffected. */
   --surface-tint: #EDF3F0;
   --ink: #1F2A24;
-  --ink-soft: #5C6B63;
-  --border: #E4E1D8;
-  --accent: #2F6F5E;
-  --accent-dark: #23574A;
+  --ink-soft: #434E49;
+  /* Strong enough (3:1 on every surface) that borders alone set inputs,
+     rows and tiles apart, not just a change of fill. */
+  --border: #8F8463;
+  --accent: #2A6253;
+  --accent-dark: #225448;
   --accent-light: #DCEDE6;
-  --warn: #B54F30;
+  /* Money going out — "You owe", "You borrowed", over budget, spending
+     up. A true red, the partner of --accent-dark's green for money coming
+     in. Deliberately not --warn: debts are normal, errors aren't. */
+  --negative: #961916;
+  /* Errors and destructive actions — a rust, pushed as far from
+     --negative as it can go while still reading as danger. At AAA
+     lightness two reds can't be told apart by hue alone, so errors also
+     differ by form: .status-error carries a warning icon and a box. */
+  --warn: #7B3702;
   --warn-light: #F5E3DB;
+  /* Labels on --accent / --warn fills. Always use these rather than a
+     literal white: dark mode flips them to near-black. */
+  --on-accent: #FFFFFF;
+  --on-warn: #FFFFFF;
 
   --font-display: 'Fraunces', Georgia, serif;
   --font-body: 'Inter', system-ui, sans-serif;
@@ -32,19 +52,75 @@
 }
 
 [data-theme="dark"] {
-  --bg: #14201B;
-  --surface: #1E2E27;
-  --surface-tint: #25382F;
+  --bg: #111C17;
+  --surface: #16231D;
+  --surface-tint: #18261F;
   --ink: #EDEAE2;
-  --ink-soft: #93A79C;
-  --border: #33473D;
-  --accent: #3E9179;
+  --ink-soft: #ADBDB4;
+  --border: #5A7E6C;
+  --accent: #4BB093;
   --accent-dark: #8FDCC4;
-  --accent-light: #24443B;
-  --warn: #E2825F;
-  --warn-light: #3D2A20;
+  --accent-light: #1B3129;
+  --negative: #FFA093;
+  --warn: #EBAB87;
+  --warn-light: #2F2019;
+  --on-accent: #0B1310;
+  --on-warn: #0B1310;
 
   color-scheme: dark;
+}
+
+/* ---------- Category colours ----------
+   One variable per palette slot (src/lib/categories.js's CATEGORY_COLORS
+   order: Groceries, Eating out, Household, Bills & utilities, Transport,
+   Health, Other). categoryColor() turns a saved preset colour into its
+   var(--category-N), so what's painted follows the theme and the
+   colour-blind setting while the saved value never changes. Custom colours
+   bypass these entirely and show exactly as saved.
+
+   Default palette: every step clears 3:1 against bg/surface/surface-tint
+   in its theme, and any two stay ≥ 15 apart (OKLab ΔE×100, all pairs) for
+   full colour vision. Colour-blind readers get ~7 — distinguishable only
+   next to a label. */
+:root {
+  --category-1: #534195;
+  --category-2: #C77510;
+  --category-3: #359E59;
+  --category-4: #B572A0;
+  --category-5: #2384D8;
+  --category-6: #A52030;
+  --category-7: #6A6966;
+}
+[data-theme="dark"] {
+  --category-1: #725EC2;
+  --category-2: #D47C10;
+  --category-3: #20A857;
+  --category-4: #D465B5;
+  --category-5: #2997F5;
+  --category-6: #BE4149;
+  --category-7: #878683;
+}
+/* Colour-blind palette (Settings > Layout, stored per device — see
+   colorBlindPalette.js): same slots and colour families, re-stepped in
+   lightness so any two stay ≥ 8 apart under protanopia and deuteranopia
+   (Machado 2009 simulation, all pairs). The trade: full-colour-vision
+   separation drops to ~11, which is why it's opt-in rather than the
+   default. Still ≥ 3:1 on every surface. */
+:root[data-palette="colorblind"] {
+  --category-1: #4246A7;
+  --category-2: #8F5E01;
+  --category-3: #3C9A6B;
+  --category-4: #6C3A6F;
+  --category-5: #3C8DBB;
+  --category-6: #E26733;
+}
+[data-theme="dark"][data-palette="colorblind"] {
+  --category-1: #727EEC;
+  --category-2: #BB8A46;
+  --category-3: #287B53;
+  --category-4: #A34EAA;
+  --category-5: #4B9AC7;
+  --category-6: #C24B0E;
 }
 
 * { box-sizing: border-box; }
@@ -74,6 +150,9 @@ body {
 
 button { font-family: inherit; font-size: inherit; }
 input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px prevents iOS zoom-on-focus */
+/* The browser's default placeholder grey is too faint for AAA, especially
+   in dark mode — --ink-soft holds 7:1 on every surface an input sits on. */
+::placeholder { color: var(--ink-soft); opacity: 1; }
 
 /* Themed text-selection highlight — without this, selecting/auto-selecting
    text (e.g. InlineEditable's select() on entering edit mode, see that
@@ -81,9 +160,24 @@ input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px preve
    which reads as a jarring grey/light box against this app's dark theme
    (most visible on the simple bill view's big .amount-card-value-input,
    auto-selected the moment you tap it). */
-::selection { background: var(--accent); color: #fff; }
+::selection { background: var(--accent); color: var(--on-accent); }
 
 .mono { font-family: var(--font-mono); }
+
+/* One keyboard focus ring for every control (buttons, links, chips, tabs,
+   list rows…) rather than each browser's own default, which varies and
+   can disappear against the accent green. :focus-visible only, so a tap
+   or click doesn't leave a ring behind. --accent holds ≥4.5:1 against
+   every surface in both themes. Text inputs keep their own :focus rule
+   below (a ring on every focus, tap included, is what a field wants). */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Inside a container that clips its overflow (swipe-to-delete rows, the
+   collapsible bill summary, scrolling modals and lists), a ring drawn
+   outside the element would be cut off — draw it just inside instead. */
+.bill-row-shell :focus-visible, .guest-row-shell :focus-visible,
+.item-row-head-shell :focus-visible, .bill-summary :focus-visible,
+.provider-item :focus-visible, .modal-panel :focus-visible,
+.stats-table :focus-visible { outline-offset: -2px; }
 
 code {
   font-family: var(--font-mono);
@@ -433,17 +527,40 @@ input.bill-title-editable-input {
 /* The app-wide crash screen (ErrorBoundary.jsx). */
 .error-boundary-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-md); }
 .status-error {
+  position: relative;
   color: var(--warn);
   background: var(--warn-light);
-  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--warn);
+  /* Room on the left for the warning icon below. */
+  padding: var(--space-sm) var(--space-md) var(--space-sm) calc(var(--space-md) + 24px);
   border-radius: var(--radius);
   font-size: 14px;
+  line-height: 1.4;
   margin-top: var(--space-sm);
+}
+/* The warning triangle (DangerIcon in icons.jsx), in the message's own
+   color. An error never relies on its hue alone: --warn and --negative
+   are both reds, so the icon and the box are what mark an error. */
+.status-error::before {
+  content: '';
+  position: absolute;
+  left: var(--space-md);
+  /* centred on the first line: (14px × 1.4 − 16px) / 2 ≈ 2px */
+  top: calc(var(--space-sm) + 2px);
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  -webkit-mask: var(--icon-danger) center / contain no-repeat;
+  mask: var(--icon-danger) center / contain no-repeat;
+}
+:root {
+  --icon-danger: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M12 3.5L2 20.5h20L12 3.5z' stroke='%23000' stroke-width='1.8' stroke-linejoin='round'/%3E%3Cpath d='M12 9.5v5' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17.2' r='1.15' fill='%23000'/%3E%3C/svg%3E");
 }
 
 .status-success {
   color: var(--accent-dark);
   background: var(--accent-light);
+  border: 1px solid var(--accent);
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius);
   font-size: 14px;
@@ -465,9 +582,9 @@ input.bill-title-editable-input {
 .btn-primary:active, .btn-secondary:active, .btn-danger:active { transform: scale(0.98); }
 .btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled { opacity: 0.55; cursor: default; }
 
-.btn-primary { background: var(--accent); color: white; }
+.btn-primary { background: var(--accent); color: var(--on-accent); }
 .btn-secondary { background: var(--accent-light); color: var(--accent-dark); }
-.btn-danger { background: var(--warn); color: white; }
+.btn-danger { background: var(--warn); color: var(--on-warn); }
 
 .btn-link {
   background: none;
@@ -515,6 +632,40 @@ input.bill-title-editable-input {
    own hamburger, tinted while its expanded nav is showing. */
 .icon-btn.active-toggle { background: var(--accent-light); color: var(--accent-dark); }
 
+/* ---------- Touch targets ----------
+   Every small control gets a tap area of at least 44×44px (WCAG 2.5.5,
+   the AAA target the rest of the app aims for) without changing how it
+   looks: an invisible ::after, centred on the control, that grows to 44px
+   in whichever direction the control is smaller. It only helps where
+   there's room — a neighbour closer than that would share the extra
+   strip — so tight clusters get real 44px boxes instead (the avatar rows'
+   36px + 8px gap, the time-range arrows and the sign-in links below).
+   .input-submit-btn is absolutely positioned already, which is all the
+   ::after needs; the rest get position: relative for it. */
+.icon-btn, .btn-icon, .btn-link, .row-submit-btn, .install-banner-dismiss,
+.account-chip, .tab, .avatar, .avatar-picker-option { position: relative; }
+.icon-btn::after, .btn-icon::after, .row-submit-btn::after, .input-submit-btn::after,
+.install-banner-dismiss::after, .account-chip::after, .avatar::after, .avatar-picker-option::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
+/* Text links and tabs are already wide enough and often sit side by side
+   (Save / Cancel), so theirs only grows vertically. */
+.btn-link::after, .tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: max(100%, 44px);
+  transform: translateY(-50%);
+}
+
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-soft); margin-bottom: var(--space-sm); }
 
 input[type="text"], input[type="email"], input[type="password"], input:not([type]), select {
@@ -552,7 +703,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   border: none;
   border-radius: 50%;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -579,7 +730,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   border: none;
   border-radius: 50%;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -631,11 +782,11 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   color: var(--ink-soft);
   cursor: pointer;
 }
-.tab.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+.tab.active { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--border), 0 1px 2px rgba(0,0,0,0.08); }
 
 .auth-form { display: flex; flex-direction: column; }
 .auth-form .btn-primary { margin-top: 4px; }
-.auth-form .btn-link { margin-top: var(--space-sm); text-align: center; }
+.auth-form .btn-link { margin-top: var(--space-xs); text-align: center; min-height: 44px; }
 .auth-magic-link-hint { margin: var(--space-sm) 0 0; font-size: 13px; line-height: 1.4; }
 /* A short caption directly under one field, not a whole form — tighter
    than .auth-magic-link-hint (which sits under the whole magic-link
@@ -721,7 +872,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    just for this). */
 .bill-amount-block { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .bill-amount-total { font-size: inherit; font-weight: 600; }
-.bill-amount-status { font-size: 12px; font-style: italic; white-space: nowrap; }
+.bill-amount-status { font-size: 12px; font-weight: 400; font-style: italic; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .bill-amount-status-neutral { color: var(--ink-soft); }
 
 /* ---------- Bill list date dividers ---------- */
@@ -1141,30 +1292,34 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    used both here (a bill's default split) and on each item row below.
    Reuses .buyer-chip's own active-state logic (filled/accent when on,
    outline when off), just circular instead of a pill with a name in it. */
-.avatar-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.avatar-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* 36px + the row's 8px gap = a 44px pitch, so the invisible 44px tap area
+   (see "Touch targets" below) meets its neighbour's exactly — no overlap,
+   no dead strip in between. Was 26px with a 6px gap, which is where most
+   mis-taps on a busy bill came from. */
 .avatar {
-  width: 26px; height: 26px; border-radius: 50%; flex: none; padding: 0;
+  width: 36px; height: 36px; border-radius: 50%; flex: none; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 600;
+  font-size: 15px; font-weight: 600;
   border: 1px solid var(--border); color: var(--ink-soft); background: var(--surface);
   cursor: pointer;
   /* Double-tap means "only this buyer" on the split-with pickers — without
      this, iOS Safari would take it as double-tap-to-zoom instead. */
   touch-action: manipulation;
 }
-.avatar.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.avatar.former { border-style: dashed; opacity: 0.7; }
+.avatar.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.avatar.former { border-style: dashed; }
 /* RecordPayment.jsx's own avatar-picker layout — a person already picked
    on the *other* side (Who paid vs. Paid to) dims and stops accepting taps
    here, the same "can't pick the same person twice" rule the dropdown
    layout already gets for free from each <option disabled>. */
 .avatar:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
-/* The two bigger options on top of the 26px default above — see the
+/* The two bigger options on top of the 36px default above — see the
    "Split-with avatar size" picker in Settings > Profile (avatarSizeSpec()
    in groupViewPreferences.js is the one place that decides both this
    class and the icon's own px, so they can't drift). */
-.avatar.avatar-md { width: 34px; height: 34px; font-size: 14px; }
-.avatar.avatar-lg { width: 42px; height: 42px; font-size: 17px; }
+.avatar.avatar-md { width: 42px; height: 42px; font-size: 17px; }
+.avatar.avatar-lg { width: 48px; height: 48px; font-size: 20px; }
 
 /* The size picker itself — three buttons, each previewing its size with a
    real (non-interactive) .avatar circle rather than just a text label. */
@@ -1180,17 +1335,17 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 
 /* The 16-icon grid itself — Settings > Profile (account default) and
    Group Settings > General (per-group override) both use this, see
-   AvatarPicker.jsx. Slightly bigger than .avatar's 26px since these are
-   the actual tap targets for choosing one, not a compact inline row. */
+   AvatarPicker.jsx. Same 36px as .avatar and the same 8px gap, so each
+   option also gets a full 44px tap area (see "Touch targets"). */
 .avatar-picker { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .avatar-picker-option {
-  width: 34px; height: 34px; border-radius: 50%; flex: none; padding: 0;
+  width: 36px; height: 36px; border-radius: 50%; flex: none; padding: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 12px; font-weight: 600;
   border: 1px solid var(--border); color: var(--ink-soft); background: var(--surface);
   cursor: pointer;
 }
-.avatar-picker-option.is-selected { background: var(--accent); border-color: var(--accent); color: #fff; }
+.avatar-picker-option.is-selected { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
 /* Settings > Profile's collapsed "Choose your avatar" row (Group
    Settings > General's per-group picker still shows the grid outright —
@@ -1227,7 +1382,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   justify-content: center;
   background: var(--accent);
   border: 1px solid var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 12px;
   font-weight: 600;
 }
@@ -1344,7 +1499,7 @@ input.amount-card-value-input {
 .item-row-head-shell { position: relative; overflow: hidden; border-radius: 8px; }
 .item-row-delete-action {
   position: absolute; top: 0; right: 0; bottom: 0; width: 76px;
-  background: var(--warn); color: #fff; border: none;
+  background: var(--warn); color: var(--on-warn); border: none;
   font-size: 12px; font-weight: 500; cursor: pointer;
 }
 .item-row-head {
@@ -1429,8 +1584,11 @@ input.item-editable-input, textarea.item-editable-input {
   background: var(--surface);
 }
 .item-name-input { width: 140px; max-width: 40vw; }
-.item-money-input { width: 64px; text-align: right; }
-.item-qty-input { width: 44px; text-align: right; }
+/* Displayed amounts are set in the monospaced .mono face, so their digits
+   already line up; these editable ones stay in the body face, so they get
+   Inter's fixed-width digits instead. */
+.item-money-input { width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+.item-qty-input { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Still used by ImportBills.jsx's own review-wizard chips (see the
    .paid-by-row comment above) and Group View's category filter — not by
@@ -1447,7 +1605,7 @@ input.item-editable-input, textarea.item-editable-input {
   cursor: pointer;
 }
 .buyer-chip.active { background: var(--accent-light); border-color: var(--accent); color: var(--accent-dark); }
-.buyer-chip.former { border-style: dashed; opacity: 0.7; }
+.buyer-chip.former { border-style: dashed; }
 .buyer-chip input { display: none; }
 
 .item-warning {
@@ -1718,7 +1876,7 @@ input.item-editable-input, textarea.item-editable-input {
   padding: 10px 14px;
   font-size: 14px;
 }
-.member-list-item.former { opacity: 0.7; border-style: dashed; }
+.member-list-item.former { border-style: dashed; }
 .member-list-actions { display: flex; gap: 10px; }
 .guest-rename-form { display: flex; gap: 8px; align-items: center; flex: 1; }
 .guest-rename-form input { flex: 1; }
@@ -1966,7 +2124,7 @@ input.item-editable-input, textarea.item-editable-input {
   overflow: hidden;
 }
 .stats-bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
-.stats-bar-fill.over-budget { background: var(--warn); }
+.stats-bar-fill.over-budget { background: var(--negative); }
 .stats-bar-value { width: 70px; text-align: right; flex-shrink: 0; }
 .threshold-bar-value { width: 130px; text-align: right; flex-shrink: 0; }
 .stats-bar-group { margin-bottom: 8px; }
@@ -1988,7 +2146,20 @@ input.item-editable-input, textarea.item-editable-input {
 .time-range-label-stack { display: flex; flex-direction: column; align-items: center; min-width: 110px; }
 .time-range-year { font-size: 11px; color: var(--ink-soft); line-height: 1.4; }
 .time-range-label { font-size: 14px; font-weight: 500; text-align: center; }
-.time-range-nav .btn-icon { font-size: 24px; padding: 4px 5px; }
+.time-range-nav .btn-icon {
+  font-size: 24px; padding: 4px 5px;
+  /* The arrows sit only 6px apart, too close for the invisible tap area
+     (see "Touch targets") to grow sideways without overlapping — so each
+     is a real 44px box instead, glyph unchanged. */
+  min-width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.time-range-nav .btn-icon::after { content: none; }
+/* Week view has six arrows (‹‹‹ ‹‹ ‹ · › ›› ›››): at 44px each the row
+   needs ~410px and would wrap on a 360px phone, so there they keep their
+   natural width and only the height goes to 44px. Month view (four
+   arrows, ~310px) keeps the full 44×44. */
+.time-range-nav:has(> .btn-icon:nth-of-type(6)) .btn-icon { min-width: 0; }
 .time-range-nav .btn-icon:disabled { opacity: 0.3; cursor: default; }
 /* The extra "jump ~1 month" / "jump ~1 year" tiers — smaller and softer
    than the ordinary single-step ‹ / ›, which stays the biggest/clearest
@@ -2045,7 +2216,11 @@ input.item-editable-input, textarea.item-editable-input {
 .pagination-inline { position: static; margin: var(--space-md) auto 0; }
 
 .balance-positive { color: var(--accent-dark); }
-.balance-negative { color: var(--warn); }
+.balance-negative { color: var(--negative); }
+/* The amount is the part of a balance that matters most: bold it in both
+   directions, whether the whole line is colored or only the amount. */
+.balance-line .mono,
+.balance-amount { font-weight: 600; }
 
 .stale-balance {
   display: inline-block;
@@ -2180,6 +2355,9 @@ input.item-editable-input, textarea.item-editable-input {
   padding: 4px 2px;
 }
 .guide-search-input:focus { outline: none; }
+/* The field itself is borderless inside its torn-paper strip, so the
+   strip shows focus instead of the bare text. */
+.guide-search-tape:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .guide-search-input::placeholder { color: var(--ink-soft); }
 
 /* The compact/embedded-in-Settings group switcher (see GuideSection.jsx's
@@ -2310,7 +2488,7 @@ input.item-editable-input, textarea.item-editable-input {
 }
 .payer-row:last-of-type { border-bottom: none; }
 .payer-row span { flex: 1; font-size: 14px; }
-.payer-row input[type='text'] { width: 90px; text-align: right; }
+.payer-row input[type='text'] { width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
 .payer-row input[type='text']:disabled { opacity: 0.4; }
 .payer-total-row { margin-top: var(--space-md); font-size: 14px; font-weight: 600; text-align: center; }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--space-md); margin-top: var(--space-lg); }
@@ -2354,7 +2532,7 @@ input.item-editable-input, textarea.item-editable-input {
    requested specifically for dark mode once it moved off the account
    dropdown and onto its own settings row. */
 .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
-.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; left: 0; top: 50%; width: 100%; height: 44px; transform: translateY(-50%); margin: 0; cursor: pointer; }
 .switch-slider {
   position: absolute;
   inset: 0;
@@ -2424,6 +2602,10 @@ input.item-editable-input, textarea.item-editable-input {
 }
 .settings-preview-eyebrow::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none; }
 .settings-preview-empty-note { margin: 0; font-size: 13px; color: var(--ink-soft); font-style: italic; }
+/* Settings > Layout's color-blind palette preview: the seven default
+   categories, each dot beside its name. */
+.settings-preview-categories { list-style: none; margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 13px; }
+.settings-preview-categories li { display: flex; align-items: center; gap: 6px; min-width: 0; }
 
 /* The Budgets position preview's own bar rows — same colors/shape as the
    real .stats-bar-row on Your Stats (accent fill, warn when over budget),
@@ -2442,7 +2624,7 @@ input.item-editable-input, textarea.item-editable-input {
 }
 .settings-preview-budget-track { flex: 1; min-width: 30px; height: 8px; background: var(--surface); border-radius: 999px; overflow: hidden; }
 .settings-preview-budget-fill { height: 100%; border-radius: 999px; background: var(--accent); }
-.settings-preview-budget-fill.over-budget { background: var(--warn); }
+.settings-preview-budget-fill.over-budget { background: var(--negative); }
 .settings-preview-budget-value { flex: none; white-space: nowrap; }
 
 /* Spending thresholds / scan settings, collapsed by default on the
@@ -2618,6 +2800,10 @@ input.item-editable-input, textarea.item-editable-input {
   appearance: none;
 }
 .range-slider-input:focus { outline: none; }
+/* The two stacked range inputs span the whole track, so an outline on the
+   input itself would ring both at once — ring just the thumb being moved. */
+.range-slider-input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.range-slider-input:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
 .range-slider-input::-webkit-slider-runnable-track { -webkit-appearance: none; background: none; height: 4px; }
 .range-slider-input::-moz-range-track { background: none; height: 4px; border: none; }
 .range-slider-input::-webkit-slider-thumb {
@@ -2770,7 +2956,7 @@ input.item-editable-input, textarea.item-editable-input {
   min-width: 0;
 }
 .settings-shell.expanded .nav-item .label { display: inline; }
-.nav-item:hover { background: var(--border); }
+.nav-item:hover { background: var(--surface-tint); }
 .nav-item.active { background: var(--accent-light); color: var(--accent-dark); }
 .nav-spacer { flex: 1; }
 .nav-item.signout {
@@ -2882,7 +3068,7 @@ input.item-editable-input, textarea.item-editable-input {
   height: 34px;
   border-radius: 9px;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   font-family: var(--font-display);
   font-size: 18px;
   font-weight: 700;

@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { fetchAllGroupMembers } from '../lib/members'
 import { fetchCategories } from '../lib/categories'
+import { categoryColor } from '../lib/categoryPalette'
 import { fetchGroupBills } from '../lib/groupViewSnapshot'
 import { statsRawFromBills, toWindowStart } from '../lib/groupStatsSnapshot'
 import { totalsByBill } from '../lib/accountStatsMath'
@@ -232,7 +233,7 @@ export default function GroupStats() {
     .map(([categoryId, amount]) => ({
       id: categoryId,
       name: categoryId === 'uncategorized' ? 'Uncategorized' : categories.find((c) => c.id === categoryId)?.name || 'Uncategorized',
-      color: categories.find((c) => c.id === categoryId)?.color || '#999999',
+      color: categoryColor(categories.find((c) => c.id === categoryId)?.color),
       amount,
       comparison: canCompare ? comparePeriods(amount, previousCategoryTotals[categoryId] || 0) : null,
     }))

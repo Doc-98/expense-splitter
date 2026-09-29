@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { fetchCategories, addCategory, renameCategory, deleteCategory, updateCategoryColor, CATEGORY_COLORS } from '../lib/categories'
+import { fetchCategories, addCategory, renameCategory, deleteCategory, updateCategoryColor } from '../lib/categories'
+import { CATEGORY_COLORS } from '../lib/categoryPalette'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { groupCategoriesCache } from '../lib/groupCategoriesCache'
 import { useClickOutside } from '../lib/useClickOutside'

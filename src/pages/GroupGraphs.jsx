@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { fetchCategories } from '../lib/categories'
+import { categoryColor } from '../lib/categoryPalette'
 import { fetchGroupBills } from '../lib/groupViewSnapshot'
 import { groupStatsCache } from '../lib/groupStatsCache'
 import { statsRawFromBills, toWindowStart } from '../lib/groupStatsSnapshot'
@@ -156,13 +157,13 @@ export default function GroupGraphs() {
   const pieSlices = Object.entries(categoryTotals).map(([id, amount]) => ({
     key: id,
     name: id === 'uncategorized' ? 'Uncategorized' : categories.find((c) => c.id === id)?.name || 'Uncategorized',
-    color: id === 'uncategorized' ? '#999999' : categories.find((c) => c.id === id)?.color || '#999999',
+    color: categoryColor(id === 'uncategorized' ? null : categories.find((c) => c.id === id)?.color),
     amount,
   }))
 
   const selectedCategory = categories.find((c) => c.id === categoryFilter)
   const selectedCategoryLabel = categoryFilter === 'uncategorized' ? 'Uncategorized' : selectedCategory?.name
-  const lineColor = categoryFilter === 'uncategorized' ? '#999999' : selectedCategory?.color || 'var(--accent)'
+  const lineColor = categoryFilter === 'uncategorized' ? categoryColor(null) : selectedCategory?.color ? categoryColor(selectedCategory.color) : 'var(--accent)'
 
   return (
     <div className="page">

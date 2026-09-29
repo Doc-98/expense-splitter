@@ -986,13 +986,13 @@ begin
   g.admin_id := new_member_id;
 
   insert into categories (group_id, name, color) values
-    (g.id, 'Groceries', '#4a86e8'),
-    (g.id, 'Eating out', '#e69138'),
-    (g.id, 'Household', '#6aa84f'),
-    (g.id, 'Bills & utilities', '#a479e2'),
-    (g.id, 'Transport', '#45818e'),
-    (g.id, 'Health', '#cc4125'),
-    (g.id, 'Other', '#999999');
+    (g.id, 'Groceries', '#534195'),
+    (g.id, 'Eating out', '#c77510'),
+    (g.id, 'Household', '#359e59'),
+    (g.id, 'Bills & utilities', '#b572a0'),
+    (g.id, 'Transport', '#2384d8'),
+    (g.id, 'Health', '#a52030'),
+    (g.id, 'Other', '#6a6966');
 
   return g;
 end;
@@ -1037,13 +1037,13 @@ begin
   g.admin_id := new_member_id;
 
   insert into categories (group_id, name, color) values
-    (g.id, 'Groceries', '#4a86e8'),
-    (g.id, 'Eating out', '#e69138'),
-    (g.id, 'Household', '#6aa84f'),
-    (g.id, 'Bills & utilities', '#a479e2'),
-    (g.id, 'Transport', '#45818e'),
-    (g.id, 'Health', '#cc4125'),
-    (g.id, 'Other', '#999999');
+    (g.id, 'Groceries', '#534195'),
+    (g.id, 'Eating out', '#c77510'),
+    (g.id, 'Household', '#359e59'),
+    (g.id, 'Bills & utilities', '#b572a0'),
+    (g.id, 'Transport', '#2384d8'),
+    (g.id, 'Health', '#a52030'),
+    (g.id, 'Other', '#6a6966');
 
   return g;
 end;

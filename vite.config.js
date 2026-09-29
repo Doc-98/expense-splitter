@@ -63,13 +63,17 @@ export default defineConfig({
         // the moment a PDF scan actually needs it), but going offline
         // before ever scanning a PDF once would leave that one path broken
         // — everything else in the app stays fully precached regardless.
-        globPatterns: ['**/*.{js,mjs,css,html,ico,png,svg,webmanifest}'],
+        // woff2: the self-hosted fonts (src/fonts.css) — precached so the
+        // installed app keeps its typefaces offline instead of falling back
+        // to Georgia and the system font (they used to load from Google
+        // Fonts, which the service worker never cached).
+        globPatterns: ['**/*.{js,mjs,css,html,ico,png,svg,webmanifest,woff2}'],
       },
       manifest: {
         name: 'Spesa - Expense Splitter',
         short_name: 'Spesa',
         description: 'Split receipts and expenses with your group, in real time.',
-        theme_color: '#2F6F5E',
+        theme_color: '#2A6253',
         background_color: '#FAF9F6',
         display: 'standalone',
         start_url: '/',

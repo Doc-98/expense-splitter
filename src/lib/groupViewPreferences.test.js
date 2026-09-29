@@ -54,13 +54,13 @@ describe('getGroupViewPreferences', () => {
 
 describe('avatarSizeSpec', () => {
   it('grows the icon px and adds a size class for medium and large', () => {
-    expect(avatarSizeSpec('small')).toEqual({ iconPx: 14, className: '' })
-    expect(avatarSizeSpec('medium')).toEqual({ iconPx: 18, className: 'avatar-md' })
-    expect(avatarSizeSpec('large')).toEqual({ iconPx: 22, className: 'avatar-lg' })
+    expect(avatarSizeSpec('small')).toEqual({ iconPx: 19, className: '' })
+    expect(avatarSizeSpec('medium')).toEqual({ iconPx: 22, className: 'avatar-md' })
+    expect(avatarSizeSpec('large')).toEqual({ iconPx: 25, className: 'avatar-lg' })
   })
 
   it('falls back to small for an unrecognized size', () => {
-    expect(avatarSizeSpec('huge')).toEqual({ iconPx: 14, className: '' })
-    expect(avatarSizeSpec(undefined)).toEqual({ iconPx: 14, className: '' })
+    expect(avatarSizeSpec('huge')).toEqual({ iconPx: 19, className: '' })
+    expect(avatarSizeSpec(undefined)).toEqual({ iconPx: 19, className: '' })
   })
 })
