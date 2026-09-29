@@ -20,4 +20,5 @@ export const WHATS_NEW = [
   "The version number in the header is back to its intended small size",
   "Text now follows your phone's or browser's own text-size setting, so a larger system font makes the whole app easier to read",
   "A few in-between text sizes and spacings are tidied onto one consistent scale, so labels and rows line up more evenly",
+  "Pie charts print each larger slice's share beside it, and tapping a slice or its legend row highlights both and shows that category's amount in the middle",
 ]

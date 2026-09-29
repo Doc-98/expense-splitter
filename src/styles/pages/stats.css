@@ -189,20 +189,31 @@
   gap: var(--space-lg);
   margin-bottom: var(--space-lg);
 }
-.pie-chart { width: 160px; height: 160px; flex-shrink: 0; }
+/* 192px for a 240-unit viewBox keeps the donut itself the 160px it always
+   was; the extra is the margin its percent labels sit in. Sizes inside the
+   SVG are in its own units, 0.8px each. */
+.pie-chart { width: 192px; height: 192px; flex-shrink: 0; overflow: visible; }
 /* A filled wedge (see donutWedgePath() in PieChart.jsx), so "highlight the
    hovered one" is a transform now rather than the stroke-width bump a
    stroked circle used — transform-origin at the donut's own center keeps
-   the pop centered on the ring instead of drifting toward a corner. */
-.pie-chart-slice { cursor: pointer; transform-origin: 100px 100px; transition: transform 0.1s ease; }
-.pie-chart-slice.active { transform: scale(1.05); }
+   the pop centered on the ring instead of drifting toward a corner. The
+   highlighted wedge also gets an ink outline, so it doesn't rely on the
+   size change alone. */
+.pie-chart-slice { cursor: pointer; transform-origin: 120px 120px; transition: transform 0.1s ease; }
+.pie-chart-slice.active { transform: scale(1.05); stroke: var(--ink); stroke-width: 1.5; }
+@media (prefers-reduced-motion: reduce) { .pie-chart-slice { transition: none; } }
 .pie-chart-total-amount { font-size: var(--text-base); fill: var(--ink); font-weight: 600; }
 .pie-chart-total-label { font-size: var(--text-2xs); fill: var(--ink-soft); }
+.pie-chart-center-name { font-size: var(--text-sm); fill: var(--ink); font-weight: 600; }
+.pie-chart-percent { font-size: var(--text-md); fill: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.pie-chart-percent.active { fill: var(--ink); font-weight: 600; }
 .pie-chart-empty { flex-direction: column; align-items: flex-start; gap: var(--space-sm); }
 .pie-chart-empty-label { font-size: var(--text-md); }
 
 .pie-chart-legend { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 200px; }
-.pie-chart-legend-item.active { background: var(--surface-tint); border-radius: var(--radius); }
+.pie-chart-legend-item { border-radius: var(--radius); outline: 1px solid transparent; }
+.pie-chart-legend-item.active { background: var(--surface-tint); outline-color: var(--border); }
+.pie-chart-legend-item.active .pie-chart-legend-name { font-weight: 600; }
 .pie-chart-legend-btn {
   display: flex;
   align-items: center;

@@ -211,7 +211,12 @@ export default function GroupGraphs() {
           <LineChart points={points} format={format} color={lineColor} />
 
           <h2 className="settings-section-title">By category</h2>
-          <PieChart slices={pieSlices} format={format} onSelectCategory={(key) => setCategoryFilter(key)} />
+          <PieChart
+            slices={pieSlices}
+            format={format}
+            selectedKey={categoryFilter}
+            onSelectCategory={(key) => setCategoryFilter(key)}
+          />
         </>
       )}
     </div>
