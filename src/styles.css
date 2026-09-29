@@ -872,7 +872,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
    just for this). */
 .bill-amount-block { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .bill-amount-total { font-size: inherit; font-weight: 600; }
-.bill-amount-status { font-size: 12px; font-style: italic; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bill-amount-status { font-size: 12px; font-weight: 400; font-style: italic; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .bill-amount-status-neutral { color: var(--ink-soft); }
 
 /* ---------- Bill list date dividers ---------- */
