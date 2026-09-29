@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
@@ -13,6 +13,9 @@ import { useCoalescedRunner } from '../lib/coalescedRunner'
 import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
 import BackButton from '../components/BackButton'
 import Pagination from '../components/Pagination'
+import { LoadingState, SkeletonRows } from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
+import { SettleIcon } from '../components/icons'
 
 const PAGE_SIZE = 15
 
@@ -142,9 +145,21 @@ export default function History() {
       {error && <p className="status-error">{error}</p>}
 
       {payments === null ? (
-        <p className="muted">Loading…</p>
+        <LoadingState label="Loading payments…">
+          <SkeletonRows count={3} withNote withAmount />
+        </LoadingState>
       ) : payments.length === 0 ? (
-        <p className="empty-state">No payments recorded yet.</p>
+        <EmptyState
+          icon={SettleIcon}
+          title="No payments yet"
+          action={
+            <Link to={`/groups/${groupId}/settle-up`} className="btn-secondary">
+              Settle up
+            </Link>
+          }
+        >
+          When someone pays someone back, it shows up here.
+        </EmptyState>
       ) : (
         <div className="bill-groups">
           {dayGroups.map((monthGroup) => (

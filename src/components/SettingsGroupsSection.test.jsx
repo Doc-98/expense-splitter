@@ -1,8 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import SettingsGroupsSection from './SettingsGroupsSection'
 import { settingsGroupsCache, SETTINGS_GROUPS_CACHE_KEY } from '../lib/settingsGroupsCache'
+
+// The empty state links to the groups list, so this renders in a router.
+function renderSection() {
+  return render(
+    <MemoryRouter>
+      <SettingsGroupsSection />
+    </MemoryRouter>,
+  )
+}
 
 // Same vi.hoisted() reasoning as GroupMembersSection.test.jsx/
 // GroupDangerZoneSection.test.jsx — vi.mock() factories are hoisted above
@@ -61,7 +71,7 @@ describe('SettingsGroupsSection', () => {
     settingsGroupsCache.set(SETTINGS_GROUPS_CACHE_KEY, groupsFixture())
     mockFetchSettingsGroupsRows.mockReturnValue(new Promise(() => {})) // never resolves this test
 
-    render(<SettingsGroupsSection />)
+    renderSection()
 
     // No `await`/`findBy` — asserts the *first* render already has it,
     // seeded from the cache, not the still-pending fetch above.
@@ -70,18 +80,19 @@ describe('SettingsGroupsSection', () => {
 
   it('shows a loading state with nothing cached', () => {
     mockFetchSettingsGroupsRows.mockReturnValue(new Promise(() => {}))
-    render(<SettingsGroupsSection />)
-    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    renderSection()
+    expect(screen.getByText('Loading your groups…')).toBeInTheDocument()
   })
 
   it('shows an empty state once loaded with no groups', async () => {
     mockFetchSettingsGroupsRows.mockResolvedValue([])
-    render(<SettingsGroupsSection />)
-    expect(await screen.findByText("You're not in any groups yet.")).toBeInTheDocument()
+    renderSection()
+    expect(await screen.findByText("You're not in any groups yet")).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Go to your groups' })).toHaveAttribute('href', '/')
   })
 
   it('lists groups with an admin tag and singular/plural member counts', async () => {
-    render(<SettingsGroupsSection />)
+    renderSection()
 
     const beachRow = (await screen.findByText('Beach Trip')).closest('li')
     const roomiesRow = screen.getByText('Roomies').closest('li')
@@ -94,7 +105,7 @@ describe('SettingsGroupsSection', () => {
 
   it('shows an error when the initial load fails', async () => {
     mockFetchSettingsGroupsRows.mockRejectedValue(new Error('could not load groups'))
-    render(<SettingsGroupsSection />)
+    renderSection()
     expect(await screen.findByText('could not load groups')).toBeInTheDocument()
   })
 
@@ -105,7 +116,7 @@ describe('SettingsGroupsSection', () => {
       if (table === 'categories') return categoriesTable({ data: categories, error: null })
       throw new Error(`unexpected table: ${table}`)
     })
-    render(<SettingsGroupsSection />)
+    renderSection()
 
     const beachRow = (await screen.findByText('Beach Trip')).closest('li')
     await user.click(within(beachRow).getByRole('button', { name: 'Group actions' }))
@@ -126,7 +137,7 @@ describe('SettingsGroupsSection', () => {
 
   it('does not leave the group when the confirm sheet is cancelled', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<SettingsGroupsSection />)
+    renderSection()
 
     const beachRow = (await screen.findByText('Beach Trip')).closest('li')
     await user.click(within(beachRow).getByRole('button', { name: 'Group actions' }))
@@ -144,7 +155,7 @@ describe('SettingsGroupsSection', () => {
       if (table === 'categories') return categoriesTable({ data: null, error: { message: 'could not load categories' } })
       throw new Error(`unexpected table: ${table}`)
     })
-    render(<SettingsGroupsSection />)
+    renderSection()
 
     const beachRow = (await screen.findByText('Beach Trip')).closest('li')
     await user.click(within(beachRow).getByRole('button', { name: 'Group actions' }))
@@ -159,7 +170,7 @@ describe('SettingsGroupsSection', () => {
   it('shows an error when snapshotAndRemoveMember fails, keeping the group in the list', async () => {
     const user = userEvent.setup({ delay: null })
     mockSnapshotAndRemoveMember.mockRejectedValue(new Error('could not leave group'))
-    render(<SettingsGroupsSection />)
+    renderSection()
 
     const beachRow = (await screen.findByText('Beach Trip')).closest('li')
     await user.click(within(beachRow).getByRole('button', { name: 'Group actions' }))
@@ -172,7 +183,7 @@ describe('SettingsGroupsSection', () => {
 
   it('reads and writes the Sticky filters toggle via the real preferences module', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<SettingsGroupsSection />)
+    renderSection()
 
     const toggle = screen.getByLabelText("Keep a group page's search and filters active after opening a bill")
     expect(toggle).not.toBeChecked()

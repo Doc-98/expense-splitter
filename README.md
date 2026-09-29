@@ -905,7 +905,8 @@ long scroll: **Profile** (display name, avatar, currency), **Groups** (every
 group you're in, with a way to leave one directly, plus Sticky filters),
 **Layout** (every per-device display preference — theme, the color-blind
 category palette, default stats period, where Budgets sits, group-page
-display toggles — most with a small
+display toggles, whether a bill's items show their category under each item
+or grouped under a heading per category with subtotals — most with a small
 live preview of what the setting changes), **Budgets**, **Scan**, **How to
 Use**, **Updates**, and **About**. **Sign Out** sits at the bottom of the nav,
 split off by its own divider — it's an action, not a section, and opens a
@@ -1114,9 +1115,12 @@ opt-in. Custom colors skip all of this and show exactly as picked.
 
 No palette can make seven or more categories reliably distinguishable by
 color alone for color-blind readers, so the category name belongs next to
-its color: the pie legend, stats bars and budget rows already do this; item
-rows (a lone dot today) and labels on the pie slices themselves are the
-remaining work, tracked on the project board. The pre-September-2026 presets were
+its color, everywhere one is drawn: the pie legend, stats bars, budget rows,
+filter chips, subscriptions, and a bill's items. Items show it one of two
+ways (Settings → Layout, per device): on a small line under each item (the
+default, receipt order kept), or grouped under one heading per category with
+that category's subtotal (`src/lib/itemGroups.js`). Labels on the pie slices
+themselves are the one remaining gap, tracked on the project board. The pre-September-2026 presets were
 migrated to the new ones (`20260928171620_category_palette.sql`); the old
 yellow/pink/navy extras were dropped as presets and stay as custom colors
 where used.

@@ -135,7 +135,7 @@ describe('SettleUp — loading', () => {
   it('shows a loading state with nothing cached', () => {
     mockFetchAllGroupMembers.mockReturnValue(new Promise(() => {})) // never resolves this test
     renderPage()
-    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(screen.getByText('Loading balances…')).toBeInTheDocument()
   })
 
   it('paints from groupViewCache before the fetch even resolves', () => {
@@ -181,7 +181,8 @@ describe('SettleUp — settlement list', () => {
   it('shows the empty state once loaded with nothing to settle', async () => {
     rpcResult = { data: [], error: null }
     renderPage()
-    expect(await screen.findByText("Everyone's even — nothing to settle.")).toBeInTheDocument()
+    expect(await screen.findByText("Everyone's even")).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Back to the group' })).toHaveAttribute('href', '/groups/group-1')
   })
 
   it("lists your own debts first, phrased from your perspective", async () => {

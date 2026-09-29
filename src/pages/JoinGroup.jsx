@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
+import EmptyState from '../components/EmptyState'
+import { GroupsNavIcon } from '../components/icons'
 
 export default function JoinGroup() {
   const { code } = useParams()
@@ -26,7 +28,17 @@ export default function JoinGroup() {
   if (status === 'not-found') {
     return (
       <div className="page">
-        <p className="empty-state">That invite link doesn't match any group.</p>
+        <EmptyState
+          icon={GroupsNavIcon}
+          title="This invite link doesn't work"
+          action={
+            <Link to="/" className="btn-secondary">
+              Go to your groups
+            </Link>
+          }
+        >
+          It doesn't match any group. Ask whoever sent it for a fresh link.
+        </EmptyState>
       </div>
     )
   }

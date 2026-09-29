@@ -48,6 +48,16 @@
   --space-lg: 24px;
   --radius: 12px;
 
+  /* Shadows for the few things that float (see "Borders over shadows"):
+     the active tab, popover menus, the install banner. Dark mode needs
+     much stronger ones — at 8% black they vanish on a near-black page. */
+  --shadow-tab: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.14);
+  /* The browser/status bar (<meta name="theme-color">, set by
+     ThemeContext): the brand green in light, the page itself in dark. */
+  --browser-bar: #2A6253;
+
   color-scheme: light;
 }
 
@@ -66,6 +76,10 @@
   --warn-light: #2F2019;
   --on-accent: #0B1310;
   --on-warn: #0B1310;
+  --shadow-tab: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-popover: 0 6px 20px rgba(0, 0, 0, 0.55);
+  --shadow-floating: 0 10px 28px rgba(0, 0, 0, 0.65);
+  --browser-bar: #111C17;
 
   color-scheme: dark;
 }
@@ -524,6 +538,83 @@ input.bill-title-editable-input {
   text-align: center;
 }
 
+/* ---------- Empty states (EmptyState.jsx) ----------
+   An empty screen or section: icon, title, one line, and a button to the
+   next step, in a dashed frame so it never reads as a real row or card.
+   Primary button when it starts something, secondary when it only takes
+   you somewhere (see EmptyState.jsx). The older one-line .empty-state
+   above stays for small in-context notes. */
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: var(--space-lg) var(--space-md);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  margin: var(--space-sm) 0;
+}
+.empty-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  color: var(--accent-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.empty-card-title { font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--ink); margin: 0; overflow-wrap: anywhere; }
+.empty-card-text { font-size: 14px; line-height: 1.45; color: var(--ink-soft); margin: 0; max-width: 32ch; overflow-wrap: anywhere; }
+.empty-card-action { margin-top: 8px; display: flex; flex-wrap: wrap; gap: var(--space-sm); justify-content: center; }
+.empty-card-action .btn-primary,
+.empty-card-action .btn-secondary { padding: 10px 16px; font-size: 14px; }
+.empty-card-note { font-size: 13px; color: var(--ink-soft); margin: 6px 0 0; }
+
+/* ---------- Loading placeholders (Skeleton.jsx) ----------
+   A pale outline of the content about to load, sized like the real thing
+   so nothing jumps. The shapes are the page's own ink-soft at 20%, so
+   they read on every ground in both themes, and pulse gently (still under
+   prefers-reduced-motion). Only shown after a short delay: see
+   LOADING_DELAY_MS. */
+.skeleton {
+  display: block;
+  border-radius: 6px;
+  background: var(--accent-light);
+  background: color-mix(in srgb, var(--ink-soft) 20%, transparent);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+.skeleton-title { height: 15px; }
+.skeleton-line { height: 12px; }
+.skeleton-amount { height: 15px; width: 64px; flex: none; }
+.skeleton-page-title { height: 22px; width: 55%; margin: 4px 0 var(--space-lg); }
+.skeleton-rows { display: flex; flex-direction: column; gap: var(--space-sm); }
+.skeleton-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: 52px;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.skeleton-row-main { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.skeleton-lines { display: flex; flex-direction: column; gap: 10px; margin: var(--space-sm) 0; }
+.skeleton-tile { align-items: center; }
+.skeleton-tile-value { height: 20px; width: 70%; margin-bottom: 4px; }
+.skeleton-bars { display: flex; flex-direction: column; gap: 12px; }
+.skeleton-bar-row { display: flex; align-items: center; gap: 10px; }
+.skeleton-bar-label { width: 80px; flex: none; }
+.skeleton-bar { height: 10px; flex: 1; border-radius: 999px; }
+.skeleton-bar-value { width: 56px; flex: none; margin-left: auto; }
+.skeleton-chart { height: 200px; border-radius: var(--radius); margin-bottom: var(--space-md); }
+
 /* The app-wide crash screen (ErrorBoundary.jsx). */
 .error-boundary-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-md); }
 .status-error {
@@ -782,7 +873,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   color: var(--ink-soft);
   cursor: pointer;
 }
-.tab.active { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--border), 0 1px 2px rgba(0,0,0,0.08); }
+.tab.active { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--border), var(--shadow-tab); }
 
 .auth-form { display: flex; flex-direction: column; }
 .auth-form .btn-primary { margin-top: 4px; }
@@ -1095,7 +1186,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   border-radius: 10px;
   padding: 4px var(--space-md);
   min-width: 140px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-popover);
   z-index: 10;
 }
 
@@ -1122,7 +1213,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   border-radius: 10px;
   padding: 4px var(--space-md);
   min-width: 140px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-popover);
   z-index: 10;
 }
 
@@ -1140,7 +1231,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   border-radius: 10px;
   padding: var(--space-md);
   min-width: 220px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-popover);
   z-index: 10;
   text-align: center;
 }
@@ -1518,6 +1609,35 @@ input.amount-card-value-input {
 .item-warn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex: none; }
 .item-price { font-size: 14px; flex-shrink: 0; }
 .item-row-chevron { color: var(--ink-soft); flex: none; transition: transform 0.2s ease; }
+/* Two-line items: the name (and qty badge) on the first line, the
+   category's dot and name on a small second line (ItemRow.jsx). Price,
+   leader, warning dot and chevron all line up with the first line, like a
+   receipt's detail line tucked under the entry. */
+.item-row-head { align-items: flex-start; }
+.item-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.item-row-name-line { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.item-row-head .item-name { line-height: 20px; overflow-wrap: anywhere; }
+.item-row-head .item-dots { align-self: flex-start; height: 15px; margin-bottom: 0; min-width: 12px; }
+.item-row-head .item-price { line-height: 20px; }
+.item-row-head .item-warn-dot { margin-top: 7px; }
+.item-row-head .item-row-chevron { margin-top: 2px; }
+.item-row-category { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.item-row-category .category-dot { width: 8px; height: 8px; margin: 0; }
+.item-row-category-none { font-style: italic; }
+/* "Grouped by category" (Settings > Layout): a header per category, with
+   its subtotal, over that category's items. */
+.item-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin: var(--space-sm) 2px 6px;
+}
+.item-group-head:first-child { margin-top: 0; }
+.item-group-head .category-dot { width: 8px; height: 8px; margin: 0; }
+.item-group-total { margin-left: auto; font-weight: 500; }
 .item-row.is-open .item-row-chevron { transform: rotate(90deg); color: var(--accent); }
 
 .item-row-body {
@@ -2037,7 +2157,7 @@ input.item-editable-input, textarea.item-editable-input {
   border-radius: 10px;
   padding: 4px var(--space-md);
   min-width: 180px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-popover);
   z-index: 10;
 }
 /* Right-anchored variant — for a trigger sitting near the right edge of a
@@ -2129,6 +2249,41 @@ input.item-editable-input, textarea.item-editable-input {
 .threshold-bar-value { width: 130px; text-align: right; flex-shrink: 0; }
 .stats-bar-group { margin-bottom: 8px; }
 .comparison-badge { display: block; text-align: right; font-size: 11px; margin-top: 2px; }
+/* One amount never breaks in the middle ("€1,050.00 / €1,200.00" may wrap
+   at the slash, never inside a figure). */
+.stats-bar-amount { white-space: nowrap; }
+
+/* Where subgrid is supported (every current browser), a list of bars is
+   one grid and each row borrows its columns, so every row in a list
+   shares the same label and value widths and the tracks line up. The
+   columns size to their content instead of the fixed 110px/70px/130px
+   above, which cut off long category names and big amounts on a phone:
+   the label takes what it needs up to 40% (then wraps, indented past its
+   dot), the value takes what it needs up to 45%, and the track gets the
+   rest but never less than 40px. */
+@supports (grid-template-columns: subgrid) {
+  .stats-bars {
+    display: grid;
+    grid-template-columns: fit-content(40%) minmax(40px, 1fr) fit-content(45%);
+    column-gap: 10px;
+    row-gap: 8px;
+  }
+  .stats-bars > .stats-bar-row,
+  .stats-bars > .stats-bar-group,
+  .stats-bar-group > .stats-bar-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    align-items: center;
+  }
+  .stats-bar-group { margin-bottom: 0; }
+  .stats-bar-group > .comparison-badge { grid-column: 1 / -1; }
+  .stats-bar-label { width: auto; min-width: 0; display: flex; align-items: flex-start; gap: 6px; overflow-wrap: anywhere; }
+  /* the dot sits on the first line, centred on it (13px text, ~16px line) */
+  .stats-bar-label > .category-dot { margin: 3px 0 0; }
+  .stats-bar-value, .threshold-bar-value { width: auto; white-space: nowrap; }
+  .threshold-bar-value { white-space: normal; }
+}
 
 .time-range { margin-bottom: var(--space-lg); }
 /* A little breathing room between period tabs, and a bit less margin below
@@ -2201,7 +2356,7 @@ input.item-editable-input, textarea.item-editable-input {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 999px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-popover);
 }
 .pagination-label { font-size: 13px; color: var(--ink-soft); min-width: 90px; text-align: center; }
 .pagination .btn-icon { font-size: 22px; }
@@ -2285,7 +2440,9 @@ input.item-editable-input, textarea.item-editable-input {
      just pushing the whole row onto the next page a little early. */
   .print-table tr { break-inside: avoid; }
   .print-total { font-size: 16px; font-weight: 700; margin-top: 16px; text-align: right; }
-  .print-footer { margin-top: 32px; font-size: 11px; color: #888; }
+  /* #444 on paper white is 9.7:1 (AAA); #888 was 3.5:1, fainter than
+     anything on screen. */
+  .print-footer { margin-top: 32px; font-size: 11px; color: #444; }
 }
 
 /* ---------- CSV import ---------- */
@@ -2605,6 +2762,8 @@ input.item-editable-input, textarea.item-editable-input {
 /* Settings > Layout's color-blind palette preview: the seven default
    categories, each dot beside its name. */
 .settings-preview-categories { list-style: none; margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 13px; }
+/* Settings > Layout's "Item categories on a bill" preview: real item rows. */
+.settings-preview-items > div + div .item-group-head { margin-top: var(--space-sm); }
 .settings-preview-categories li { display: flex; align-items: center; gap: 6px; min-width: 0; }
 
 /* The Budgets position preview's own bar rows — same colors/shape as the
@@ -2685,6 +2844,9 @@ input.item-editable-input, textarea.item-editable-input {
   flex-shrink: 0;
 }
 .category-label { display: flex; align-items: center; }
+/* Group settings > Subscriptions: title + details as one flowing line,
+   the category's dot and name on a line of their own underneath. */
+.subscription-summary { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .color-swatch-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .color-swatch {
   width: 22px;
@@ -2722,7 +2884,7 @@ input.item-editable-input, textarea.item-editable-input {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: var(--space-sm);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-popover);
   z-index: 10;
 }
 
@@ -3060,7 +3222,7 @@ input.item-editable-input, textarea.item-editable-input {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+  box-shadow: var(--shadow-floating);
 }
 .install-banner-mark {
   flex-shrink: 0;

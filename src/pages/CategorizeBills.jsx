@@ -11,6 +11,9 @@ import { buildTitleGroups, applyAiSuggestions } from '../lib/billCategorization/
 import { classifyTitles, resolveClassifyStrategy } from '../lib/billCategorization'
 import { findKeywordClusters } from '../lib/billCategorization/keywordClusters'
 import BackButton from '../components/BackButton'
+import { LoadingState, SkeletonLines } from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
+import { CheckIcon, TagIcon } from '../components/icons'
 
 // Supabase/Postgres queries have a practical limit on how many IDs belong
 // in one `.in(...)` — a single category can end up covering bills from
@@ -224,7 +227,11 @@ export default function CategorizeBills() {
 
       {error && <p className="status-error">{error}</p>}
 
-      {step === 'loading' && <p className="page-loading">Loading…</p>}
+      {step === 'loading' && (
+        <LoadingState label="Loading bills…">
+          <SkeletonLines count={3} />
+        </LoadingState>
+      )}
 
       {step === 'landing' && (
         <>
@@ -237,12 +244,29 @@ export default function CategorizeBills() {
           </p>
 
           {categories.length === 0 ? (
-            <p className="empty-state">
-              This group has no categories yet — add some in{' '}
-              <Link to={`/groups/${groupId}/settings`}>Group settings</Link> first, then come back.
-            </p>
+            <EmptyState
+              icon={TagIcon}
+              title="No categories yet"
+              action={
+                <Link to={`/groups/${groupId}/settings`} className="btn-secondary">
+                  Group settings
+                </Link>
+              }
+            >
+              Add some categories in Group settings first, then come back.
+            </EmptyState>
           ) : bills.length === 0 ? (
-            <p className="empty-state">Every bill in this group already has a category — nothing to do here.</p>
+            <EmptyState
+              icon={CheckIcon}
+              title="Every bill has a category"
+              action={
+                <Link to={`/groups/${groupId}`} className="btn-secondary">
+                  Back to the group
+                </Link>
+              }
+            >
+              Nothing to do here.
+            </EmptyState>
           ) : (
             <>
               <p>

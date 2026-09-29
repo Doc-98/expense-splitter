@@ -32,7 +32,9 @@ import ComparisonBadge from '../components/ComparisonBadge'
 import ShareButton from '../components/ShareButton'
 import { PrintableAccountStatsRecap } from '../components/PrintableRecap'
 import BackButton from '../components/BackButton'
-import { LineChartIcon } from '../components/icons'
+import { LineChartIcon, PieChartIcon } from '../components/icons'
+import { StatsSkeleton } from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
 
 function monthKey(dateStr) {
   const d = new Date(dateStr)
@@ -80,6 +82,11 @@ export default function AccountStats() {
   // alone, not on isViewCovered like GroupStats.jsx — this page mixes
   // several groups' histories, and keeps the simpler rule.
   const [historyStatus, setHistoryStatus] = useState('loading')
+  // False until there's something real to show (the cache, the first
+  // fetch, or an error): before that, groups/snapshots are just their empty
+  // initial values, and the page would claim "No stats yet" to someone
+  // who has plenty. Shows a placeholder instead.
+  const [loaded, setLoaded] = useState(false)
   const [historyWindowStart, setHistoryWindowStart] = useState(null)
 
   function applyRawBills(rawBillsData) {
@@ -166,6 +173,7 @@ export default function AccountStats() {
       applyRawBills(billsData)
       setRawCategories(categoriesResult.data || [])
       setOverallBalance(overallBalanceFrom(groupIds, participantByGroup, balancesByGroup, snapshotData))
+      setLoaded(true)
       if (hadCompleteHistory) {
         setHistoryStatus('complete')
         return
@@ -189,6 +197,8 @@ export default function AccountStats() {
       // state had already been set before the failure just stayed on
       // screen, incomplete, with no indication anything had gone wrong.
       setError(loadErrorMessage(err))
+    } finally {
+      setLoaded(true)
     }
   }, [user.id])
 
@@ -214,6 +224,7 @@ export default function AccountStats() {
       setOverallBalance(cached.overallBalance)
       setHistoryStatus(cached.historyStatus)
       setHistoryWindowStart(toWindowStart(cached.historyWindowStart))
+      setLoaded(true)
     }
     load()
   }, [user.id, load])
@@ -517,7 +528,8 @@ export default function AccountStats() {
               />
             </div>
             <span className={`mono threshold-bar-value ${t.over ? 'balance-negative' : ''}`}>
-              {format(t.spent)} / {format(t.amount)}
+              <span className="stats-bar-amount">{format(t.spent)}</span> /{' '}
+              <span className="stats-bar-amount">{format(t.amount)}</span>
             </span>
           </div>
         ))}
@@ -573,8 +585,20 @@ export default function AccountStats() {
         </p>
       )}
 
-      {groups.length === 0 && snapshots.length === 0 ? (
-        <p className="empty-state">Join or create a group to start seeing your stats.</p>
+      {!loaded ? (
+        <StatsSkeleton label="Loading your stats…" />
+      ) : groups.length === 0 && snapshots.length === 0 ? (
+        <EmptyState
+          icon={PieChartIcon}
+          title="No stats yet"
+          action={
+            <Link to="/" className="btn-secondary">
+              Go to your groups
+            </Link>
+          }
+        >
+          Stats appear once you're in a group with some bills.
+        </EmptyState>
       ) : (
         <>
           {thresholdsPosition === 'top' && thresholdsSection}

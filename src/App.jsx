@@ -8,6 +8,7 @@ import BootSplash from './components/BootSplash'
 import InstallPrompt from './components/InstallPrompt'
 import PwaUpdater from './components/PwaUpdater'
 import ErrorBoundary from './components/ErrorBoundary'
+import { PageSkeleton } from './components/Skeleton'
 import { savePendingRedirect, takePendingRedirect } from './lib/pendingRedirect'
 import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
@@ -120,7 +121,7 @@ function Shell() {
             path="/stats/graphs"
             element={
               <RequireAuth>
-                <Suspense fallback={<div className="page-loading">Loading…</div>}>
+                <Suspense fallback={<PageSkeleton />}>
                   <AccountGraphs />
                 </Suspense>
               </RequireAuth>
@@ -139,7 +140,7 @@ function Shell() {
             path="/groups/:groupId/stats/graphs"
             element={
               <RequireAuth>
-                <Suspense fallback={<div className="page-loading">Loading…</div>}>
+                <Suspense fallback={<PageSkeleton />}>
                   <GroupGraphs />
                 </Suspense>
               </RequireAuth>
@@ -149,7 +150,7 @@ function Shell() {
             path="/groups/:groupId/import"
             element={
               <RequireAuth>
-                <Suspense fallback={<div className="page-loading">Loading…</div>}>
+                <Suspense fallback={<PageSkeleton />}>
                   <ImportBills />
                 </Suspense>
               </RequireAuth>
@@ -159,7 +160,7 @@ function Shell() {
             path="/groups/:groupId/import-bank-statement"
             element={
               <RequireAuth>
-                <Suspense fallback={<div className="page-loading">Loading…</div>}>
+                <Suspense fallback={<PageSkeleton />}>
                   <ImportBankStatement />
                 </Suspense>
               </RequireAuth>
@@ -170,7 +171,7 @@ function Shell() {
             path="/groups/:groupId/categorize"
             element={
               <RequireAuth>
-                <Suspense fallback={<div className="page-loading">Loading…</div>}>
+                <Suspense fallback={<PageSkeleton />}>
                   <CategorizeBills />
                 </Suspense>
               </RequireAuth>

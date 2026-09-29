@@ -13,8 +13,8 @@ import { categoryColor } from '../lib/categoryPalette'
 // only validates that what was typed is well-formed at all (non-empty
 // name, a real number for the money/quantity fields) before handing it up.
 //
-// Collapsed to one read-only line by default (category dot, name, a qty
-// badge when it's not 1, the total) — tap it to expand into the actual
+// Collapsed to a read-only summary by default (name, a qty badge when
+// it's not 1, the category underneath, the total) — tap it to expand into the actual
 // editable fields plus split-with/category, rather than every item
 // permanently showing its full buyer row and category picker whether
 // you're touching it or not. `bindSwipe` comes from BillView.jsx's own
@@ -36,12 +36,13 @@ export default function ItemRow({
   onUpdate,
   bindSwipe,
   avatarSize,
+  showCategory = true,
 }) {
   const { format } = useCurrency()
   const [open, setOpen] = useState(false)
   const buyerIds = item.item_shares.map((s) => s.member_id)
 
-  // An item with no category of its own inherits the bill's — the dot
+  // An item with no category of its own inherits the bill's — the label
   // always reflects that *effective* category, not just what's literally
   // set on this one row, so it's an accurate at-a-glance summary either way.
   const effectiveCategoryId = item.category_id || billCategoryId
@@ -88,11 +89,29 @@ export default function ItemRow({
           Remove
         </button>
         <button type="button" className="item-row-head" onClick={() => setOpen((o) => !o)} {...swipe.row}>
-          {effectiveCategory && (
-            <span className="category-dot" style={{ background: categoryColor(effectiveCategory.color) }} title={effectiveCategory.name} />
-          )}
-          <span className="item-name">{item.name}</span>
-          {quantity !== 1 && <span className="item-qty-badge">{quantity}&times;</span>}
+          {/* The category's name sits on its own small line under the item
+              name, dot included: a colour is never shown without its name
+              (phones can't show a tooltip). Off when BillView groups the
+              items under category headers instead (Settings > Layout),
+              and when the group has no categories at all. */}
+          <span className="item-row-main">
+            <span className="item-row-name-line">
+              <span className="item-name">{item.name}</span>
+              {quantity !== 1 && <span className="item-qty-badge">{quantity}&times;</span>}
+            </span>
+            {showCategory && categories.length > 0 && (
+              <span className="item-row-category">
+                {effectiveCategory ? (
+                  <>
+                    <span className="category-dot" style={{ background: categoryColor(effectiveCategory.color) }} />
+                    {effectiveCategory.name}
+                  </>
+                ) : (
+                  <span className="item-row-category-none">No category</span>
+                )}
+              </span>
+            )}
+          </span>
           <span className="item-dots" aria-hidden="true" />
           {unassigned && <span className="item-warn-dot" title="No one's assigned yet" />}
           <span className="item-price mono">{format(item.total_price)}</span>

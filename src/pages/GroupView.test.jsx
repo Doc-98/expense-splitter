@@ -483,3 +483,18 @@ describe('GroupView — filling the stats cache', () => {
     expect(groupStatsCache.get('group-1')).toBeUndefined()
   })
 })
+
+describe('GroupView — empty group', () => {
+  it('offers "Add a bill", which moves you to the New bill field', async () => {
+    server = new Map()
+    render(
+      <CurrencyProvider>
+        <GroupView />
+      </CurrencyProvider>
+    )
+    act(() => onStatus('SUBSCRIBED'))
+    expect(await screen.findByText('No bills yet')).toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Add a bill' }))
+    expect(screen.getByRole('textbox', { name: 'New bill' })).toHaveFocus()
+  })
+})

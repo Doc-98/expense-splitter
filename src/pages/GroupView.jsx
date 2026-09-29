@@ -49,6 +49,8 @@ import RangeSlider from '../components/RangeSlider'
 import { PrintableSettlementRecap, PrintablePersonalSpaceRecap } from '../components/PrintableRecap'
 import { SearchIcon, PieChartIcon, SettingsIcon, ArrowRightIcon, SettleIcon, ReceiptIcon } from '../components/icons'
 import BackButton from '../components/BackButton'
+import { LoadingState, Skeleton, SkeletonRows } from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
 
 const BILLS_PAGE_SIZE = 15
 const VERIFY_DELAY_MS = 30 * 1000
@@ -78,6 +80,8 @@ export default function GroupView() {
   // sidesteps that — always reads the latest value, with nothing to go
   // stale.
   const billsRef = useRef(null)
+  // The empty state's "Add a bill" just moves you to the New bill field.
+  const newBillInputRef = useRef(null)
   // Which realtime events concern this group — replaced per group in the
   // subscription effect below (see realtimeRelevance.js).
   const relevanceRef = useRef(createRealtimeRelevance())
@@ -1232,7 +1236,11 @@ export default function GroupView() {
       {/* The title, alone on its own row now — no icons sharing it (see
           the header above), so a long group name wraps cleanly instead of
           fighting Share/Stats/Settings for space. */}
-      <h1 className="page-title">{group?.name}</h1>
+      {group ? (
+        <h1 className="page-title">{group.name}</h1>
+      ) : (
+        !error && <Skeleton className="skeleton-page-title" />
+      )}
 
       {/* The balance summary — everything a "how much did you spend"
           question needs at a glance, unlike the full settlement below
@@ -1336,9 +1344,11 @@ export default function GroupView() {
           "Add bill" has always created — see createBill() above. */}
       <form onSubmit={createBill} className="add-bill-row">
         <input
+          ref={newBillInputRef}
           value={newBillTitle}
           onChange={(e) => setNewBillTitle(e.target.value)}
           placeholder="New bill (e.g. Lidl - Tuesday)"
+          aria-label="New bill"
         />
         <input
           value={newBillAmount}
@@ -1394,16 +1404,36 @@ export default function GroupView() {
       )}
       {shareStatus && <p className="muted share-status">{shareStatus}</p>}
 
+      {bills === null && !error && (
+        <LoadingState label="Loading bills…">
+          <SkeletonRows count={3} withNote withAmount />
+        </LoadingState>
+      )}
       {bills?.length === 0 && (
-        <p className="empty-state">No bills yet. Add one above, then scan or add a receipt.</p>
+        <EmptyState
+          icon={ReceiptIcon}
+          title="No bills yet"
+          action={
+            <button type="button" className="btn-primary" onClick={() => newBillInputRef.current?.focus()}>
+              Add a bill
+            </button>
+          }
+        >
+          Add the first one, then scan its receipt or type the items in.
+        </EmptyState>
       )}
       {bills && bills.length > 0 && filteredBills.length === 0 && (
-        <p className="empty-state">
-          No bills match these filters.{' '}
-          <button type="button" className="btn-link" onClick={clearFilters}>
-            Clear filters
-          </button>
-        </p>
+        <EmptyState
+          icon={SearchIcon}
+          title="No bills match these filters"
+          action={
+            <button type="button" className="btn-secondary" onClick={clearFilters}>
+              Clear filters
+            </button>
+          }
+        >
+          Try another word, or widen the filters.
+        </EmptyState>
       )}
 
       <div className="bill-groups" onMouseMove={billNav.onListMouseMove}>

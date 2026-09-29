@@ -58,6 +58,14 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
+    // The browser/status bar follows the theme actually shown, not just
+    // the OS (index.html's media-query metas only cover first paint): an
+    // explicit Light or Dark in Settings wins. The colour itself lives in
+    // styles.css (--browser-bar), next to every other theme colour.
+    const bar = getComputedStyle(document.documentElement).getPropertyValue('--browser-bar').trim()
+    if (bar) {
+      for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.setAttribute('content', bar)
+    }
   }, [theme])
 
   return <ThemeContext.Provider value={{ mode, theme, setMode }}>{children}</ThemeContext.Provider>

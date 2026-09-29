@@ -8,6 +8,7 @@ import { fetchBudgetsData } from '../lib/prefetchSettings'
 import { budgetsCache, BUDGETS_CACHE_KEY } from '../lib/budgetsCache'
 import { getStatsPreferences, setStatsPreferences } from '../lib/statsPreferences'
 import { BUDGET_PERIOD_OPTIONS, monthlyToDisplayAmount, displayToMonthlyAmount } from '../lib/budgetPeriod'
+import { LoadingState, SkeletonLines } from './Skeleton'
 
 const BUDGET_PERIOD_LABELS = { week: 'Week', month: 'Month' }
 
@@ -189,7 +190,9 @@ export default function BudgetsSection() {
       </p>
 
       {loading ? (
-        <p className="muted">Loading…</p>
+        <LoadingState label="Loading budgets…">
+          <SkeletonLines count={4} />
+        </LoadingState>
       ) : (
         <>
           <h2 className="settings-section-title">Default categories</h2>

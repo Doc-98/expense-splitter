@@ -27,4 +27,12 @@ export const WHATS_NEW = [
   "The installed app keeps its own typefaces when you're offline, instead of falling back to plain system fonts",
   "What you owe is now a clear red, the partner of the green for what you're owed, and the amount is in bold on both, whether you color the whole balance line or just the amount",
   "Error messages carry a warning sign and use their own rust color, so they never look like a debt; delete buttons use the rust too",
+  "Stats bars no longer cut off long category names or big amounts on a phone, and the bars in each list line up",
+  "The date at the bottom of a printed recap is now dark enough to read",
+  "In dark mode, menus and the install banner cast a visible shadow, and the phone's status bar turns dark to match instead of staying green",
+  "A fresh app icon in the current green, with a crisper \"S\"; iPhones now get a proper home-screen icon, and Android can shape it to fit your launcher",
+  "While a page loads you now see a faint outline of what's coming instead of a bare \"Loading…\", and Your Stats no longer briefly says you have no stats while it loads",
+  "Empty screens now say what to do next, with a button that takes you there: create your first group, add a bill, head back once everyone's even, and more",
+  "A bill's items now show their category's name, not just a coloured dot: under each item by default, or grouped under a heading per category with its subtotal (Settings > Layout > Item categories on a bill)",
+  "Subscriptions show their category's name too",
 ]

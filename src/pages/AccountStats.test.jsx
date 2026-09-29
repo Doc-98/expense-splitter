@@ -93,6 +93,36 @@ function renderPage() {
 }
 
 describe('Your Stats', () => {
+  it('shows a loading placeholder, never "No stats yet", while the first load is in flight', async () => {
+    renderPage()
+    expect(screen.getByText('Loading your stats…')).toBeInTheDocument()
+    expect(screen.queryByText('No stats yet')).not.toBeInTheDocument()
+    expect(await screen.findByText('+€12.25', { selector: '.stats-summary-value' })).toBeInTheDocument()
+    expect(screen.queryByText('Loading your stats…')).not.toBeInTheDocument()
+  })
+
+  it('shows the empty state, with a way to the groups list, when there is really nothing', async () => {
+    TABLES.group_members = { data: [], error: null }
+    TABLES.departure_snapshots = { data: [], error: null }
+    try {
+      renderPage()
+      expect(await screen.findByText('No stats yet')).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Go to your groups' })).toHaveAttribute('href', '/')
+    } finally {
+      TABLES.group_members = {
+        data: [
+          { id: 'me-in-g1', group_id: 'g1' },
+          { id: 'me-in-g2', group_id: 'g2' },
+        ],
+        error: null,
+      }
+      TABLES.departure_snapshots = {
+        data: [{ group_id: 'g-old', group_name: 'Old flat', balance: '-3.00', balance_settled: false, daily_totals: {} }],
+        error: null,
+      }
+    }
+  })
+
   it("shows the overall balance from each group's server balance plus unsettled balances from groups left", async () => {
     renderPage()
     // 20.50 - 5.25 - 3.00

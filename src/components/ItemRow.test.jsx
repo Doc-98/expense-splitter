@@ -96,12 +96,38 @@ describe('ItemRow — collapsed view', () => {
 
   it("falls back to the bill's category when the item has none of its own", () => {
     renderItemRow({ item: makeItem({ category_id: null }) })
-    expect(screen.getByTitle('Food')).toBeInTheDocument()
+    expect(screen.getByText('Food', { selector: '.item-row-category' })).toBeInTheDocument()
   })
 
   it("shows the item's own category over the bill's when it has one", () => {
     renderItemRow({ item: makeItem({ category_id: 'cat-drinks' }) })
-    expect(screen.getByTitle('Drinks')).toBeInTheDocument()
+    expect(screen.getByText('Drinks', { selector: '.item-row-category' })).toBeInTheDocument()
+  })
+
+  it('says "No category" when neither the item nor the bill has one', () => {
+    renderItemRow({ item: makeItem({ category_id: null }), billCategoryId: null })
+    expect(screen.getByText('No category')).toBeInTheDocument()
+  })
+
+  it('leaves the category out when the bill groups items by category, or the group has none', () => {
+    const { rerender, container } = renderItemRow({ item: makeItem(), showCategory: false })
+    expect(container.querySelector('.item-row-category')).toBeNull()
+    rerender(
+      <CurrencyProvider>
+        <ItemRow
+          item={makeItem()}
+          members={MEMBERS}
+          categories={[]}
+          onToggleBuyer={vi.fn()}
+          onOnlyBuyer={vi.fn()}
+          onDelete={vi.fn()}
+          onCategoryChange={vi.fn()}
+          onUpdate={vi.fn()}
+          bindSwipe={vi.fn(() => ({ deleteButton: {}, row: {} }))}
+        />
+      </CurrencyProvider>
+    )
+    expect(container.querySelector('.item-row-category')).toBeNull()
   })
 
   it("shows an unassigned warning dot when no one's assigned", () => {

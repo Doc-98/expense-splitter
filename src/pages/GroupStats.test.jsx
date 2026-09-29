@@ -145,7 +145,7 @@ describe('Group Graphs', () => {
   it("skips its loading state when the group page has already filled the cache", () => {
     fillCacheLikeTheGroupPage()
     renderPage(GroupGraphs)
-    expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
+    expect(screen.queryByText('Loading graphs…')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Graphs — Beach Trip' })).toBeInTheDocument()
   })
 
@@ -158,9 +158,9 @@ describe('Group Graphs', () => {
 
   it('with nothing cached, shows its loading state and then the charts', async () => {
     renderPage(GroupGraphs)
-    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(screen.getByText('Loading graphs…')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Graphs — Beach Trip' })).toBeInTheDocument()
-    await waitFor(() => expect(screen.queryByText('Loading…')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText('Loading graphs…')).not.toBeInTheDocument())
     await waitFor(() => expect(billRequests()).toHaveLength(2))
   })
 })

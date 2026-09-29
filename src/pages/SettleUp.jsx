@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useCurrency } from '../context/CurrencyContext'
@@ -11,6 +11,9 @@ import { isNotFoundError } from '../lib/notFound'
 import { useCoalescedRunner } from '../lib/coalescedRunner'
 import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
 import BackButton from '../components/BackButton'
+import { LoadingState, SkeletonRows } from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
+import { CheckIcon } from '../components/icons'
 
 // Every debt in the group, full stop — GroupView.jsx's own balance summary
 // (right under the title) only ever shows the lines that involve you; this
@@ -148,9 +151,21 @@ export default function SettleUp() {
       {error && <p className="status-error">{error}</p>}
 
       {settlement === null ? (
-        <p className="muted">Loading…</p>
+        <LoadingState label="Loading balances…">
+          <SkeletonRows count={3} />
+        </LoadingState>
       ) : settlement.length === 0 ? (
-        <p className="empty-state">Everyone's even — nothing to settle.</p>
+        <EmptyState
+          icon={CheckIcon}
+          title="Everyone's even"
+          action={
+            <Link to={`/groups/${groupId}`} className="btn-secondary">
+              Back to the group
+            </Link>
+          }
+        >
+          {group?.name ? `Nobody in ${group.name} owes anyone anything.` : 'Nobody here owes anyone anything.'}
+        </EmptyState>
       ) : (
         <>
           {mine.length > 0 ? (
