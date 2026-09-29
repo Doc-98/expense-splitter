@@ -48,7 +48,7 @@
    (GroupView.jsx) and a group's name (Groups.jsx). */
 .card-list-item-title { min-width: 0; overflow-wrap: anywhere; }
 .card-list-item-note {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 400;
   color: var(--ink-soft);
   white-space: nowrap;
@@ -59,7 +59,7 @@
 /* "(admin)" next to a group's name in Settings' Groups list — same idea as
    GroupSettings.jsx's own member-list admin label, just inline with a
    title instead of a whole row. */
-.role-tag { font-size: 12px; font-weight: 500; color: var(--accent-dark); }
+.role-tag { font-size: var(--text-xs); font-weight: 500; color: var(--accent-dark); }
 
 /* Right side of a bill row: the total/personal-status block, then
    whichever trailing control the row actually has (the chevron, or the
@@ -79,13 +79,13 @@
    just for this). */
 .bill-amount-block { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .bill-amount-total { font-size: inherit; font-weight: 600; }
-.bill-amount-status { font-size: 12px; font-weight: 400; font-style: italic; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bill-amount-status { font-size: var(--text-xs); font-weight: 400; font-style: italic; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .bill-amount-status-neutral { color: var(--ink-soft); }
 
 /* ---------- Bill list date dividers ---------- */
 .bill-month-divider {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ink);
   margin: var(--space-lg) 0 var(--space-sm);
@@ -101,7 +101,7 @@
 .bill-month-group:first-child > .bill-month-divider { margin-top: 0; padding-top: 0; border-top: none; }
 .bill-day-divider {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ink-soft);
   margin: var(--space-sm) 2px 6px;
@@ -229,7 +229,7 @@
    — this is a plain two-way switch sitting in a header row, not its own
    section. */
 .bill-filters-tag-mode { display: inline-flex; width: auto; margin-bottom: 0; }
-.bill-filters-tag-mode .tab { flex: none; padding: 4px 10px; font-size: 13px; }
+.bill-filters-tag-mode .tab { flex: none; padding: 4px 10px; font-size: var(--text-sm); }
 
 .bulk-select-bar {
   display: flex;
@@ -241,11 +241,11 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 14px;
+  font-size: var(--text-md);
   flex-wrap: wrap;
 }
 .bulk-select-actions { display: flex; align-items: center; gap: var(--space-sm); }
-.bulk-select-hint { width: 100%; margin: 4px 0 0; font-size: 13px; }
+.bulk-select-hint { width: 100%; margin: 4px 0 0; font-size: var(--text-sm); }
 
 /* A checkbox row reuses .card-list-item's card look as-is — same
    space-between/align-items:center it already uses to pin the title on
@@ -281,9 +281,9 @@
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 10px 14px;
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 .member-list-item.former { border-style: dashed; }
 .member-list-actions { display: flex; gap: 10px; }
@@ -311,10 +311,10 @@
   align-items: stretch;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding-right: 6px;
 }
-.guest-row-shell { position: relative; overflow: hidden; flex: 1; min-width: 0; border-radius: 10px 0 0 10px; }
+.guest-row-shell { position: relative; overflow: hidden; flex: 1; min-width: 0; border-radius: var(--radius-md) 0 0 var(--radius-md); }
 .guest-row-name {
   position: relative;
   height: 100%;
@@ -324,13 +324,13 @@
   gap: 4px;
   background: var(--surface);
   padding: 10px 14px;
-  font-size: 14px;
+  font-size: var(--text-md);
   touch-action: pan-y;
 }
 .guest-row > .guest-rename-form {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 10px 14px;
 }
 
@@ -356,7 +356,7 @@
 .pagination {
   position: sticky;
   bottom: calc(var(--space-md) + env(safe-area-inset-bottom, 0px));
-  z-index: 5;
+  z-index: var(--z-sticky);
   display: flex;
   width: fit-content;
   align-items: center;
@@ -366,11 +366,11 @@
   padding: 6px 14px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   box-shadow: var(--shadow-popover);
 }
-.pagination-label { font-size: 13px; color: var(--ink-soft); min-width: 90px; text-align: center; }
-.pagination .btn-icon { font-size: 22px; }
+.pagination-label { font-size: var(--text-sm); color: var(--ink-soft); min-width: 90px; text-align: center; }
+.pagination .btn-icon { font-size: var(--text-3xl); }
 .pagination .btn-icon:disabled { opacity: 0.3; cursor: default; }
 /* The non-floating variant (see Pagination.jsx's `floating` prop) — a
    payment history list already tucked inside a collapsed <details> has

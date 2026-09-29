@@ -27,7 +27,7 @@ body {
 }
 
 button { font-family: inherit; font-size: inherit; }
-input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px prevents iOS zoom-on-focus */
+input, select, textarea { font-family: inherit; font-size: var(--text-lg); } /* 16px prevents iOS zoom-on-focus */
 /* The browser's default placeholder grey is too faint for AAA, especially
    in dark mode — --ink-soft holds 7:1 on every surface an input sits on. */
 ::placeholder { color: var(--ink-soft); opacity: 1; }
@@ -61,18 +61,18 @@ code {
   font-family: var(--font-mono);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 1px 5px;
   font-size: 0.9em;
 }
 
-.muted { color: var(--ink-soft); font-size: 14px; }
+.muted { color: var(--ink-soft); font-size: var(--text-md); }
 
-label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-soft); margin-bottom: var(--space-sm); }
+label { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm); color: var(--ink-soft); margin-bottom: var(--space-sm); }
 
 input[type="text"], input[type="email"], input[type="password"], input:not([type]), select {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   background: var(--surface);
   color: var(--ink);

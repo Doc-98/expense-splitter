@@ -10,7 +10,7 @@
    explicit width rule to fill the row, because nothing here is a flex
    item to begin with, same reasoning .bill-list-item's own fix relies on
    two sections up in this file. */
-.balance-summary { display: flex; flex-direction: column; gap: 4px; margin: 0 0 var(--space-md); font-size: 15px; }
+.balance-summary { display: flex; flex-direction: column; gap: 4px; margin: 0 0 var(--space-md); font-size: var(--text-base); }
 .balance-line { margin: 0; }
 .balance-line strong { font-weight: 600; }
 
@@ -56,7 +56,7 @@
 .settlement { margin-top: var(--space-lg); }
 .settlement h2 {
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: var(--text-xl);
   margin-bottom: var(--space-sm);
 }
 .settlement-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
@@ -67,9 +67,9 @@
   gap: var(--space-xs);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 10px 14px;
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 .debtor { font-weight: 600; }
 .creditor { font-weight: 600; color: var(--accent-dark); }
@@ -81,11 +81,11 @@
    staying right-aligned alongside the amount. */
 .settlement-action { margin-left: auto; display: flex; align-items: center; gap: var(--space-xs); flex-wrap: nowrap; }
 .amount { font-weight: 600; }
-.mark-paid-btn { padding: 6px 12px; font-size: 13px; }
+.mark-paid-btn { padding: 6px 12px; font-size: var(--text-sm); }
 
 .payment-form-title {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: var(--text-base);
   margin: var(--space-lg) 0 var(--space-sm);
 }
 .payment-form {
@@ -96,7 +96,7 @@
 .payment-form select { flex: 1; min-width: 110px; }
 .payment-form input { flex: 1; min-width: 90px; }
 
-.payment-history { margin-top: var(--space-md); font-size: 14px; }
+.payment-history { margin-top: var(--space-md); font-size: var(--text-md); }
 .payment-history summary { cursor: pointer; color: var(--ink-soft); }
 .payment-history .settlement-list { margin-top: var(--space-sm); }
 
@@ -108,7 +108,7 @@
    fresh — both are "here's more, if you want it" sections under a
    primary list. */
 .settle-your-debts { margin-bottom: var(--space-lg); }
-.other-debts summary { cursor: pointer; color: var(--ink-soft); font-size: 14px; }
+.other-debts summary { cursor: pointer; color: var(--ink-soft); font-size: var(--text-md); }
 .other-debts .settlement-list { margin-top: var(--space-sm); }
 
 /* "Add bill" (GroupView.jsx) — title, Amount, and the submit arrow all on

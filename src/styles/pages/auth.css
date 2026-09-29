@@ -3,7 +3,7 @@
 
 .brand {
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: var(--text-4xl);
   font-weight: 600;
   margin: 0;
   color: var(--accent-dark);
@@ -19,9 +19,9 @@
 .auth-invite-note {
   margin: calc(-1 * var(--space-sm)) 0 var(--space-lg);
   padding: var(--space-sm) var(--space-md);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--accent-light);
-  font-size: 14px;
+  font-size: var(--text-md);
   line-height: 1.4;
 }
 
@@ -39,11 +39,11 @@
   max-width: 380px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   padding: var(--space-lg);
 }
 
 .auth-form { display: flex; flex-direction: column; }
 .auth-form .btn-primary { margin-top: 4px; }
 .auth-form .btn-link { margin-top: var(--space-xs); text-align: center; min-height: 44px; }
-.auth-magic-link-hint { margin: var(--space-sm) 0 0; font-size: 13px; line-height: 1.4; }
+.auth-magic-link-hint { margin: var(--space-sm) 0 0; font-size: var(--text-sm); line-height: 1.4; }

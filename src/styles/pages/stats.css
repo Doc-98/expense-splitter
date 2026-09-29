@@ -19,7 +19,7 @@
   text-align: center;
 }
 .stats-summary-value {
-  font-size: 20px;
+  font-size: var(--text-2xl);
   font-weight: 600;
 }
 
@@ -30,13 +30,13 @@
    quietly underneath them. */
 .stats-summary.is-slim { margin-bottom: var(--space-md); }
 .stats-summary.is-slim .stats-summary-item { padding: 10px 12px; gap: 2px; }
-.stats-summary.is-slim .stats-summary-value { font-size: 16px; }
+.stats-summary.is-slim .stats-summary-value { font-size: var(--text-lg); }
 .stats-summary.is-slim .muted { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; }
 
 .stats-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: var(--text-md);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -47,26 +47,26 @@
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
 }
-.stats-table th { color: var(--ink-soft); font-weight: 500; font-size: 12px; }
+.stats-table th { color: var(--ink-soft); font-weight: 500; font-size: var(--text-xs); }
 .stats-table tr:last-child td { border-bottom: none; }
 .stats-note { margin-top: 6px; }
 
 .stats-bars { display: flex; flex-direction: column; gap: 8px; }
-.stats-bar-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.stats-bar-row { display: flex; align-items: center; gap: 10px; font-size: var(--text-sm); }
 .stats-bar-label { width: 110px; flex-shrink: 0; color: var(--ink-soft); }
 .stats-bar-track {
   flex: 1;
   height: 10px;
   background: var(--accent-light);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
-.stats-bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+.stats-bar-fill { height: 100%; background: var(--accent); border-radius: var(--radius-pill); }
 .stats-bar-fill.over-budget { background: var(--negative); }
 .stats-bar-value { width: 70px; text-align: right; flex-shrink: 0; }
 .threshold-bar-value { width: 130px; text-align: right; flex-shrink: 0; }
 .stats-bar-group { margin-bottom: 8px; }
-.comparison-badge { display: block; text-align: right; font-size: 11px; margin-top: 2px; }
+.comparison-badge { display: block; text-align: right; font-size: var(--text-2xs); margin-top: 2px; }
 /* One amount never breaks in the middle ("€1,050.00 / €1,200.00" may wrap
    at the slash, never inside a figure). */
 .stats-bar-amount { white-space: nowrap; }
@@ -117,8 +117,8 @@
   gap: 6px;
 }
 .time-range-label-stack { display: flex; flex-direction: column; align-items: center; min-width: 110px; }
-.time-range-year { font-size: 11px; color: var(--ink-soft); line-height: 1.4; }
-.time-range-label { font-size: 14px; font-weight: 500; text-align: center; }
+.time-range-year { font-size: var(--text-2xs); color: var(--ink-soft); line-height: 1.4; }
+.time-range-label { font-size: var(--text-md); font-weight: 500; text-align: center; }
 .time-range-nav .btn-icon {
   font-size: 24px; padding: 4px 5px;
   /* The arrows sit only 6px apart, too close for the invisible tap area
@@ -139,15 +139,15 @@
    tap target since it's the one actually used most often. Still large
    enough to tell apart at a glance and tap accurately, which the first
    pass at this (font-size 16px, 2px padding, no inter-button gap) wasn't. */
-.time-range-nav .btn-icon.time-range-jump { font-size: 20px; color: var(--ink-soft); }
+.time-range-nav .btn-icon.time-range-jump { font-size: var(--text-2xl); color: var(--ink-soft); }
 
 .stale-balance {
   display: inline-block;
-  font-size: 12px;
+  font-size: var(--text-xs);
   margin-left: 8px;
 }
 .stats-table .btn-link {
-  font-size: 12px;
+  font-size: var(--text-xs);
   margin-left: 6px;
 }
 
@@ -160,23 +160,23 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  font-size: 14px;
+  font-size: var(--text-md);
   margin-bottom: var(--space-md);
 }
 .graphs-category-filter select { flex: 1; max-width: 260px; }
-.graphs-period-total { font-size: 15px; margin-bottom: var(--space-sm); }
+.graphs-period-total { font-size: var(--text-base); margin-bottom: var(--space-sm); }
 
 .line-chart-wrap { width: 100%; margin-bottom: var(--space-lg); }
 .line-chart { width: 100%; height: auto; display: block; overflow: visible; }
 /* Same rough height a real chart would occupy, so the page doesn't jump
    when a period with no bills renders this instead of the SVG. */
 .line-chart-empty { display: flex; align-items: center; justify-content: center; min-height: 140px; }
-.line-chart-max-label { font-size: 11px; fill: var(--ink-soft); font-family: var(--font-mono); }
+.line-chart-max-label { font-size: var(--text-2xs); fill: var(--ink-soft); font-family: var(--font-mono); }
 .line-chart-baseline { stroke: var(--border); stroke-width: 1; }
 .line-chart-x-label { font-size: 10px; fill: var(--ink-soft); }
 .line-chart-tooltip rect { fill: var(--ink); opacity: 0.92; }
 .line-chart-tooltip-label { font-size: 10px; fill: var(--bg); text-anchor: middle; }
-.line-chart-tooltip-amount { font-size: 11px; fill: var(--bg); text-anchor: middle; font-weight: 600; }
+.line-chart-tooltip-amount { font-size: var(--text-2xs); fill: var(--bg); text-anchor: middle; font-weight: 600; }
 
 .pie-chart-wrap {
   display: flex;
@@ -192,10 +192,10 @@
    the pop centered on the ring instead of drifting toward a corner. */
 .pie-chart-slice { cursor: pointer; transform-origin: 100px 100px; transition: transform 0.1s ease; }
 .pie-chart-slice.active { transform: scale(1.05); }
-.pie-chart-total-amount { font-size: 15px; fill: var(--ink); font-weight: 600; }
-.pie-chart-total-label { font-size: 11px; fill: var(--ink-soft); }
+.pie-chart-total-amount { font-size: var(--text-base); fill: var(--ink); font-weight: 600; }
+.pie-chart-total-label { font-size: var(--text-2xs); fill: var(--ink-soft); }
 .pie-chart-empty { flex-direction: column; align-items: flex-start; gap: var(--space-sm); }
-.pie-chart-empty-label { font-size: 14px; }
+.pie-chart-empty-label { font-size: var(--text-md); }
 
 .pie-chart-legend { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 200px; }
 .pie-chart-legend-item.active { background: var(--surface-tint); border-radius: var(--radius); }
@@ -208,7 +208,7 @@
   background: none;
   border: none;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--ink);
   cursor: pointer;
   text-align: left;

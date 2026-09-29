@@ -13,7 +13,7 @@
   background: none;
   border: none;
   color: var(--ink);
-  font-size: 14px;
+  font-size: var(--text-md);
   font-weight: 500;
   text-decoration: none;
   cursor: pointer;
@@ -32,7 +32,7 @@
   background: none;
   border: none;
   color: var(--ink-soft);
-  font-size: 18px;
+  font-size: var(--text-xl);
   line-height: 1;
   cursor: pointer;
   padding: 4px 8px;
@@ -44,11 +44,11 @@
   top: calc(100% + 6px);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 4px var(--space-md);
   min-width: 140px;
   box-shadow: var(--shadow-popover);
-  z-index: 10;
+  z-index: var(--z-popover);
 }
 
 /* Same "⋮" pattern as .bill-menu-* above, under its own name rather than
@@ -59,7 +59,7 @@
   background: none;
   border: none;
   color: var(--ink-soft);
-  font-size: 18px;
+  font-size: var(--text-xl);
   line-height: 1;
   cursor: pointer;
   padding: 4px 8px;
@@ -71,11 +71,11 @@
   top: calc(100% + 6px);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 4px var(--space-md);
   min-width: 140px;
   box-shadow: var(--shadow-popover);
-  z-index: 10;
+  z-index: var(--z-popover);
 }
 
 .invite-menu-wrap { position: relative; }
@@ -89,11 +89,11 @@
   max-width: calc(100vw - 2 * var(--space-md));
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: var(--space-md);
   min-width: 220px;
   box-shadow: var(--shadow-popover);
-  z-index: 10;
+  z-index: var(--z-popover);
   text-align: center;
 }
 .invite-qr {
@@ -101,12 +101,12 @@
   width: 160px;
   height: 160px;
   margin: 0 auto var(--space-sm);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: #fff;
   padding: 8px;
   border: 1px solid var(--border);
 }
-.invite-hint { margin: 0 0 var(--space-sm); font-size: 13px; }
+.invite-hint { margin: 0 0 var(--space-sm); font-size: var(--text-sm); }
 
 .share-button-wrap { position: relative; display: flex; align-items: center; gap: 10px; margin-top: var(--space-sm); }
 /* Icon mode (GroupView.jsx's header, alongside the plain .icon-btn Stats/
@@ -121,18 +121,18 @@
   top: calc(100% + 6px);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 4px var(--space-md);
   min-width: 180px;
   box-shadow: var(--shadow-popover);
-  z-index: 10;
+  z-index: var(--z-popover);
 }
 /* Right-anchored variant — for a trigger sitting near the right edge of a
    narrow header (GroupView.jsx's Share icon), where the default left:0
    anchor would push the menu's right edge past the viewport instead of
    opening safely inward. */
 .share-menu-popover-right { left: auto; right: 0; }
-.share-status { font-size: 13px; }
+.share-status { font-size: var(--text-sm); }
 /* Icon mode's own copy-status message — a header packed tight with three
    icon buttons has no spare inline room for this without shoving Stats/
    Settings around every time it briefly appears, so it floats below the
@@ -144,8 +144,8 @@
   white-space: nowrap;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 4px 8px;
-  font-size: 12px;
-  z-index: 10;
+  font-size: var(--text-xs);
+  z-index: var(--z-popover);
 }

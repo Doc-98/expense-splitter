@@ -15,7 +15,7 @@
   border: none;
   background: none;
   font-family: var(--font-body);
-  font-size: 16px;
+  font-size: var(--text-lg);
   color: var(--ink);
   padding: 4px 2px;
 }
@@ -48,8 +48,8 @@
   background: var(--surface);
   color: var(--ink-soft);
   padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 13px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -59,7 +59,7 @@
 .guide-group { margin-bottom: var(--space-lg); }
 .guide-group-label {
   font-family: var(--font-display);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.09em;
@@ -78,17 +78,17 @@
   cursor: pointer;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 15px;
+  font-size: var(--text-base);
 }
 .guide-section[open] summary { margin-bottom: var(--space-sm); }
-.guide-section-body { font-size: 14px; line-height: 1.55; }
+.guide-section-body { font-size: var(--text-md); line-height: 1.55; }
 .guide-section-body p { margin: 0 0 10px; }
 .guide-section-body p:last-child { margin-bottom: 0; }
 .guide-section-body ul { margin: 0 0 10px; padding-left: 20px; }
 .guide-section-body li { margin-bottom: 6px; }
 .guide-section-body code {
   background: var(--surface-tint);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 1px 5px;
   font-family: var(--font-mono);
   font-size: 0.92em;
@@ -107,11 +107,11 @@
 .guide-demo {
   background: var(--surface-tint);
   border: 1px dashed var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: var(--space-sm) var(--space-md);
   margin: 0 0 10px;
 }
-.guide-demo-label { margin: 0 0 4px; font-size: 12px; }
+.guide-demo-label { margin: 0 0 4px; font-size: var(--text-xs); }
 .guide-settle-demo .guide-demo-label:not(:first-child) { margin-top: 8px; }
 .guide-settle-row { margin: 0 0 2px; font-size: 13.5px; }
 /* The bare "⋮" glyph reference inline in a sentence — same look as the

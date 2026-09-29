@@ -30,14 +30,14 @@
   @page { margin: 1.5cm; }
   .print-only h1 {
     font-family: var(--font-display);
-    font-size: 22px;
+    font-size: var(--text-3xl);
     margin: 0 0 4px;
   }
-  .print-only .print-subtitle { margin: 0 0 8px; color: #444; font-size: 13px; }
+  .print-only .print-subtitle { margin: 0 0 8px; color: #444; font-size: var(--text-sm); }
   .print-only .print-note { font-style: italic; color: #444; }
   .print-only h2 {
     font-family: var(--font-display);
-    font-size: 15px;
+    font-size: var(--text-base);
     margin: 24px 0 8px;
   }
   .print-only h2:first-of-type { margin-top: 20px; }
@@ -46,15 +46,15 @@
     text-align: left;
     padding: 6px 8px;
     border-bottom: 1px solid #ccc;
-    font-size: 13px;
+    font-size: var(--text-sm);
   }
   .print-table th { font-weight: 600; }
   /* Keeps a single row from being split across a page break — a bill's
      name landing on one page and its amount on the next is worse than
      just pushing the whole row onto the next page a little early. */
   .print-table tr { break-inside: avoid; }
-  .print-total { font-size: 16px; font-weight: 700; margin-top: 16px; text-align: right; }
+  .print-total { font-size: var(--text-lg); font-weight: 700; margin-top: 16px; text-align: right; }
   /* #444 on paper white is 9.7:1 (AAA); #888 was 3.5:1, fainter than
      anything on screen. */
-  .print-footer { margin-top: 32px; font-size: 11px; color: #444; }
+  .print-footer { margin-top: 32px; font-size: var(--text-2xs); color: #444; }
 }

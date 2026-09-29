@@ -16,7 +16,7 @@
    than .auth-magic-link-hint (which sits under the whole magic-link
    form), pulled up close to the input it's describing rather than
    getting .auth-form .btn-link's own spacing rules. */
-.field-hint { margin: 4px 0 0; font-size: 12px; }
+.field-hint { margin: 4px 0 0; font-size: var(--text-xs); }
 
 /* Every click-to-edit value (name, unit price, quantity, total price) gets
    the same dotted-underline treatment — deliberately the same visual
@@ -59,7 +59,7 @@
 input.item-editable-input, textarea.item-editable-input {
   color: inherit;
   border: 1px solid var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 0 4px;
   background: var(--surface);
 }
@@ -74,7 +74,7 @@ input.item-editable-input, textarea.item-editable-input {
   position: absolute;
   inset: 0;
   background: var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   transition: background-color 0.15s ease;
   pointer-events: none;
 }
@@ -109,11 +109,11 @@ input.item-editable-input, textarea.item-editable-input {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   flex: 1;
 }
 .stacked-form-row select,
-.stacked-form-row input[type='date'] { font-size: 14px; }
+.stacked-form-row input[type='date'] { font-size: var(--text-md); }
 .stacked-form-actions { display: flex; align-items: center; gap: var(--space-md); }
 .form-submit-btn { transition: opacity 0.22s ease, transform 0.22s ease; }
 .btn-primary.form-submit-btn:disabled { opacity: 0; transform: translateY(4px); pointer-events: none; }
@@ -189,7 +189,7 @@ input.item-editable-input, textarea.item-editable-input {
   box-shadow: 0 1px 3px rgba(0,0,0,0.25);
   cursor: pointer;
 }
-.range-slider-labels { display: flex; justify-content: space-between; margin-top: 4px; font-size: 13px; color: var(--ink-soft); }
+.range-slider-labels { display: flex; justify-content: space-between; margin-top: 4px; font-size: var(--text-sm); color: var(--ink-soft); }
 /* .item-editable (the dotted-underline click-to-edit look shared with
    ItemRow's name/price/quantity) already handles the look — this just
    gives the label a bit of hit-target padding, since a bare number is a

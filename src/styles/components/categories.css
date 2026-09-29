@@ -46,8 +46,8 @@
   top: calc(100% + 6px);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: var(--space-sm);
   box-shadow: var(--shadow-popover);
-  z-index: 10;
+  z-index: var(--z-popover);
 }

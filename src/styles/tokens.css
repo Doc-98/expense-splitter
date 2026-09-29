@@ -49,7 +49,38 @@
   --space-sm: 10px;
   --space-md: 16px;
   --space-lg: 24px;
+  /* Corner radius. --radius is THE radius (buttons, cards, tiles, modals). */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
   --radius: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* Type scale, in rem so text follows the browser's own text-size
+     setting (1rem = 16px by default; nothing here sets the root size).
+     Roles, as in the design system: 2xs micro labels · xs captions ·
+     sm labels · md secondary text · base body and buttons · lg section
+     heads and inputs · xl sheet titles · 2xl stat figures · 3xl page
+     titles · 4xl the wordmark · 5xl the app mark. */
+  --text-2xs: 0.6875rem; /* 11px */
+  --text-xs: 0.75rem;    /* 12px */
+  --text-sm: 0.8125rem;  /* 13px */
+  --text-md: 0.875rem;   /* 14px */
+  --text-base: 0.9375rem; /* 15px */
+  --text-lg: 1rem;       /* 16px */
+  --text-xl: 1.125rem;   /* 18px */
+  --text-2xl: 1.25rem;   /* 20px */
+  --text-3xl: 1.375rem;  /* 22px */
+  --text-4xl: 1.75rem;   /* 28px */
+  --text-5xl: 2.125rem;  /* 34px */
+
+  /* Stacking order, lowest to highest. */
+  --z-sticky: 5;      /* sticky bars inside the page (pagination) */
+  --z-popover: 10;    /* dropdown menus and pickers */
+  --z-floating: 50;   /* the install banner */
+  --z-overlay: 100;   /* modal and bottom-sheet backdrops */
 
   /* Shadows for the few things that float (see "Borders over shadows"):
      the active tab, popover menus, the install banner. Dark mode needs

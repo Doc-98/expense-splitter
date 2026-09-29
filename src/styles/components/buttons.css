@@ -8,9 +8,9 @@
   display: inline-block;
   border: 1px solid var(--border);
   background: var(--surface);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 6px 14px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--ink);
   text-decoration: none;
@@ -24,7 +24,7 @@
   border-radius: var(--radius);
   padding: 12px 18px;
   font-weight: 600;
-  font-size: 15px;
+  font-size: var(--text-base);
   text-decoration: none;
   cursor: pointer;
   transition: transform 0.05s ease, opacity 0.15s ease;
@@ -40,7 +40,7 @@
   background: none;
   border: none;
   color: var(--accent-dark);
-  font-size: 14px;
+  font-size: var(--text-md);
   font-weight: 500;
   cursor: pointer;
   padding: 4px 0;
@@ -51,7 +51,7 @@
   background: none;
   border: none;
   color: var(--ink-soft);
-  font-size: 20px;
+  font-size: var(--text-2xl);
   line-height: 1;
   cursor: pointer;
   padding: 0 4px;
@@ -74,7 +74,7 @@
   color: var(--ink-soft);
   cursor: pointer;
   padding: 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   text-decoration: none;
 }
 .icon-btn:hover { background: var(--accent-light); color: var(--accent-dark); }
@@ -189,7 +189,7 @@
 .tab-row {
   display: flex;
   background: var(--bg);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 4px;
   margin-bottom: var(--space-lg);
 }
@@ -198,7 +198,7 @@
   border: none;
   background: none;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-weight: 500;
   color: var(--ink-soft);
   cursor: pointer;
