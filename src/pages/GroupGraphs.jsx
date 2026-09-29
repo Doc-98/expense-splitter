@@ -167,7 +167,7 @@ export default function GroupGraphs() {
   const lineColor = categoryFilter === 'uncategorized' ? categoryColor(null) : selectedCategory?.color ? categoryColor(selectedCategory.color) : 'var(--accent)'
 
   return (
-    <div className="page">
+    <div className="page page-wide">
       <header className="page-header">
         <BackButton to={`/groups/${groupId}/stats`} />
         <h1>Graphs{groupName ? ` — ${groupName}` : ''}</h1>

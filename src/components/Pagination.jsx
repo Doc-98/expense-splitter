@@ -1,5 +1,17 @@
 import { useLayoutEffect, useRef } from 'react'
 
+// The element whose scrolling this pill floats over: normally the window,
+// but on a wide screen the group page's bill list scrolls inside its own
+// pane (see GroupSplit.jsx), and "at the bottom" has to mean that pane's
+// bottom. Null means the window.
+function scrollContainerOf(el) {
+  for (let node = el?.parentElement; node && node !== document.body; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node)
+    if (overflowY === 'auto' || overflowY === 'scroll') return node
+  }
+  return null
+}
+
 // `floating` (default true) is the bill list's own pill: sticky to the
 // bottom of the viewport while there's more page to scroll, docking in
 // flow once you reach the real bottom (see the comment below). Pass
@@ -24,6 +36,7 @@ export default function Pagination({ page, setPage, totalItems, pageSize, floati
   // floating distinction to preserve across a page swap in the first
   // place.
   const wasAtBottom = useRef(false)
+  const pillRef = useRef(null)
 
   // The bug this exists for: .pagination is `position: sticky`, so once
   // you've scrolled to the actual bottom of a page it docks into its
@@ -55,20 +68,25 @@ export default function Pagination({ page, setPage, totalItems, pageSize, floati
   useLayoutEffect(() => {
     if (!floating || !wasAtBottom.current) return
     wasAtBottom.current = false
-    window.scrollTo(0, document.documentElement.scrollHeight)
+    const container = scrollContainerOf(pillRef.current)
+    if (container) container.scrollTop = container.scrollHeight
+    else window.scrollTo(0, document.documentElement.scrollHeight)
   }, [page, totalItems, floating])
 
   if (totalPages <= 1) return null
 
   function goToPage(next) {
     if (floating) {
-      wasAtBottom.current = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2
+      const container = scrollContainerOf(pillRef.current)
+      wasAtBottom.current = container
+        ? container.scrollTop + container.clientHeight >= container.scrollHeight - 2
+        : window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2
     }
     setPage(next)
   }
 
   return (
-    <div className={floating ? 'pagination' : 'pagination pagination-inline'}>
+    <div ref={pillRef} className={floating ? 'pagination' : 'pagination pagination-inline'}>
       <button
         type="button"
         className="btn-icon"

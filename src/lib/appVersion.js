@@ -21,4 +21,6 @@ export const WHATS_NEW = [
   "Text now follows your phone's or browser's own text-size setting, so a larger system font makes the whole app easier to read",
   "A few in-between text sizes and spacings are tidied onto one consistent scale, so labels and rows line up more evenly",
   "Pie charts print each larger slice's share beside it, and tapping a slice or its legend row highlights both and shows that category's amount in the middle",
+  "On a laptop or a tablet held sideways, a bill opens beside the bill list instead of replacing it",
+  "On tablets and laptops, the stats and graphs pages use the full width, with their sections side by side",
 ]

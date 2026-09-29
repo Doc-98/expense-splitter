@@ -509,7 +509,7 @@ export default function AccountStats() {
   // (Variable/preference names here stay "threshold" — see
   // statsPreferences.js — only the heading and links say "Budgets" now.)
   const thresholdsSection = thresholdRows.length > 0 && (
-    <>
+    <section className="stats-section">
       <h2 className="settings-section-title">Budgets</h2>
       <div className="stats-bars">
         {thresholdRows.map((t) => (
@@ -540,11 +540,11 @@ export default function AccountStats() {
         switch between weekly and monthly, from <strong>Settings → Budgets</strong>; where this
         section sits on the page is set from <strong>Settings → Layout</strong>.
       </p>
-    </>
+    </section>
   )
 
   return (
-    <div className="page">
+    <div className="page page-wide">
       <header className="page-header">
         <BackButton to="/" label="Groups" />
         <h1>Your stats</h1>
@@ -637,8 +637,11 @@ export default function AccountStats() {
             not-yet-settled balance frozen from a group you've left.
           </p>
 
+          {/* One <section> per heading, so a tablet or laptop can set them
+              out two to a row (.stats-grid, see pages/stats.css). */}
+          <div className="stats-grid">
           {categoryRows.length > 0 && (
-            <>
+            <section className="stats-section">
               <h2 className="settings-section-title">By category</h2>
               <div className="stats-bars">
                 {categoryRows.map((c) => (
@@ -666,9 +669,10 @@ export default function AccountStats() {
                 breakdown existed: its snapshot has no category data for that period to draw from,
                 so it's missing here even though its total still counts in the summary above.
               </p>
-            </>
+            </section>
           )}
 
+          <section className="stats-section">
           <h2 className="settings-section-title">By group</h2>
           <table className="stats-table">
             <thead>
@@ -705,9 +709,10 @@ export default function AccountStats() {
               ))}
             </tbody>
           </table>
+          </section>
 
           {showMonthly && monthlyRows.length > 0 && (
-            <>
+            <section className="stats-section">
               <h2 className="settings-section-title">By month (fronted)</h2>
               <div className="stats-bars">
                 {monthlyRows.map(([key, value]) => (
@@ -720,10 +725,11 @@ export default function AccountStats() {
                   </div>
                 ))}
               </div>
-            </>
+            </section>
           )}
 
           {thresholdsPosition === 'bottom' && thresholdsSection}
+          </div>
 
           <PrintableAccountStatsRecap recap={recap} />
         </>

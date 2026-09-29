@@ -162,6 +162,15 @@
 .bill-row-outer:hover { border-color: var(--accent); }
 .bill-row-outer:active { border-color: var(--accent); background: var(--accent-light); }
 .list-row-focused .bill-row-outer { border-color: var(--accent); background: var(--accent-light); }
+/* The bill open beside the list on a wide screen (GroupSplit.jsx): the
+   pressed-row fill plus a 2px accent edge, so it isn't marked by shade
+   alone. */
+.bill-row-outer:has(.card-list-item.is-current) {
+  border-color: var(--accent);
+  outline: 1px solid var(--accent);
+  background: var(--accent-light);
+}
+.bill-row-shell .card-list-item.is-current { background: var(--accent-light); }
 .bill-row-shell { position: relative; overflow: hidden; flex: 1; min-width: 0; border-radius: var(--radius) 0 0 var(--radius); }
 /* .card-list-item's own border/radius would just double up on
    .bill-row-outer's identical treatment one level up, so those are

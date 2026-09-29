@@ -13,7 +13,7 @@ import { savePendingRedirect, takePendingRedirect } from './lib/pendingRedirect'
 import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
 import Groups from './pages/Groups'
-import GroupView from './pages/GroupView'
+import GroupSplit from './pages/GroupSplit'
 import SettleUp from './pages/SettleUp'
 import History from './pages/History'
 import RecordPayment from './pages/RecordPayment'
@@ -130,7 +130,14 @@ function Shell() {
           <Route path="/scan-settings" element={<RequireAuth><ScanSettings /></RequireAuth>} />
           <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
           <Route path="/" element={<RequireAuth><Groups /></RequireAuth>} />
-          <Route path="/groups/:groupId" element={<RequireAuth><GroupView /></RequireAuth>} />
+          {/* The group page and a bill share one layout route, so on a wide
+              screen the bill opens beside the list instead of replacing it
+              (see GroupSplit.jsx). The group's own path renders nothing into
+              the outlet; the bill's renders the bill. */}
+          <Route element={<RequireAuth><GroupSplit /></RequireAuth>}>
+            <Route path="/groups/:groupId" element={null} />
+            <Route path="/groups/:groupId/bills/:billId" element={<BillView />} />
+          </Route>
           <Route path="/groups/:groupId/settle-up" element={<RequireAuth><SettleUp /></RequireAuth>} />
           <Route path="/groups/:groupId/history" element={<RequireAuth><History /></RequireAuth>} />
           <Route path="/groups/:groupId/record-payment" element={<RequireAuth><RecordPayment /></RequireAuth>} />
@@ -166,7 +173,6 @@ function Shell() {
               </RequireAuth>
             }
           />
-          <Route path="/groups/:groupId/bills/:billId" element={<RequireAuth><BillView /></RequireAuth>} />
           <Route
             path="/groups/:groupId/categorize"
             element={

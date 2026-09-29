@@ -221,7 +221,7 @@ export default function AccountGraphs() {
   const lineColor = categoryFilter && selectedCategory?.color ? categoryColor(selectedCategory.color) : 'var(--accent)'
 
   return (
-    <div className="page">
+    <div className="page page-wide">
       <header className="page-header">
         <BackButton to="/stats" />
         <h1>Graphs</h1>

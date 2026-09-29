@@ -206,6 +206,19 @@ phone's own text-size setting; nothing sets a root font size), corners from
 Component-internal padding stays on an even-pixel grid; the only odd values
 are deliberate 1–3px optical nudges.
 
+**Phones first, wider screens where it helps.** Every page is a 560px
+reading column on a phone, and most stay one everywhere: forms and lists
+read worse stretched. Two exceptions use a tablet's or laptop's room. The
+stats and graphs pages (`.page-wide`) widen to 1000px from 768px up, and
+their sections (each a `.stats-section` in a `.stats-grid`) sit two to a
+row. The group page and an open bill share one layout route
+(`GroupSplit.jsx`): from 1024px (`SPLIT_MEDIA_QUERY`) the bill list stays
+on the left and the open bill fills the right, each pane scrolling on its
+own; narrower, it renders one page at a time exactly as before. Because
+the group page stays mounted while bills open beside it, it picks up
+router-state notices when they arrive rather than only on mount, and only
+one of the two pages renders a print recap at a time.
+
 **Why no top-level `tests/` directory.** Every test file sits directly
 next to what it tests — `Foo.jsx` → `Foo.test.jsx`,
 `bar.js` → `bar.test.js` — rather than mirrored into a parallel tree.

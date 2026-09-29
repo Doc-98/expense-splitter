@@ -55,7 +55,11 @@ import EmptyState from '../components/EmptyState'
 const BILLS_PAGE_SIZE = 15
 const VERIFY_DELAY_MS = 30 * 1000
 
-export default function GroupView() {
+// `activeBillId` and `printable` only come from GroupSplit.jsx's wide
+// layout, where this page shares the screen with an open bill: the open
+// bill's row is marked in the list, and the print recap is left to the
+// bill while one is open.
+export default function GroupView({ activeBillId = null, printable = true }) {
   const { groupId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
@@ -128,9 +132,15 @@ export default function GroupView() {
   // this only ever reflects the navigation that just landed here, then
   // cleared from history immediately below so refreshing or going back
   // doesn't resurface it.
-  const [notice] = useState(() => location.state?.notice || null)
+  //
+  // On a wide screen this page doesn't remount when a bill beside it is
+  // deleted (see GroupSplit.jsx), so a notice arriving later is picked up
+  // here too, not only the one present when the page first mounted.
+  const [notice, setNotice] = useState(() => location.state?.notice || null)
   useEffect(() => {
-    if (location.state?.notice) navigate(location.pathname, { replace: true, state: {} })
+    if (!location.state?.notice) return
+    setNotice(location.state.notice)
+    navigate(location.pathname, { replace: true, state: {} })
   }, [location.state, location.pathname, navigate])
   // Which bill (if any) is mid-rename via the ⋮ menu's own "Rename" —
   // same two-state shape (an id + a draft string) as GroupCategoriesSection/
@@ -1554,7 +1564,8 @@ export default function GroupView() {
                                   </button>
                                   <Link
                                     to={`/groups/${groupId}/bills/${bill.id}`}
-                                    className="card-list-item"
+                                    className={`card-list-item ${String(bill.id) === activeBillId ? 'is-current' : ''}`}
+                                    aria-current={String(bill.id) === activeBillId ? 'page' : undefined}
                                     {...billBind.row}
                                   >
                                     {billLabel}
@@ -1596,7 +1607,7 @@ export default function GroupView() {
           contributes no visible spacing of its own (print-only). Quick
           stats itself lives up near the top of the page now, right after
           the action row — nothing left down here to double up with. */}
-      {group?.is_personal ? (
+      {!printable ? null : group?.is_personal ? (
         <PrintablePersonalSpaceRecap recap={personalRecap} />
       ) : (
         <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />

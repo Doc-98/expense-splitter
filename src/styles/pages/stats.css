@@ -2,6 +2,36 @@
    Layer: pages (see src/styles.css for the order). */
 
 /* ---------- Group stats page ---------- */
+/* Each heading and what's under it is a .stats-section (inside a
+   .stats-grid), so the divider between sections belongs to the section
+   rather than to its heading: on a phone it's the same hairline above every
+   section after the first that .settings-section-title draws on its own
+   elsewhere, and on a tablet or laptop (below) two sections share a row. A
+   Budgets section placed at the top of Your Stats sits before the grid, so
+   the grid's first section then gets a divider too. */
+.stats-grid > .stats-section > .settings-section-title { margin-top: 0; padding-top: 0; border-top: none; }
+.stats-grid > .stats-section + .stats-section,
+.stats-section ~ .stats-grid > .stats-section:first-child {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border);
+}
+@media (min-width: 768px) {
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 40px;
+    align-items: start;
+  }
+  /* The first row sits right under the summary tiles: no divider. */
+  .stats-grid > .stats-section:nth-child(-n + 2) { margin-top: 0; padding-top: 0; border-top: none; }
+  /* The line chart scales with its width; past this height its labels
+     would grow oversized, so the drawing stays centred at this size. */
+  .page-wide .line-chart { max-height: 320px; }
+  /* Past this, a legend row's amount drifts too far from its name. */
+  .page-wide .pie-chart-legend { max-width: 440px; }
+}
+
 .stats-summary {
   display: flex;
   flex-wrap: wrap;
