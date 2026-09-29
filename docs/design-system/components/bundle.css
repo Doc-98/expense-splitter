@@ -179,7 +179,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 
 /* Modal & bottom sheet (rendered in-flow in previews; position: fixed in the app) */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 100; padding: var(--space-md); }
+.modal-backdrop { position: fixed; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; z-index: 100; padding: var(--space-md); }
 .modal-panel { background: var(--surface); border-radius: var(--radius); padding: var(--space-lg); max-width: 420px; width: 100%; max-height: 85vh; overflow-y: auto; }
 .modal-panel h2 { font-family: var(--font-display); font-size: 18px; margin: 0 0 var(--space-md); }
 .payer-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
@@ -191,7 +191,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .item-qty-input { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 .payer-total-row { margin-top: var(--space-md); font-size: 14px; font-weight: 600; text-align: center; }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--space-md); margin-top: var(--space-lg); }
-.sheet-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: flex-end; justify-content: center; z-index: 100; }
+.sheet-backdrop { position: fixed; inset: 0; background: var(--scrim); display: flex; align-items: flex-end; justify-content: center; z-index: 100; }
 .sheet-panel { background: var(--surface); border-radius: 20px 20px 0 0; padding: var(--space-lg) var(--space-lg) calc(var(--space-lg) + env(safe-area-inset-bottom, 0px)); width: 100%; max-width: 480px; }
 .sheet-grabber { width: 36px; height: 4px; border-radius: 999px; background: var(--border); margin: -6px auto 14px; }
 .sheet-panel h2 { font-family: var(--font-display); font-size: 18px; margin: 0 0 8px; }
