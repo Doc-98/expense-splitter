@@ -33,4 +33,6 @@ export const WHATS_NEW = [
   "A fresh app icon in the current green, with a crisper \"S\"; iPhones now get a proper home-screen icon, and Android can shape it to fit your launcher",
   "While a page loads you now see a faint outline of what's coming instead of a bare \"Loading…\", and Your Stats no longer briefly says you have no stats while it loads",
   "Empty screens now say what to do next, with a button that takes you there: create your first group, add a bill, head back once everyone's even, and more",
+  "A bill's items now show their category's name, not just a coloured dot: under each item by default, or grouped under a heading per category with its subtotal (Settings > Layout > Item categories on a bill)",
+  "Subscriptions show their category's name too",
 ]

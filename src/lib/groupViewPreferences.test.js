@@ -12,9 +12,16 @@ const BASE_DEFAULTS = {
   avatarSize: 'small',
   highlightFullBalanceLine: true,
   paymentFormLayout: 'dropdowns',
+  itemCategoryDisplay: 'label',
 }
 
 describe('getGroupViewPreferences', () => {
+  it("shows each item's category under it by default, and remembers switching to grouped", () => {
+    expect(getGroupViewPreferences().itemCategoryDisplay).toBe('label')
+    setGroupViewPreferences({ itemCategoryDisplay: 'grouped' })
+    expect(getGroupViewPreferences()).toEqual({ ...BASE_DEFAULTS, itemCategoryDisplay: 'grouped' })
+  })
+
   it('defaults both display preferences to visible, sticky filters off, small avatars, whole-line balance highlighting, and dropdown payment fields', () => {
     expect(getGroupViewPreferences()).toEqual(BASE_DEFAULTS)
   })

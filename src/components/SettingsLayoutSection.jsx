@@ -2,7 +2,12 @@ import { useState } from 'react'
 import { useTheme } from '../context/ThemeContext'
 import { useCurrency } from '../context/CurrencyContext'
 import { getStatsPreferences, setStatsPreferences, THRESHOLDS_POSITION_OPTIONS } from '../lib/statsPreferences'
-import { getGroupViewPreferences, setGroupViewPreferences, PAYMENT_FORM_LAYOUT_OPTIONS } from '../lib/groupViewPreferences'
+import {
+  getGroupViewPreferences,
+  setGroupViewPreferences,
+  PAYMENT_FORM_LAYOUT_OPTIONS,
+  ITEM_CATEGORY_DISPLAY_OPTIONS,
+} from '../lib/groupViewPreferences'
 import { GRANULARITIES, granularityLabel } from './TimeRangeSelector'
 import { DEFAULT_CATEGORIES } from '../lib/categories'
 import { categoryColor } from '../lib/categoryPalette'
@@ -13,6 +18,7 @@ const THEME_MODES = ['light', 'dark', 'system']
 const THEME_MODE_LABELS = { light: 'Light', dark: 'Dark', system: 'System' }
 const PAYMENT_FORM_LAYOUT_LABELS = { dropdowns: 'Dropdowns', avatars: 'Avatars' }
 const THRESHOLDS_POSITION_LABELS = { top: 'Top', bottom: 'Bottom', hidden: 'Hidden' }
+const ITEM_CATEGORY_DISPLAY_LABELS = { label: 'Under each item', grouped: 'Grouped' }
 
 // Dummy figures for the previews below — never real user data, just
 // standing in for it (see each preview's own comment for why those
@@ -20,6 +26,7 @@ const THRESHOLDS_POSITION_LABELS = { top: 'Top', bottom: 'Bottom', hidden: 'Hidd
 // than computed on every render.
 const PREVIEW_GROCERIES = DEFAULT_CATEGORIES.find((c) => c.name === 'Groceries')
 const PREVIEW_TRANSPORT = DEFAULT_CATEGORIES.find((c) => c.name === 'Transport')
+const PREVIEW_HOUSEHOLD = DEFAULT_CATEGORIES.find((c) => c.name === 'Household')
 
 // Every per-device "how things are laid out" preference in the app,
 // pulled into one place — previously scattered across Profile
@@ -324,8 +331,100 @@ export default function SettingsLayoutSection() {
         Dropdowns pick "Who paid" and "Paid to" from a plain list; Avatars pick each by tapping their
         own avatar circle instead, same as "Split with" on a bill.
       </p>
+
+      <div className={openPreview === 'itemCategories' ? 'is-open' : ''}>
+        <div className="settings-row">
+          <button type="button" className="settings-row-label-btn" onClick={() => toggleLabel('itemCategories')}>
+            Item categories on a bill
+            <ChevronIcon size={14} className="settings-row-chevron" />
+          </button>
+        </div>
+        <div className="tab-row">
+          {ITEM_CATEGORY_DISPLAY_OPTIONS.map((o) => (
+            <button
+              key={o}
+              type="button"
+              className={`tab ${groupPrefs.itemCategoryDisplay === o ? 'active' : ''}`}
+              onClick={() => {
+                updateGroupPref({ itemCategoryDisplay: o })
+                setOpenPreview('itemCategories')
+              }}
+              aria-pressed={groupPrefs.itemCategoryDisplay === o}
+            >
+              {ITEM_CATEGORY_DISPLAY_LABELS[o]}
+            </button>
+          ))}
+        </div>
+        <div className="xwrap">
+          <div className="xinner">
+            <div className="settings-preview-box">
+              <p className="settings-preview-eyebrow">Preview</p>
+              <ItemCategoriesPreview display={groupPrefs.itemCategoryDisplay} format={format} />
+            </div>
+          </div>
+        </div>
+      </div>
+      <p className="muted">
+        Under each item shows every item's category on a small line beneath it, in receipt order.
+        Grouped lists the items under one heading per category, with what each category came to.
+      </p>
     </>
   )
+}
+
+// A bill's item list in miniature — the same .item-row/.item-row-head/
+// .item-row-category/.item-group-head markup BillView and ItemRow render,
+// as plain (non-interactive) elements. Three made-up items across two
+// default categories, so grouping has something to group and each
+// category's subtotal shows.
+function ItemCategoriesPreview({ display, format }) {
+  const items = [
+    { name: 'Milk', price: 1.29, category: PREVIEW_GROCERIES },
+    { name: 'Dish soap', price: 2.15, category: PREVIEW_HOUSEHOLD },
+    { name: 'Pasta', price: 2.58, category: PREVIEW_GROCERIES },
+  ]
+  const row = (it, withCategory) => (
+    <div key={it.name} className="item-row">
+      <div className="item-row-head-shell">
+        <div className="item-row-head">
+          <span className="item-row-main">
+            <span className="item-row-name-line">
+              <span className="item-name">{it.name}</span>
+            </span>
+            {withCategory && (
+              <span className="item-row-category">
+                <span className="category-dot" style={{ background: categoryColor(it.category.color) }} />
+                {it.category.name}
+              </span>
+            )}
+          </span>
+          <span className="item-dots" aria-hidden="true" />
+          <span className="item-price mono">{format(it.price)}</span>
+        </div>
+      </div>
+    </div>
+  )
+  if (display === 'grouped') {
+    const groups = [PREVIEW_GROCERIES, PREVIEW_HOUSEHOLD].map((category) => {
+      const its = items.filter((it) => it.category === category)
+      return { category, items: its, total: its.reduce((sum, it) => sum + it.price, 0) }
+    })
+    return (
+      <div className="settings-preview-items">
+        {groups.map((g) => (
+          <div key={g.category.name}>
+            <div className="item-group-head">
+              <span className="category-dot" style={{ background: categoryColor(g.category.color) }} />
+              {g.category.name}
+              <span className="item-group-total mono">{format(g.total)}</span>
+            </div>
+            {g.items.map((it) => row(it, false))}
+          </div>
+        ))}
+      </div>
+    )
+  }
+  return <div className="settings-preview-items">{items.map((it) => row(it, true))}</div>
 }
 
 // "Batman"/"Robin" rather than a real member's name, for the same reason

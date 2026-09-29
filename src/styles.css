@@ -1609,6 +1609,35 @@ input.amount-card-value-input {
 .item-warn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex: none; }
 .item-price { font-size: 14px; flex-shrink: 0; }
 .item-row-chevron { color: var(--ink-soft); flex: none; transition: transform 0.2s ease; }
+/* Two-line items: the name (and qty badge) on the first line, the
+   category's dot and name on a small second line (ItemRow.jsx). Price,
+   leader, warning dot and chevron all line up with the first line, like a
+   receipt's detail line tucked under the entry. */
+.item-row-head { align-items: flex-start; }
+.item-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.item-row-name-line { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.item-row-head .item-name { line-height: 20px; overflow-wrap: anywhere; }
+.item-row-head .item-dots { align-self: flex-start; height: 15px; margin-bottom: 0; min-width: 12px; }
+.item-row-head .item-price { line-height: 20px; }
+.item-row-head .item-warn-dot { margin-top: 7px; }
+.item-row-head .item-row-chevron { margin-top: 2px; }
+.item-row-category { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.item-row-category .category-dot { width: 8px; height: 8px; margin: 0; }
+.item-row-category-none { font-style: italic; }
+/* "Grouped by category" (Settings > Layout): a header per category, with
+   its subtotal, over that category's items. */
+.item-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin: var(--space-sm) 2px 6px;
+}
+.item-group-head:first-child { margin-top: 0; }
+.item-group-head .category-dot { width: 8px; height: 8px; margin: 0; }
+.item-group-total { margin-left: auto; font-weight: 500; }
 .item-row.is-open .item-row-chevron { transform: rotate(90deg); color: var(--accent); }
 
 .item-row-body {
@@ -2733,6 +2762,8 @@ input.item-editable-input, textarea.item-editable-input {
 /* Settings > Layout's color-blind palette preview: the seven default
    categories, each dot beside its name. */
 .settings-preview-categories { list-style: none; margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 13px; }
+/* Settings > Layout's "Item categories on a bill" preview: real item rows. */
+.settings-preview-items > div + div .item-group-head { margin-top: var(--space-sm); }
 .settings-preview-categories li { display: flex; align-items: center; gap: 6px; min-width: 0; }
 
 /* The Budgets position preview's own bar rows — same colors/shape as the
@@ -2813,6 +2844,9 @@ input.item-editable-input, textarea.item-editable-input {
   flex-shrink: 0;
 }
 .category-label { display: flex; align-items: center; }
+/* Group settings > Subscriptions: title + details as one flowing line,
+   the category's dot and name on a line of their own underneath. */
+.subscription-summary { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .color-swatch-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .color-swatch {
   width: 22px;

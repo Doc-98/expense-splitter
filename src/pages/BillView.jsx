@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { fetchAllGroupMembers } from '../lib/members'
@@ -27,6 +27,8 @@ import { createRealtimeRelevance } from '../lib/realtimeRelevance'
 import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
 import { LoadingState, SkeletonLines } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
+import { groupItemsByCategory } from '../lib/itemGroups'
+import { categoryColor } from '../lib/categoryPalette'
 
 export default function BillView() {
   const { groupId, billId } = useParams()
@@ -98,7 +100,10 @@ export default function BillView() {
   const activeMembers = allMembers.filter((m) => m.active)
   const nameOf = (id) => allMembers.find((m) => m.id === id)?.name || 'Someone'
 
-  const { avatarSize } = getGroupViewPreferences()
+  const { avatarSize, itemCategoryDisplay } = getGroupViewPreferences()
+  // Settings > Layout's "Item categories": under each item (the default,
+  // see ItemRow) or grouped under a header per category with its
+  // subtotal. Grouping needs categories to group by.
 
   // Who a brand-new item defaults to being split with: the bill's own
   // "default split" setting if one's been chosen, otherwise everyone
@@ -719,6 +724,29 @@ export default function BillView() {
   if (noteDraft.trim()) summaryParts.push('note added')
   const summaryText = summaryParts.join(' · ')
 
+  const groupedByCategory = itemCategoryDisplay === 'grouped' && categories.length > 0
+
+  function renderItemRow(item) {
+    return (
+      <ItemRow
+        key={item.id}
+        bindSwipe={bindSwipe}
+        item={item}
+        members={allMembers}
+        categories={categories}
+        billCategoryId={bill?.category_id}
+        hideBuyers={!group || group.is_personal}
+        avatarSize={avatarSize}
+        showCategory={!groupedByCategory}
+        onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
+        onOnlyBuyer={(memberId) => setOnlyBuyer(item, memberId)}
+        onDelete={() => deleteItem(item.id)}
+        onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}
+        onUpdate={(field, value) => updateItemField(item, field, value)}
+      />
+    )
+  }
+
   return (
     <div className="page receipt-page">
       <header className="page-header">
@@ -906,23 +934,24 @@ export default function BillView() {
       ) : (
         <>
           <div className="receipt-tape">
-            {items.map((item) => (
-              <ItemRow
-                key={item.id}
-                bindSwipe={bindSwipe}
-                item={item}
-                members={allMembers}
-                categories={categories}
-                billCategoryId={bill?.category_id}
-                hideBuyers={!group || group.is_personal}
-                avatarSize={avatarSize}
-                onToggleBuyer={(memberId) => toggleBuyer(item, memberId)}
-                onOnlyBuyer={(memberId) => setOnlyBuyer(item, memberId)}
-                onDelete={() => deleteItem(item.id)}
-                onCategoryChange={(categoryId) => setItemCategory(item.id, categoryId)}
-                onUpdate={(field, value) => updateItemField(item, field, value)}
-              />
-            ))}
+            {groupedByCategory
+              ? groupItemsByCategory(items, categories, bill?.category_id).map((g) => (
+                  <Fragment key={g.key}>
+                    <div className="item-group-head">
+                      {g.category ? (
+                        <>
+                          <span className="category-dot" style={{ background: categoryColor(g.category.color) }} />
+                          {g.category.name}
+                        </>
+                      ) : (
+                        'No category'
+                      )}
+                      <span className="item-group-total mono">{format(g.total)}</span>
+                    </div>
+                    {g.items.map(renderItemRow)}
+                  </Fragment>
+                ))
+              : items.map(renderItemRow)}
             {items.length === 0 && itemsStatus === 'loading' && (
               <LoadingState label="Loading items…">
                 <SkeletonLines count={3} />

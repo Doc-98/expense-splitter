@@ -269,21 +269,29 @@ export default function GroupSubscriptionsSection() {
               key={t.id}
               className={`member-list-item ${t.active ? '' : 'former'} ${t.id === editingId ? 'row-editing' : ''}`}
             >
-              <span className="category-label">
-                {categoryNameOf(t.category_id) && (
-                  <span
-                    className="category-dot"
-                    style={{ background: categoryColor(categories.find((c) => c.id === t.category_id)?.color) }}
-                  />
-                )}
-                <strong>{t.title}</strong>
-                <span className="muted">
-                  {' '}
-                  — {format(t.amount)}
-                  {!isPersonal && <> · paid by {nameOf(t.paid_by)}</>} · {FREQUENCY_LABELS[t.frequency]} · next{' '}
-                  {new Date(`${t.next_due_date}T00:00:00`).toLocaleDateString()}
-                  {!t.active && ' · paused'}
+              {/* Title and details flow as one paragraph; the category (dot
+                  and name, never the dot alone) gets its own small line
+                  under them, the same way a bill's items show theirs. */}
+              <span className="subscription-summary">
+                <span>
+                  <strong>{t.title}</strong>
+                  <span className="muted">
+                    {' '}
+                    — {format(t.amount)}
+                    {!isPersonal && <> · paid by {nameOf(t.paid_by)}</>} · {FREQUENCY_LABELS[t.frequency]} · next{' '}
+                    {new Date(`${t.next_due_date}T00:00:00`).toLocaleDateString()}
+                    {!t.active && ' · paused'}
+                  </span>
                 </span>
+                {categoryNameOf(t.category_id) && (
+                  <span className="item-row-category">
+                    <span
+                      className="category-dot"
+                      style={{ background: categoryColor(categories.find((c) => c.id === t.category_id)?.color) }}
+                    />
+                    {categoryNameOf(t.category_id)}
+                  </span>
+                )}
               </span>
               <TemplateMenu template={t} onEdit={startEdit} onTogglePause={togglePause} onDelete={openDeleteConfirm} />
             </li>

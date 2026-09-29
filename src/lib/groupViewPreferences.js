@@ -45,9 +45,17 @@ const DEFAULTS = {
   // purely "which one do you personally find faster," same reasoning as
   // every other toggle here.
   paymentFormLayout: 'dropdowns',
+  // How a bill's items show their category (BillView.jsx/ItemRow.jsx):
+  // 'label' puts the category's name (and dot) on a small line under each
+  // item, in receipt order; 'grouped' lists the items under one header
+  // per category, with that category's subtotal. Either way a category
+  // colour is never shown without its name.
+  itemCategoryDisplay: 'label',
 }
 
 export const PAYMENT_FORM_LAYOUT_OPTIONS = ['dropdowns', 'avatars']
+
+export const ITEM_CATEGORY_DISPLAY_OPTIONS = ['label', 'grouped']
 
 export const AVATAR_SIZE_OPTIONS = ['small', 'medium', 'large']
 
