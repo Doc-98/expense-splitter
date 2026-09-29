@@ -3,8 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#2A6253" />
+    <!-- Browser/status bar colour before the app loads, following the OS
+         scheme: the brand green in light, the page's own near-black in dark
+         (a green bar over a dark page glares). Once running, ThemeContext
+         sets both to styles.css's --browser-bar for the theme actually
+         shown, so an explicit Light/Dark choice in Settings wins. -->
+    <meta name="theme-color" content="#2A6253" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111C17" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="Split receipts and expenses with your group, in real time." />
     <!-- Fonts are self-hosted (src/fonts.css), not loaded from Google, so
          the installed app keeps its typefaces offline. -->

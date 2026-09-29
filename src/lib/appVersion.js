@@ -29,4 +29,6 @@ export const WHATS_NEW = [
   "Error messages carry a warning sign and use their own rust color, so they never look like a debt; delete buttons use the rust too",
   "Stats bars no longer cut off long category names or big amounts on a phone, and the bars in each list line up",
   "The date at the bottom of a printed recap is now dark enough to read",
+  "In dark mode, menus and the install banner cast a visible shadow, and the phone's status bar turns dark to match instead of staying green",
+  "A fresh app icon in the current green, with a crisper \"S\"; iPhones now get a proper home-screen icon, and Android can shape it to fit your launcher",
 ]
