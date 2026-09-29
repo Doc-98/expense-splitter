@@ -44,9 +44,29 @@ Trello.
 
 ## Latest update
 
-**Faster, sturdier, and easier to split a bill.** The last few releases
-were mostly about what happens under the hood, plus a handful of fixes
-that came straight out of real use:
+**A design pass over the whole app.** The last three releases were about
+how Spesa looks and reads, written down as a [design system](#design-system)
+so it stays that way:
+
+- **Clearer money colours and errors.** Money going out is a red and
+  money coming in the brand green, treated alike; errors are a separate
+  rust and always carry a warning icon, so a debt is never mistaken for an
+  error. All text meets WCAG AAA contrast (7:1) in both themes, enforced
+  by a test.
+- **Loading and empty screens** show a faint outline of what's coming, and
+  every empty screen says what to do next with a button to do it.
+- **Category colours always come with their names** (on a bill's items, or
+  grouped under a heading per category), an opt-in colour-blind palette,
+  and pie charts that label their slices and highlight a slice and its
+  legend row together.
+- **Text follows your phone's or browser's text-size setting**, and every
+  size, corner and gap comes from one named scale.
+- **Tablets and laptops use the room**: a bill opens beside the bill list,
+  and the stats and graphs pages go wide with their sections side by side.
+
+**Before that: faster, sturdier, and easier to split a bill.** Those
+releases were mostly about what happens under the hood, plus a handful of
+fixes that came straight out of real use:
 
 - **Balances and full history come from the server.** A group's balances
   are computed by one Postgres function (`get_group_balances()`) and its
@@ -77,6 +97,7 @@ that came straight out of real use:
 - [Latest update](#latest-update)
 - [How it's built](#how-its-built)
   - [Project structure](#project-structure)
+- [Design system](#design-system)
 - [Setup](#setup)
 - [Receipt scanning](#receipt-scanning)
 - [Editing items](#editing-items)
@@ -123,6 +144,8 @@ that came straight out of real use:
 
 ```
 expense-splitter/
+├── docs/
+│   └── design-system/          # The design system as plain files — see "Design system"
 ├── public/                     # Static PWA assets — icons, favicon
 ├── supabase/
 │   ├── migrations/             # Timestamped, additive SQL — see "Migrations & Supabase branching"
@@ -226,6 +249,36 @@ Colocating them means a file and its test move, rename, or get deleted
 together as one unit instead of two directory trees needing to be kept
 in sync by hand. See "Running the tests" below for the actual testing
 conventions this repo follows.
+
+## Design system
+
+How Spesa looks, and the rules behind it, are written down as a design
+system: a brand book (voice, colour, type, spacing, shape, states, touch
+targets, contrast, layout), the tokens, and a card for each component
+saying when to use it and what it must never do. Read it before changing
+anything a person sees.
+
+- **In the repo:** [`docs/design-system/`](docs/design-system/). Start with
+  its [`README.md`](docs/design-system/README.md) (the brand book), then
+  `tokens.json` and `components/<Name>/README.md` for whatever you're
+  touching. `components/bundle.css` is the component CSS as the system
+  documents it; each card's `preview.html` is the example it renders (they
+  expect the system's token stylesheet, so they're for reading here).
+- **Browsable, with live previews in both themes:** the Spesa design
+  system page on claude.ai (the link is in [`CLAUDE.md`](CLAUDE.md); it's
+  private to the project owner unless they've shared it). The two are the
+  same content, kept identical.
+- **The app is the source of truth.** Every token is a CSS custom
+  property of the same name in `src/styles/tokens.css`, and every
+  component is the app's own classes in `src/styles/**`. A unit test,
+  `src/lib/designSystemTokens.test.js`, fails the build if
+  `docs/design-system/tokens.json` and `tokens.css` disagree on any value
+  or if a token exists in only one of them; `src/lib/contrast.test.js`
+  enforces the contrast rules.
+- **Changing the design:** change the app, then update the design system
+  (both copies) in the same piece of work: the tokens, the affected
+  component's card and preview, `bundle.css`, and the brand book when a
+  rule changes.
 
 ## Setup
 

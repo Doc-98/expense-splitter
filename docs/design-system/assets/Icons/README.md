@@ -1,0 +1,1 @@
+Spesa's 31 in-app icons, exported from `src/components/icons.jsx`: 24×24, 2px round strokes. In the app they draw in `currentColor`; these files are single-ink in `ink` light (#1F2A24) — recolour the stroke/fill to use them elsewhere. Default 20px beside text, 16px inside buttons; always `aria-hidden` inside a labelled control.
