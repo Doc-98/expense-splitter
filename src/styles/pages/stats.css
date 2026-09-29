@@ -4,11 +4,15 @@
 /* ---------- Group stats page ---------- */
 .stats-summary {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-sm);
   margin-bottom: var(--space-lg);
 }
+/* A 6em basis (not 0): at the default text size the tiles still share one
+   row equally, but with a large browser text size they wrap onto a second
+   row instead of pushing past the screen edge. */
 .stats-summary-item {
-  flex: 1;
+  flex: 1 1 6em;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);

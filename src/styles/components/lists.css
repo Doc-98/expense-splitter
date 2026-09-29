@@ -287,8 +287,8 @@
 }
 .member-list-item.former { border-style: dashed; }
 .member-list-actions { display: flex; gap: 10px; }
-.guest-rename-form { display: flex; gap: 8px; align-items: center; flex: 1; }
-.guest-rename-form input { flex: 1; }
+.guest-rename-form { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; }
+.guest-rename-form input { flex: 1; min-width: 0; }
 /* Active guest rows (GroupGuestsSection.jsx) — swipe-to-delete, same red
    strip/width as .item-row-delete-action (reused verbatim). This list
    isn't expandable the way an item row is, so there's no equivalent of
