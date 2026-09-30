@@ -193,6 +193,93 @@ describe('useSwipeToDelete — taps after a swipe', () => {
   })
 })
 
+// A phone can drop the click after a swipe altogether (the browser spends
+// the tap stopping a gesture of its own), so Remove acts on the finger
+// lifting off it, and the swipe itself keeps the browser out of it.
+describe('useSwipeToDelete — the Remove tap on a phone', () => {
+  const removeButton = (id) => screen.getByRole('button', { name: `Remove ${id}` })
+
+  it('deletes when the finger lifts off Remove, even if no click follows', () => {
+    const { row, onDelete } = setup()
+    slowDrag(row('a'), 100)
+    pointer(removeButton('a'), 'pointerDown', { x: 300, y: 10 })
+    pointer(removeButton('a'), 'pointerUp', { x: 302, y: 11 })
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    expect(onDelete).toHaveBeenCalledWith('a')
+    expect(row('a').dataset.open).toBe('false')
+  })
+
+  it('swallows the click that follows, wherever it lands', () => {
+    const { row, onDelete, onRowClick } = setup()
+    slowDrag(row('a'), 100)
+    pointer(removeButton('a'), 'pointerDown', { x: 300 })
+    pointer(removeButton('a'), 'pointerUp', { x: 300 })
+    // The row under the finger is now the next one: its click must not open it.
+    fireEvent.click(row('b'))
+    expect(onRowClick).not.toHaveBeenCalled()
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    // Only the one click: the next tap works as usual.
+    tap(row('b'))
+    expect(onRowClick).toHaveBeenCalledWith('b')
+  })
+
+  it('deletes once when the click lands on Remove itself', () => {
+    const { row, onDelete } = setup()
+    slowDrag(row('a'), 100)
+    pointer(removeButton('a'), 'pointerDown', { x: 300 })
+    pointer(removeButton('a'), 'pointerUp', { x: 300 })
+    fireEvent.click(removeButton('a'))
+    expect(onDelete).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not delete when the finger slides off Remove before lifting', () => {
+    const { row, onDelete } = setup()
+    slowDrag(row('a'), 100)
+    pointer(removeButton('a'), 'pointerDown', { x: 300 })
+    pointer(removeButton('a'), 'pointerUp', { x: 330 })
+    expect(onDelete).not.toHaveBeenCalled()
+  })
+
+  it('does not delete on a lift that never pressed Remove', () => {
+    const { row, onDelete } = setup()
+    slowDrag(row('a'), 100)
+    pointer(removeButton('a'), 'pointerUp', { x: 300 })
+    expect(onDelete).not.toHaveBeenCalled()
+  })
+
+  it('still deletes from the keyboard (a click with no pointer before it)', () => {
+    const { onDelete } = setup()
+    fireEvent.click(removeButton('b'))
+    expect(onDelete).toHaveBeenCalledWith('b')
+  })
+
+  it('cancels the touchmoves of a sideways swipe, so the browser starts no gesture of its own', () => {
+    const { row } = setup()
+    pointer(row('a'), 'pointerDown', { x: 200, t: 0 })
+    // Before it counts as a swipe, touchmoves are left alone.
+    expect(fireEvent.touchMove(row('a'))).toBe(true)
+    pointer(row('a'), 'pointerMove', { x: 180, t: 16 })
+    expect(fireEvent.touchMove(row('a'))).toBe(false)
+    pointer(row('a'), 'pointerUp', { x: 180, t: 32 })
+    // The listener goes with the gesture.
+    expect(fireEvent.touchMove(row('a'))).toBe(true)
+  })
+
+  it('leaves the touchmoves of a vertical scroll alone', () => {
+    const { row } = setup()
+    pointer(row('a'), 'pointerDown', { x: 200, y: 0, t: 0 })
+    pointer(row('a'), 'pointerMove', { x: 198, y: 30, t: 16 })
+    expect(fireEvent.touchMove(row('a'))).toBe(true)
+  })
+
+  it('does not listen to touchmoves for a mouse drag', () => {
+    const { row } = setup()
+    pointer(row('a'), 'pointerDown', { x: 200, t: 0, pointerType: 'mouse' })
+    pointer(row('a'), 'pointerMove', { x: 180, t: 16, pointerType: 'mouse' })
+    expect(fireEvent.touchMove(row('a'))).toBe(true)
+  })
+})
+
 // jsdom doesn't lay out or scroll, so the one thing a real browser needs
 // most is checked against the stylesheet itself: without touch-action: pan-y
 // on a swipe row, the browser claims the horizontal drag after a few px
