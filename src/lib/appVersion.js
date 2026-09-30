@@ -16,11 +16,5 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
-  "The \"Remove\" links for members and guests now show in the warning colour, like every other destructive action",
-  "The version number in the header is back to its intended small size",
-  "Text now follows your phone's or browser's own text-size setting, so a larger system font makes the whole app easier to read",
-  "A few in-between text sizes and spacings are tidied onto one consistent scale, so labels and rows line up more evenly",
-  "Pie charts print each larger slice's share beside it, and tapping a slice or its legend row highlights both and shows that category's amount in the middle",
-  "On a laptop or a tablet held sideways, a bill opens beside the bill list instead of replacing it",
-  "On tablets and laptops, the stats and graphs pages use the full width, with their sections side by side",
+  "Swiping a row open and tapping Remove now removes it on the first tap, instead of needing a second one",
 ]

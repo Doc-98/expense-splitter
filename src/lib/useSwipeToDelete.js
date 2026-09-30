@@ -42,17 +42,61 @@ const SETTLE_TRANSITION = 'transform 0.2s ease'
 // vertical scrolling to the browser but tells it not to claim horizontal
 // drags itself — without it the browser takes the gesture over part-way
 // (pointercancel) and the row stops following the finger.
+//
+// Two more things keep the tap after a swipe from being lost on a phone.
+// touch-action alone still lets Chrome treat the swipe as a scroll gesture
+// of its own, just one it doesn't act on; lifting the finger then leaves an
+// invisible fling "running", and the next tap anywhere only stops that
+// fling — no click at all. So once a press is a horizontal swipe, its
+// touchmoves are cancelled (a non-passive listener: React's own touch
+// handlers are passive and can't), and the browser never starts a gesture
+// of its own. And the Remove button acts on the finger lifting off it
+// rather than on `click`, so even a click the browser drops still deletes.
+// The click that normally follows is swallowed wherever it lands: by then
+// the row is gone and the next one has slid under the finger, and a click
+// on it would open that bill or expand that item. Keyboard and screen
+// reader activation (a click with no pointer before it) still works.
+const CLICK_AFTER_REMOVE_MS = 600
+
+// Swallows the one click a pointer Remove is followed by, if it comes.
+function swallowNextClick() {
+  const until = performance.now() + CLICK_AFTER_REMOVE_MS
+  function onClick(e) {
+    window.removeEventListener('click', onClick, true)
+    if (performance.now() > until) return
+    e.preventDefault()
+    e.stopPropagation()
+  }
+  window.addEventListener('click', onClick, true)
+  setTimeout(() => window.removeEventListener('click', onClick, true), CLICK_AFTER_REMOVE_MS)
+}
+
 export function useSwipeToDelete() {
   const [openId, setOpenId] = useState(null)
-  // { id, el, startX, startY, base, offset, isDrag, lastX, lastT, velocity } | null
+  // { id, el, onTouchMove, startX, startY, base, offset, isDrag, lastX, lastT, velocity } | null
   const dragRef = useRef(null)
   // Set when a press turns into a drag, so the click that a mouse drag
   // ends with doesn't also open/expand the row. A touch drag produces no
   // click at all, so it's reset at the start of every new press — leaving
   // it set used to swallow the next, unrelated tap on any row in the list.
   const suppressClickRef = useRef(false)
+  // The press on a Remove button in progress: { id, pointerId, x, y } | null.
+  const deletePressRef = useRef(null)
 
   const close = useCallback(() => setOpenId(null), [])
+
+  // Cancels the touchmoves of a press once it has become a horizontal
+  // swipe (see the note above useSwipeToDelete). Before that, and for a
+  // press that turns out to be a vertical scroll, touchmoves are left
+  // alone so the page scrolls as usual.
+  function onTouchMove(e) {
+    if (dragRef.current?.isDrag && e.cancelable) e.preventDefault()
+  }
+
+  function endDrag(d) {
+    if (d.onTouchMove) d.el.removeEventListener('touchmove', d.onTouchMove)
+    dragRef.current = null
+  }
 
   function settle(d, open) {
     d.el.style.transition = SETTLE_TRANSITION
@@ -71,7 +115,13 @@ export function useSwipeToDelete() {
       // Only one row open at a time: touching another row closes it.
       if (openId !== null && openId !== id) setOpenId(null)
       const base = isOpen ? -REVEAL_WIDTH : 0
+      if (dragRef.current) endDrag(dragRef.current)
+      // Kept on the drag itself, so the exact function added is the one
+      // removed even if the list re-renders mid-swipe.
+      const touchMoveListener = e.pointerType === 'touch' ? onTouchMove : null
+      if (touchMoveListener) e.currentTarget.addEventListener('touchmove', touchMoveListener, { passive: false })
       dragRef.current = {
+        onTouchMove: touchMoveListener,
         id,
         el: e.currentTarget,
         startX: e.clientX,
@@ -95,7 +145,7 @@ export function useSwipeToDelete() {
         // A finger moving mostly vertically is scrolling the page, not
         // swiping this row — abandon the gesture rather than fight it.
         if (Math.abs(dy) > Math.abs(dx)) {
-          dragRef.current = null
+          endDrag(d)
           return
         }
         d.isDrag = true
@@ -114,7 +164,7 @@ export function useSwipeToDelete() {
     function onPointerUp(e) {
       const d = dragRef.current
       if (!d || d.id !== id) return
-      dragRef.current = null
+      endDrag(d)
       if (!d.isDrag) return
       const flicking = e.timeStamp - d.lastT <= FLICK_MAX_AGE_MS
       if (flicking && d.velocity <= -FLICK_VELOCITY) settle(d, true)
@@ -127,7 +177,7 @@ export function useSwipeToDelete() {
     function onPointerCancel() {
       const d = dragRef.current
       if (!d || d.id !== id) return
-      dragRef.current = null
+      endDrag(d)
       if (d.isDrag) settle(d, d.offset <= -REVEAL_WIDTH * OPEN_FRACTION)
     }
 
@@ -148,10 +198,33 @@ export function useSwipeToDelete() {
       }
     }
 
-    function onDeleteClick(e) {
-      e.stopPropagation()
+    function remove() {
       setOpenId(null)
       onDelete()
+    }
+
+    function onDeletePointerDown(e) {
+      if (e.pointerType === 'mouse' && e.button > 0) return
+      deletePressRef.current = { id, pointerId: e.pointerId, x: e.clientX, y: e.clientY }
+    }
+
+    // The finger (or mouse button) lifting off the button it went down on,
+    // without having slid away, is the tap.
+    function onDeletePointerUp(e) {
+      const press = deletePressRef.current
+      deletePressRef.current = null
+      if (!press || press.id !== id || press.pointerId !== e.pointerId) return
+      if (Math.abs(e.clientX - press.x) >= DRAG_THRESHOLD || Math.abs(e.clientY - press.y) >= DRAG_THRESHOLD) return
+      e.stopPropagation()
+      remove()
+      // Armed after onDelete returns: a confirm() it opens can stay up as
+      // long as the person likes, and the click only follows once it closes.
+      swallowNextClick()
+    }
+
+    function onDeleteClick(e) {
+      e.stopPropagation()
+      remove()
     }
 
     return {
@@ -169,7 +242,14 @@ export function useSwipeToDelete() {
           transition: SETTLE_TRANSITION,
         },
       },
-      deleteButton: { onClick: onDeleteClick },
+      deleteButton: {
+        onPointerDown: onDeletePointerDown,
+        onPointerUp: onDeletePointerUp,
+        onPointerCancel: () => {
+          deletePressRef.current = null
+        },
+        onClick: onDeleteClick,
+      },
       isOpen,
     }
   }
