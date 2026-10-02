@@ -56,8 +56,8 @@ input, select, textarea { font-family: inherit; font-size: 16px; }
 
 /* Inputs */
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-soft); margin-bottom: var(--space-sm); }
-input[type="text"], input[type="email"], input[type="password"], input:not([type]), select {
-  border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--surface); color: var(--ink);
+input[type="text"], input[type="email"], input[type="password"], input[type="date"], input:not([type]), select {
+  border: 1px solid var(--border-strong); border-radius: 8px; padding: 10px 12px; background: var(--surface); color: var(--ink);
 }
 input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .field-hint { margin: 4px 0 0; font-size: 12px; }

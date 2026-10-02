@@ -16,5 +16,6 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
+  "Outlines around rows, cards and tiles are softer and match the app's greens, so they no longer overpower what's inside them; text fields keep their clearer outline",
   "Swiping a row open and tapping Remove now removes it on the first tap, instead of needing a second one",
 ]

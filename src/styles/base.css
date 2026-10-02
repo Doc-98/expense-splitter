@@ -70,8 +70,8 @@ code {
 
 label { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm); color: var(--ink-soft); margin-bottom: var(--space-sm); }
 
-input[type="text"], input[type="email"], input[type="password"], input:not([type]), select {
-  border: 1px solid var(--border);
+input[type="text"], input[type="email"], input[type="password"], input[type="date"], input:not([type]), select {
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   background: var(--surface);
