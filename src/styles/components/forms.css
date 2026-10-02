@@ -73,7 +73,7 @@ input.item-editable-input, textarea.item-editable-input {
 .switch-slider {
   position: absolute;
   inset: 0;
-  background: var(--border);
+  background: var(--border-strong);
   border-radius: var(--radius-pill);
   transition: background-color 0.15s ease;
   pointer-events: none;
@@ -138,7 +138,7 @@ input.item-editable-input, textarea.item-editable-input {
 .range-slider-track {
   position: relative;
   height: 4px;
-  background: var(--border);
+  background: var(--border-strong);
   border-radius: var(--radius-pill);
   margin: 14px 9px;
 }

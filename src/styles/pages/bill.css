@@ -47,7 +47,7 @@ input.bill-title-editable-input {
 .bill-note {
   width: 100%;
   resize: vertical;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   background: var(--surface);
