@@ -5,8 +5,10 @@
 /* Both themes meet WCAG AAA: every text color (--ink, --ink-soft,
    --accent-dark, --negative, --warn) is at least 7:1 on every ground it
    can land on (--bg, --surface, --surface-tint, --accent-light, and
-   --warn-light for --warn), labels on fills are 7:1 via --on-accent/--on-warn, and --border
+   --warn-light for --warn), labels on fills are 7:1 via --on-accent/--on-warn, and --border-strong
    and --accent (focus ring, bar fills) are at least 3:1 on every surface.
+   --border is deliberately quieter (at least 1.5:1): it only outlines
+   things recognisable from their own content.
    Check a new text/ground pairing against that before adding it. */
 :root {
   --bg: #FAF9F6;
@@ -20,9 +22,14 @@
   --surface-tint: #EDF3F0;
   --ink: #1F2A24;
   --ink-soft: #434E49;
-  /* Strong enough (3:1 on every surface) that borders alone set inputs,
-     rows and tiles apart, not just a change of fill. */
-  --border: #8F8463;
+  /* Two outline strengths, in the palette's own green-grey.
+     --border is the quiet line around list rows, cards, tiles, menus,
+     tables and dividers: about 2:1, since what's inside them already says
+     what they are. --border-strong (3:1 on every surface) is for outlines
+     that ARE the control: text fields, dropdowns, the note box, and the
+     tracks of the switch and range slider. */
+  --border: #AEBBB3;
+  --border-strong: #8F8463;
   --accent: #2A6253;
   --accent-dark: #225448;
   --accent-light: #DCEDE6;
@@ -104,7 +111,8 @@
   --surface-tint: #18261F;
   --ink: #EDEAE2;
   --ink-soft: #ADBDB4;
-  --border: #5A7E6C;
+  --border: #435149;
+  --border-strong: #5A7E6C;
   --accent: #4BB093;
   --accent-dark: #8FDCC4;
   --accent-light: #1B3129;

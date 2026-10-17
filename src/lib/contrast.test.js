@@ -4,7 +4,8 @@
 // from the stylesheet so a changed token can't slip past:
 //   - every text colour is ≥ 7:1 (WCAG AAA) on every ground it can land on
 //   - labels on accent/warn fills are ≥ 7:1
-//   - borders, and the accent used as focus ring and bar fill, are ≥ 3:1
+//   - field/control outlines (--border-strong), and the accent used as focus
+//     ring and bar fill, are ≥ 3:1; the quiet --border stays ≥ 1.5:1
 //   - category colours (both palettes) are ≥ 3:1 as marks
 //   - every text colour in the print styles is ≥ 7:1 on paper white
 import { describe, it, expect } from 'vitest'
@@ -80,7 +81,8 @@ function pairs() {
   p.push(['warn text on warn-light (error messages)', 'warn', 'warn-light', 7])
   p.push(['on-accent label on accent', 'on-accent', 'accent', 7])
   p.push(['on-warn label on warn', 'on-warn', 'warn', 7])
-  for (const bg of GROUNDS) p.push([`border on ${bg}`, 'border', bg, 3])
+  for (const bg of GROUNDS) p.push([`border-strong (field and control outlines) on ${bg}`, 'border-strong', bg, 3])
+  for (const bg of GROUNDS) p.push([`border (quiet row/card outline) on ${bg}, still visible`, 'border', bg, 1.5])
   for (const bg of GROUNDS) p.push([`accent (focus ring, bar fill) on ${bg}`, 'accent', bg, 4.5])
   for (const bg of ['bg', 'surface', 'surface-tint', 'accent-light'])
     p.push([`negative (over-budget fill) on ${bg}`, 'negative', bg, 3])
@@ -89,7 +91,7 @@ function pairs() {
 
 describe.each(Object.entries(themes))('%s theme contrast', (name, t) => {
   it('reads every token it checks from styles.css', () => {
-    for (const token of [...TEXT, ...GROUNDS, 'warn-light', 'on-accent', 'on-warn', 'border', 'accent'])
+    for (const token of [...TEXT, ...GROUNDS, 'warn-light', 'on-accent', 'on-warn', 'border', 'border-strong', 'accent'])
       expect(t[token], `--${token} in the ${name} theme`).toMatch(/^#[0-9A-Fa-f]{6}$/)
   })
 
