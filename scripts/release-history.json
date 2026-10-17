@@ -1,0 +1,748 @@
+[
+  {
+    "pr": 1,
+    "title": "Install and Configure Vercel Web Analytics",
+    "mergedOn": "2026-08-09",
+    "sha": "b248dcea52f85407a82b5716b6aac1af04012be6",
+    "behindTheScenes": [
+      "Vercel Web Analytics added, to see how much the app is used"
+    ]
+  },
+  {
+    "pr": 2,
+    "title": "Install and configure Vercel Speed Insights",
+    "mergedOn": "2026-08-09",
+    "sha": "f8921f2d9bd29e5e9c8a8a630febbc1481432294",
+    "behindTheScenes": [
+      "Vercel Speed Insights added, to measure how fast pages load for real visitors"
+    ]
+  },
+  {
+    "pr": 3,
+    "title": "Add date dividers to bill list grouping by month and day",
+    "mergedOn": "2026-08-20",
+    "sha": "b41f6833a93abddffa26a8b9ca1f78e32a64956e",
+    "whatsNew": [
+      "A group's bill list is now grouped under month and day headings, like Splitwise's activity feed"
+    ]
+  },
+  {
+    "pr": 4,
+    "title": "Spending thresholds, period comparison on Your Stats, and snapshot category tracking",
+    "mergedOn": "2026-08-20",
+    "sha": "d229cd64edf3de6b7114c26b9792273138963ca0",
+    "whatsNew": [
+      "Spending thresholds: set a monthly budget per category for yourself, and see how this month is going on Your Stats",
+      "Your Stats compares each period with the one before (▲/▼ vs last period), and gains a \"By category\" breakdown",
+      "Leaving a group now keeps a per-category record of your spending in it, so your category totals stay complete"
+    ]
+  },
+  {
+    "pr": 5,
+    "title": "Your Stats UX: default period, thresholds position, and tiered period navigation",
+    "mergedOn": "2026-08-21",
+    "sha": "2bfce05e01c2d5caec37e5bd2c6bb5ae6abbbd75",
+    "whatsNew": [
+      "Your Stats opens on the current month, and you can choose any other period as your default",
+      "The spending thresholds section can sit at the top or the bottom of Your Stats",
+      "Extra ‹‹ / ›› arrows on the stats period selector jump a whole month or year at a time",
+      "Fixed the thresholds page and Your Stats hanging on \"Loading…\" with no explanation when something failed to load"
+    ]
+  },
+  {
+    "pr": 6,
+    "title": "Period selector polish, layout fixes, and merged share/PDF button",
+    "mergedOn": "2026-08-21",
+    "sha": "5bd310f9b28d2ced3d01b3f2620d15a8100e6c74",
+    "whatsNew": [
+      "The stats period arrows are bigger and easier to tell apart, and week view shows which year you're in",
+      "\"Import bills from Splitwise\" moved to the group's own settings, under a new \"Import data\" section",
+      "Share and Download PDF are now one button that opens a small menu",
+      "Settle-up rows keep the amount and its button together on the right when they wrap"
+    ]
+  },
+  {
+    "pr": 7,
+    "title": "Bill deletion, sharing, and per-bill actions menu",
+    "mergedOn": "2026-08-22",
+    "sha": "502bbbe4fce98520d29a56c16eef9e241a36a593",
+    "whatsNew": [
+      "Select several bills at once to delete or share them together",
+      "Each bill row has a ⋮ menu: Select, Share or Delete that one bill",
+      "Export a whole group's bills as a spreadsheet (CSV) from the settle-up recap",
+      "Group admins can delete every bill in a group at once, from a new Danger zone in group settings, optionally clearing payment history too"
+    ]
+  },
+  {
+    "pr": 8,
+    "title": "Item editing, shared stats default period, and section dividers",
+    "mergedOn": "2026-08-22",
+    "sha": "9c66ac4136fb5b98ef370bffac6cbc59e5822e9e",
+    "whatsNew": [
+      "Edit any item in place: tap its name, unit price, quantity or total to change it",
+      "Item rows show unit price × quantity next to the total",
+      "Group Stats remembers the same default period as Your Stats",
+      "Thin dividers between sections on the group page, group settings and stats pages",
+      "Fixed clearing a price field saving it as zero instead of keeping the old value"
+    ]
+  },
+  {
+    "pr": 9,
+    "title": "Search, tag filter, and price-range filter for a group's bill list",
+    "mergedOn": "2026-08-22",
+    "sha": "2e5343d78b01dcb9b11977d8b2c3aaa24025b18d",
+    "whatsNew": [
+      "Search a group's bills by title or note",
+      "Filter bills by category (match any or all of the ones you pick) and by price, with a two-handle slider or by typing exact amounts"
+    ]
+  },
+  {
+    "pr": 10,
+    "title": "Bill row polish: select-mode alignment fix, per-bill status, front-page reshape",
+    "mergedOn": "2026-08-23",
+    "sha": "ca57a271dd12874b734c7d0cdf7f3c80a04e3219",
+    "whatsNew": [
+      "Each bill row shows its total, and whether you borrowed, lent or aren't involved",
+      "The groups list is paginated, with \"Create a new group\" moved below it",
+      "Group and bill rows sit on a faint tinted card",
+      "Fixed the checkbox in select mode sitting below the bill name instead of beside it"
+    ]
+  },
+  {
+    "pr": 11,
+    "title": "Fix silently-wrong stats/badges: surface fetch errors, auto-retry on 401",
+    "mergedOn": "2026-08-23",
+    "sha": "91ad5450a6b1a16394ae28a5915cab9f0cb626f9",
+    "whatsNew": [
+      "Fixed stats showing zero and bills showing \"not involved\" when loading had actually failed: errors are now shown instead of looking like empty data",
+      "If your session has expired, the app quietly refreshes it and tries again once before showing an error",
+      "Groups with a long imported history load reliably, fetched in pages instead of one huge request"
+    ]
+  },
+  {
+    "pr": 12,
+    "title": "Speed up the group page and stats pages: caching + parallel fetches",
+    "mergedOn": "2026-08-24",
+    "sha": "2f15437c322a251f4dddfe66b18890e93c1fd425",
+    "whatsNew": [
+      "Going back to a group or stats page you just visited shows it instantly, then refreshes in the background",
+      "First loads are faster: data is fetched in parallel instead of one request after another"
+    ]
+  },
+  {
+    "pr": 13,
+    "title": "Windowed-then-backfilled stats loads; unify the group page's bill fetches",
+    "mergedOn": "2026-08-24",
+    "sha": "c7fd115f1b02473f2899f88b4a9e84ca91e328cf",
+    "whatsNew": [
+      "Stats pages show this year and last year straight away, then load older history in the background, with a note while they do",
+      "The group page loads its bills once instead of twice"
+    ]
+  },
+  {
+    "pr": 14,
+    "title": "Backdate a bill's date; review + proof-check unresolvable Splitwise payers",
+    "mergedOn": "2026-08-24",
+    "sha": "0441a2b6f587cf3808f65541665c4bd71964fa63",
+    "whatsNew": [
+      "Change a bill's date (backdate or postdate it) by tapping the date on the bill",
+      "Splitwise import: expenses it can't work out on its own (no clear payer, or several payers) now get a review step instead of being skipped or guessed",
+      "Splitwise import ends with a proof-check comparing the app's balances against Splitwise's own"
+    ]
+  },
+  {
+    "pr": 15,
+    "title": "Rename header + version, and keyboard navigation across the app",
+    "mergedOn": "2026-08-24",
+    "sha": "3c90f2da32e2be266ca58ab6a51505545c81b930",
+    "whatsNew": [
+      "The header now reads \"Expense Splitter\", with the version number underneath",
+      "Keyboard shortcuts: ↑/↓ and Enter to move through and open bills or groups, ←/→ to change page or stats period, / to search, Escape to close menus",
+      "Page buttons stay pinned to the bottom of the screen instead of jumping around"
+    ]
+  },
+  {
+    "pr": 16,
+    "title": "Uneven splits on Splitwise import; collapsible bill search",
+    "mergedOn": "2026-08-24",
+    "sha": "479feb27be47b660743b16eecf844fb063207744",
+    "whatsNew": [
+      "Splitwise import: each person's share becomes its own item, so imported bills are as editable as any other, and uneven splits can be entered in the review step",
+      "Search and filters start tucked away behind a \"Search\" button, and the search section moved above \"Add a bill\"",
+      "The create-bill button is now called \"Add\""
+    ]
+  },
+  {
+    "pr": 17,
+    "title": "Search alignment fix, import proof-check fix, guest deletion, nicer PDF recaps, recurring-bills button",
+    "mergedOn": "2026-08-25",
+    "sha": "a73896273c12334d1e6d67cf73e795b145ed76ce",
+    "whatsNew": [
+      "Group admins can permanently delete an archived guest who has no history in the group",
+      "Stats pages can be shared as a recap (text or PDF), like bills and settle-up",
+      "PDF recaps no longer end with a blank page, and table rows don't split across pages",
+      "Fixed the Splitwise import proof-check ignoring payments already recorded in the group",
+      "The recurring-bills link is now a proper button, and the Search button sits at the right edge"
+    ]
+  },
+  {
+    "pr": 18,
+    "title": "AI-assisted wizard for categorizing bulk-imported bills",
+    "mergedOn": "2026-08-25",
+    "sha": "2cb9bf1c7d9f215414d40cd058fa538ab0c2b18b",
+    "whatsNew": [
+      "A new wizard (in group settings) to categorise bills in bulk, mainly for a Splitwise import's backlog: it reuses Splitwise's own categories, asks your AI provider about the rest, and spots common words across bills so one tap can categorise them all. Nothing is saved until you review it"
+    ]
+  },
+  {
+    "pr": 19,
+    "title": "Categorization wizard fixes, category color picker, recurring-bills button color",
+    "mergedOn": "2026-08-25",
+    "sha": "2c94d2100c5aa14ccb70cc9e4219bccb27dd888d",
+    "whatsNew": [
+      "Categorisation wizard: tell the AI what your bill titles mean in your own words, better spotting of repeated shop names, and an \"Applied ✓\" confirmation",
+      "Pick any colour for a category, and change an existing category's colour by tapping its dot",
+      "The recurring-bills button matches the colour of \"Add\""
+    ]
+  },
+  {
+    "pr": 20,
+    "title": "Spending graphs page (line + donut charts), personal-spend convention, chart smoothing",
+    "mergedOn": "2026-08-25",
+    "sha": "3df1a53d56d1ecedfc1c377def447d65a3833cd5",
+    "whatsNew": [
+      "New Graphs pages, for Your Stats and for each group: a smooth line chart of spending over time and a donut chart by category. Tap a slice to follow that category in the line chart",
+      "Personal graphs include groups you've left, like Your Stats does"
+    ]
+  },
+  {
+    "pr": 21,
+    "title": "Polish: recurring-bills button, Group Stats header, finer graph granularity",
+    "mergedOn": "2026-08-25",
+    "sha": "9d217da0c43071e5d273a5f749301e94f106fa3c",
+    "whatsNew": [
+      "Graphs plot in finer detail: each bill this month, each day over four months, each week over the year",
+      "\"Select\" is now \"Select bills\", and Group Stats shows the group's name under its title",
+      "Fixed button-style links showing an underline"
+    ]
+  },
+  {
+    "pr": 22,
+    "title": "Pie chart fix, revert graph granularity, layout bug fix, login/settle-up polish",
+    "mergedOn": "2026-08-26",
+    "sha": "77560302714369f031b2e3af32a88b6c894a7c80",
+    "whatsNew": [
+      "Fixed thin slices of the donut chart drawing outside the ring",
+      "Graphs are back to their calmer detail (days for a month, months for longer periods)",
+      "Fixed a very long bill or group name with no spaces pushing the page sideways on a phone",
+      "The sign-in page opens on the Password tab",
+      "The recurring-bills button is now plain text next to \"Select bills\""
+    ]
+  },
+  {
+    "pr": 23,
+    "title": "Fix bill-row overflow (for real this time), center recap actions, close magic-link account-creation hole",
+    "mergedOn": "2026-08-27",
+    "sha": "e9c734222e3b7797d96ae7420e96c1ad2ce71d85",
+    "whatsNew": [
+      "Fixed long bill rows still pushing the page sideways on a phone",
+      "Magic-link sign-in no longer creates a new account by accident: an unknown email is told to register instead",
+      "The Share and Export buttons at the end of a group page are centred",
+      "Fixed groups with many bills timing out while loading, with database indexes on the most-used lookups"
+    ]
+  },
+  {
+    "pr": 24,
+    "title": "Settings page + username change, Splitwise settle-up fix, RLS perf fix, README rework",
+    "mergedOn": "2026-08-28",
+    "sha": "a23678b427a485e5fa3183e012d49ff9188e80bb",
+    "whatsNew": [
+      "A new Settings page (account menu → Settings): change your display name, dark mode, currency, budgets and scan settings in one place",
+      "Splitwise import: settle-up transfers now come in as payments instead of bills titled \"A paid B\"",
+      "Large groups load much faster (about 9 seconds down to a third of a second for a group with 1,100 bills)"
+    ],
+    "behindTheScenes": [
+      "README shortened from about 1,500 to 650 lines"
+    ]
+  },
+  {
+    "pr": 25,
+    "title": "Password reset + personal spending",
+    "mergedOn": "2026-08-28",
+    "sha": "2e41d68b0b6561dd69cb051f825417aae3e4d529",
+    "whatsNew": [
+      "Forgot your password? A reset link from the sign-in page now works, including for accounts first created with a magic link",
+      "A new Personal space for tracking your own spending, with categories, budgets, scanning, recurring bills and stats, without making a group of one"
+    ]
+  },
+  {
+    "pr": 26,
+    "title": "Performance: boot splash, prefetching, persisted caches, query optimizations",
+    "mergedOn": "2026-08-28",
+    "sha": "29b916f7576b7da81504a365d0c6b057e5cd0edc",
+    "whatsNew": [
+      "A splash screen while the app starts, only when there's nothing to show yet",
+      "Your recent groups are loaded in the background, so opening one is usually instant",
+      "Refreshing the page no longer blanks the groups list, a group or the stats pages for a moment",
+      "A group's first visit shows recent bills straight away and fills in older history after",
+      "A group page only reloads when that group changes, not any group you're in"
+    ]
+  },
+  {
+    "pr": 27,
+    "title": "Bank statement import for the Personal space",
+    "mergedOn": "2026-08-28",
+    "sha": "67ab25e0b57a366b15eb8691d691d0c124e6a81a",
+    "whatsNew": [
+      "Import a bank statement into your Personal space (in its settings), from a CSV export or a PDF read by your AI provider. Categories are suggested, repeats and subscriptions are spotted, and spending already recorded in another group is flagged. Nothing is saved until you confirm it"
+    ]
+  },
+  {
+    "pr": 28,
+    "title": "Bank import: Excel support, AI-assisted column detection, and an opt-out",
+    "mergedOn": "2026-08-29",
+    "sha": "4ab2f40a8e17cd469ccf1e07156208158750363c",
+    "whatsNew": [
+      "Bank import accepts Excel files too, handy on a phone",
+      "Better at reading amounts in different formats, and fixed some debits being read as credits",
+      "Edit a transaction's description before it becomes a bill",
+      "With an AI provider set up, it double-checks which column is which, and tells you when it changed something. You can switch this off"
+    ]
+  },
+  {
+    "pr": 29,
+    "title": "Fix Excel import: wrong read-excel-file export, no header-row scan",
+    "mergedOn": "2026-08-29",
+    "sha": "98e845d3b09fe2dcbdc90d1f9ab5a433655c65c4",
+    "whatsNew": [
+      "Fixed Excel bank statements being read as empty, and statements with a summary block above the column titles. Italian column names are recognised too"
+    ]
+  },
+  {
+    "pr": 30,
+    "title": "Bank import: fix mobile overlap, loading spinners, faster fetches, full-text descriptions",
+    "mergedOn": "2026-08-29",
+    "sha": "325e1f230e319edcabaed16a48578c8a1f81dc17",
+    "whatsNew": [
+      "Bank import: fixed rows overlapping on a phone, shows a spinner while reading and importing, starts faster, and shows full descriptions instead of cutting them off"
+    ]
+  },
+  {
+    "pr": 31,
+    "title": "Speed up bills RLS; remove bank-import recurring detection",
+    "mergedOn": "2026-08-31",
+    "sha": "e19b82e0885760842f18aac1f150b05946aefbd6",
+    "whatsNew": [
+      "Bank import no longer guesses subscriptions: unrelated payments through the same processor (like PayPal) were being mistaken for them",
+      "Faster loading of bills for large groups"
+    ]
+  },
+  {
+    "pr": 32,
+    "title": "Bank import: one-at-a-time review wizard with resumable drafts",
+    "mergedOn": "2026-08-31",
+    "sha": "032ac6dccf2d4a636ccd18e7e0a6720961d36a87",
+    "whatsNew": [
+      "Bank import reviews one transaction at a time, with Back to fix an earlier one and a progress count",
+      "Each confirmed transaction is saved straight away, and an unfinished import can be resumed later from group settings"
+    ]
+  },
+  {
+    "pr": 33,
+    "title": "Bank import: bring-your-own-AI-chat CSV path, less conservative category prompt",
+    "mergedOn": "2026-08-31",
+    "sha": "414fabce66a69814bc6f93729cb13487345ec739",
+    "whatsNew": [
+      "Bank import without an API key: copy a ready-made prompt into any AI chat app, then paste back the table it gives you",
+      "Category suggestions make a best guess more often instead of leaving most things blank"
+    ]
+  },
+  {
+    "pr": 34,
+    "title": "Bill page: hide \"you lent\" in Personal, kill flash-then-hide UI, trust bank category columns",
+    "mergedOn": "2026-08-31",
+    "sha": "6475e82221a788ff9215c68e4c2fe3b262444b94",
+    "whatsNew": [
+      "The Personal space no longer shows \"You lent / You borrowed\" on each bill",
+      "Fixed the bill page briefly flashing \"Paid by\" and \"split with\" rows in the Personal space before hiding them",
+      "Bank import uses the bank's own category column when there is one: you match each bank category to yours once, and it's remembered"
+    ]
+  },
+  {
+    "pr": 35,
+    "title": "Add a formal test suite (Vitest) + CI",
+    "mergedOn": "2026-09-04",
+    "sha": "f2f1fb2a158477f9aaa04c0b3a0b03c57d3832d2",
+    "behindTheScenes": [
+      "An automated test suite (112 tests at the start), run on every pull request together with lint and a build"
+    ]
+  },
+  {
+    "pr": 36,
+    "title": "UI declutter round 1: icons, and move Invite/Recurring bills into Settings",
+    "mergedOn": "2026-09-07",
+    "sha": "a64735bd74b3be562eb3ca95b933be95ce9c999c",
+    "whatsNew": [
+      "Icons for Search, Share, Settings and Stats on the group page, in its header",
+      "Export as CSV moved into the Share menu",
+      "Invite and \"Add recurring bill\" moved into group settings",
+      "\"Select bills\" removed: use \"Select\" in a bill's ⋮ menu, and Escape or Cancel to leave select mode"
+    ]
+  },
+  {
+    "pr": 37,
+    "title": "UI declutter round 2: back-arrow icon everywhere, drop member count, fix double divider",
+    "mergedOn": "2026-09-07",
+    "sha": "e43dc209dcaaaf421897cc46a33f171db119b27c",
+    "whatsNew": [
+      "Every \"← Back\" link is now a back-arrow icon",
+      "The member count is gone from the group page (it's in group settings)",
+      "Fixed a double divider above Quick stats",
+      "Your stats on the main page is now the same pie-chart icon"
+    ]
+  },
+  {
+    "pr": 38,
+    "title": "Fix two bugs: Your Stats crash, and pagination pill jumping on short pages",
+    "mergedOn": "2026-09-07",
+    "sha": "f269716e34c09b56775aeaddd66641aa1206a8e1",
+    "whatsNew": [
+      "Fixed Your Stats going blank after a refresh, and taking other pages down with it",
+      "Fixed the page buttons sitting mid-screen and jumping around on short pages"
+    ]
+  },
+  {
+    "pr": 39,
+    "title": "Restructure Settings into a sectioned page with a side nav",
+    "mergedOn": "2026-09-07",
+    "sha": "b076fbc5b7b4edaf6f980e8bdec2968b9a18b75e",
+    "whatsNew": [
+      "A new Settings page with a side menu: Profile, Groups (with Leave group), Budgets, Scan, How to Use, About, Updates and Sign out. Tap your name anywhere to open it",
+      "\"Spending thresholds\" are now called \"Budgets\"",
+      "Sign out and Leave group ask for confirmation in a sheet from the bottom of the screen",
+      "Settings > Updates shows what's new and lets you check for and install a new version",
+      "A one-time prompt to add Spesa to your home screen, when you open it in a browser"
+    ]
+  },
+  {
+    "pr": 40,
+    "title": "Bug hunt batch: pagination docking, payment history, date dividers, icon cleanup, group display prefs",
+    "mergedOn": "2026-09-08",
+    "sha": "5fc5a52a5eb26cb7521a5c26f9aacf1c898e9aa4",
+    "whatsNew": [
+      "Page buttons settle at the bottom of the page again, without jumping when you change page",
+      "Payment history is paginated instead of listing every payment at once",
+      "Day headings in the bill list show the month too (\"Sep 5\")",
+      "\"See graphs\" is an icon in the stats page header, and the duplicate \"See full stats\" link is gone",
+      "New switches to hide Quick stats and the \"You lent/borrowed\" line on bills"
+    ]
+  },
+  {
+    "pr": 41,
+    "title": "UI/UX round 5: inline submit buttons, recurring bills, personal share, cleanup",
+    "mergedOn": "2026-09-08",
+    "sha": "ddaf6efbbc3af894f5f01eb33c20ee297357d6e8",
+    "whatsNew": [
+      "Create group and Add bill have their arrow button inside the text field, shown only once there's something to submit",
+      "Recurring bills can be edited, from a ⋮ menu",
+      "Fixed a recurring bill starting today only appearing the next day",
+      "The Personal space can share a recap as text or PDF, with your total and a breakdown by category",
+      "Removed controls that moved to Settings, and made the graphs icon bigger"
+    ]
+  },
+  {
+    "pr": 42,
+    "title": "Restructure Group Settings + prefetch/cache DB-backed settings sections",
+    "mergedOn": "2026-09-08",
+    "sha": "0dd4bfb0af01a01b0d5515aed4ee2bb30c73ec8f",
+    "whatsNew": [
+      "Group settings redesigned with a side menu: General, Members, Guests, Categories, Subscriptions, Data and Danger zone",
+      "Recurring bills are now \"Subscriptions\", inside group settings",
+      "Group admins can delete a whole group",
+      "Settings sections load instantly from what was loaded before, then refresh"
+    ]
+  },
+  {
+    "pr": 43,
+    "title": "Mobile scan/keyboard fixes, Categories polish, sticky filters, price expressions",
+    "mergedOn": "2026-09-09",
+    "sha": "324e4d833db6f2fb2a96924b009fcd5eaf0ebc9b",
+    "whatsNew": [
+      "Scan a receipt: choose between taking a photo or picking a file (PDF, text and HTML too)",
+      "Price fields accept simple sums like \"2,30-1,25\", and iPhone shows a minus key on the number pad",
+      "New \"Sticky filters\" setting keeps a group's search and filters when you open a bill and come back",
+      "Categories in group settings have a ⋮ menu",
+      "Fixed prices with a comma (like 3,50) being refused by some browsers"
+    ]
+  },
+  {
+    "pr": 44,
+    "title": "How to Use guide revamp + README correctness/readability pass",
+    "mergedOn": "2026-09-09",
+    "sha": "8b50e1f84189c2282de23335885995930d6e829c",
+    "whatsNew": [
+      "The How to Use guide is easier to browse, by topic, with shorter sections and small illustrations"
+    ]
+  },
+  {
+    "pr": 45,
+    "title": "Press-and-hold select, automatic versioning, PWA update fix, Scan Settings redesign, and Bill View polish",
+    "mergedOn": "2026-09-10",
+    "sha": "f15b215de9c87f4518e77fdcc9e1f0d8cb5f1392",
+    "whatsNew": [
+      "Press and hold a bill to start selecting bills",
+      "Fixed \"Reload to update\" in Settings > Updates doing nothing",
+      "Scan settings redesigned: one row per method, and only the one you pick opens to show its options",
+      "On a bill: Share is an icon in the header, the scan method shows as a small badge, Take photo and Choose file have icons, and adding an item uses the arrow button",
+      "The version number now updates itself with every release"
+    ]
+  },
+  {
+    "pr": 46,
+    "title": "Bill View progressive disclosure + per-person avatar icons",
+    "mergedOn": "2026-09-11",
+    "sha": "2cc53920306efdc878687ccc91cd57bd4e839e62",
+    "whatsNew": [
+      "On a bill, each item's actions (edit, split, delete) show when you open that item, and you can swipe an item left to delete it",
+      "A bill with a single item gets a simpler view",
+      "Pick an avatar icon for yourself, for all groups or a different one per group, from 16 hand-drawn icons"
+    ]
+  },
+  {
+    "pr": 47,
+    "title": "Avatar icon polish, split-with sizes, Add bill unification, small fixes",
+    "mergedOn": "2026-09-11",
+    "sha": "0a996f0ba58a9b923886e2f9cefbc24c84e7bc6a",
+    "whatsNew": [
+      "New \"Split-with avatar size\" setting: small, medium or large",
+      "One \"Add bill\" form, with an optional amount on the same line as the title",
+      "Avatar pickers no longer flash the wrong choice while loading, and some icons were redrawn",
+      "Fixes: a grey box behind a single-item bill's amount, the graphs icon out of line, and the add-item arrow appearing before a price was entered"
+    ]
+  },
+  {
+    "pr": 48,
+    "title": "Swipe-to-delete on bills/guests, cleaner bill row, collapsed avatar picker",
+    "mergedOn": "2026-09-13",
+    "sha": "34f922b7d7bfbc0d7f74fa1decdd16b06bed17fd",
+    "whatsNew": [
+      "Swipe left to delete a bill or a guest, alongside press-and-hold to select",
+      "Bill rows are cleaner: the decorative arrow is gone, and the ⋮ menu sits inside the row",
+      "Guests have a ⋮ menu, and \"Get claim link\" no longer silently fails to share or copy",
+      "Press and hold on a bill no longer opens the phone's own link menu",
+      "The avatar picker is a compact \"Choose your avatar\" button that expands in place"
+    ]
+  },
+  {
+    "pr": 49,
+    "title": "Fix group-page crash + stale Updates copy",
+    "mergedOn": "2026-09-13",
+    "sha": "cf1aacc4a7f0005f4198214c8adf3f377b248d91",
+    "whatsNew": [
+      "Fixed every group page, including your Personal space, going blank"
+    ]
+  },
+  {
+    "pr": 50,
+    "title": "Group page redesign: header, balance summary, Settle Up page + bill rename + row-width fix",
+    "mergedOn": "2026-09-17",
+    "sha": "106a28d7a03561e44013f622900cfeb59c8de136",
+    "whatsNew": [
+      "The group page has a new header, with the group name on its own line",
+      "Under the name, a balance summary shows only what you owe and what you're owed",
+      "A new Settle up page lists every debt in the group, yours first, each with Mark paid",
+      "Rename a bill from its ⋮ menu or by tapping its title on the bill",
+      "Fixed bill rows not filling the full width"
+    ]
+  },
+  {
+    "pr": 51,
+    "title": "Group page redesign: History/Record payment pages, Settings > Layout, Quick stats placement",
+    "mergedOn": "2026-09-18",
+    "sha": "4a54872209a1dbb6ffa0c9e1852dd96019e5b344",
+    "whatsNew": [
+      "History and Record payment have their own pages, next to Settle up in a row of three buttons",
+      "Record payment can use dropdowns or avatar pickers (your choice in settings)",
+      "The theme has a \"System\" option that follows your device",
+      "A new Settings > Layout section gathers the display settings: theme, stats defaults and group-page options",
+      "Quick stats moved up under the buttons and got slimmer"
+    ]
+  },
+  {
+    "pr": 52,
+    "title": "Fix action-row button centering and full-width fill",
+    "mergedOn": "2026-09-18",
+    "sha": "9d0889181054065240a16a3d0392dacc9d25e184",
+    "whatsNew": [
+      "The Settle up, Record payment and History buttons centre their icon and text, and fill the row"
+    ]
+  },
+  {
+    "pr": 53,
+    "title": "Testing infrastructure, README/CLAUDE.md updates, and Supabase migration naming fix",
+    "mergedOn": "2026-09-19",
+    "sha": "af0724f238084667a5c9545cfbd3e1a7a61adef5",
+    "whatsNew": [
+      "The avatar picker button is announced properly by screen readers"
+    ],
+    "behindTheScenes": [
+      "Groundwork for testing screens and components",
+      "Database migration files renamed to the format Supabase requires"
+    ]
+  },
+  {
+    "pr": 54,
+    "title": "UI test suite: 15 new component/page tests, plus a SettleUp error-race fix",
+    "mergedOn": "2026-09-19",
+    "sha": "57f112070e4df594ac003107c184ffded93d7f4b",
+    "whatsNew": [
+      "Fixed Settle up sometimes hiding an error about the group failing to load",
+      "Several icon-only buttons are now named for screen readers"
+    ],
+    "behindTheScenes": [
+      "Tests for 20 more components and pages"
+    ]
+  },
+  {
+    "pr": 55,
+    "title": "Settings > Layout live previews, plus weekly/monthly budgets",
+    "mergedOn": "2026-09-21",
+    "sha": "80c7df6279ed3ec8ad8c6e8d3f896c9dab1fd66e",
+    "whatsNew": [
+      "Budgets can be weekly or monthly (Settings > Budgets)",
+      "Settings > Layout: tap a setting to see a live preview of what it changes",
+      "Budgets on Your Stats can now also be hidden, besides top or bottom"
+    ]
+  },
+  {
+    "pr": 56,
+    "title": "PDF receipt scanning, Supabase network-safety pass, server-side group balances",
+    "mergedOn": "2026-09-23",
+    "sha": "3801a12f1be1371ed9c80451386d712ba98755de",
+    "whatsNew": [
+      "Fixed a group's balance briefly showing a wildly wrong number: it's now worked out on the server from the group's complete history",
+      "Fixed places where a network hiccup could leave the app stuck instead of showing an error you can retry, like Sign out stuck on \"Signing out…\"",
+      "Free OCR can read a PDF receipt directly, no AI key needed, and no longer picks up the receipt's footer as items"
+    ]
+  },
+  {
+    "pr": 57,
+    "title": "Fix bill-deletion race, harden \"deleted out from under you\" loads, and translate raw AI provider errors",
+    "mergedOn": "2026-09-24",
+    "sha": "a8e8406d4ce2d8b306d7f7e8c5398f839bc2031c",
+    "whatsNew": [
+      "Fixed a bill getting stuck (undeletable, then a confusing error) when deleted right after scanning a receipt into it. Scanned items now save in one go",
+      "A bill or group that's already gone when you open it now sends you back with a plain notice instead of an error",
+      "A scan that fails says why in plain words, like \"Gemini is overloaded right now, try again in a moment\""
+    ]
+  },
+  {
+    "pr": 58,
+    "title": "Fix connection-pool exhaustion; per-bill realtime patching and faster group loads",
+    "mergedOn": "2026-09-25",
+    "sha": "92c2dcc61e95d474088c42c3f72663f0a0766c79",
+    "whatsNew": [
+      "Fixed the app slowing to a crawl after scanning a receipt (deletes not working, bills opening empty, \"connection pool\" errors), especially with the app open on more than one device. Balances are about 30× faster, and a group's bills load in one quick request",
+      "Pages catch up by themselves after your phone was asleep or offline",
+      "When a bill changes, the group page refreshes just that bill, using far less mobile data",
+      "Removing an item is instant",
+      "A bill whose items are still loading says \"Loading items…\" instead of looking empty"
+    ]
+  },
+  {
+    "pr": 59,
+    "title": "Swipe fixes, instant stats, security hardening and safety nets",
+    "mergedOn": "2026-09-25",
+    "sha": "2d738ee422c426fcd46116cfd81f4b1c8d3b8ad4",
+    "whatsNew": [
+      "Swipe-to-remove fixed: bills on the group page slide all the way, rows follow your finger smoothly, a quick flick is enough, and rows never get stuck half-open",
+      "Removing an item is a trash-can button, and a bill's details start open",
+      "Double-tap someone in a \"Split with\" row to make them the only one splitting",
+      "Stats and Graphs open instantly from a group page",
+      "Record payment shows current members, with \"Show people who've left\" for the rest",
+      "Your Stats and Your Graphs load faster, and your overall balance shows straight away",
+      "When something goes wrong, the app says so and offers a way back instead of a blank screen"
+    ],
+    "behindTheScenes": [
+      "Security hardening of the database: tighter rules on who can change a group and its members"
+    ]
+  },
+  {
+    "pr": 60,
+    "title": "Pre-approve Claude Code actions; keep a prompt only for destructive SQL",
+    "mergedOn": "2026-09-25",
+    "sha": "f12287ba2a07ef058d6d887e8eb436fafbf295fd",
+    "behindTheScenes": [
+      "Claude Code settings for this repo: routine actions pre-approved, with a confirmation kept for any SQL that deletes something"
+    ]
+  },
+  {
+    "pr": 61,
+    "title": "Invite links for new devices, one-item bill split, README and permissions pass",
+    "mergedOn": "2026-09-28",
+    "sha": "13ba9405b10a15a47e5e753c8c61cc72e62bdb90",
+    "whatsNew": [
+      "Invite links now work for friends who've never opened the app, instead of a \"page doesn't exist\" error",
+      "Opening an invite or guest-claim link while signed out says why you're asked to sign in, and takes you back to it afterwards, even after confirming a new account's email",
+      "The Invite menu on a group's Members page opens fully on screen",
+      "A one-item bill has its own \"Split with\" right under the amount",
+      "\"Add another item\" splits the new item between the same people as the first, and the bill's default is now labelled \"Next item split with\""
+    ]
+  },
+  {
+    "pr": 62,
+    "title": "AAA themes, focus and touch targets, new category colors, offline fonts, red for money out",
+    "mergedOn": "2026-09-29",
+    "sha": "459ae095901b0b8e9adc310768b16328a1a8bd48",
+    "whatsNew": [
+      "Easier to read in light and dark mode: much stronger contrast for text, links and amounts (WCAG AAA), and visible outlines around fields, cards and tiles",
+      "In dark mode, buttons use dark text on brighter colours",
+      "The selected tab, people who've left a group, and messages no longer rely on a faint shade",
+      "A clear green focus ring on every button, link, tab and row for keyboard users",
+      "Easier to tap: bigger \"Split with\" avatars, and fingertip-sized tap areas around small buttons, links, tabs and switches",
+      "New category colours that are easier to tell apart, plus a colour-blind friendly option in Settings > Layout",
+      "The installed app keeps its own typefaces offline",
+      "What you owe is a clear red, the partner of the green for what you're owed",
+      "Errors carry a warning sign and their own rust colour, so they never look like a debt"
+    ]
+  },
+  {
+    "pr": 63,
+    "title": "Contrast test, dark-mode polish, new icons, loading and empty states, category names on items",
+    "mergedOn": "2026-09-29",
+    "sha": "c5e7a436f6de9bb1cbe3a8e1f68ec5103d9f28dd",
+    "whatsNew": [
+      "Stats bars no longer cut off long category names or big amounts on a phone",
+      "In dark mode, menus cast a visible shadow, and the phone's status bar turns dark too",
+      "A fresh app icon, with a proper home-screen icon on iPhone",
+      "While a page loads you see a faint outline of what's coming instead of \"Loading…\"",
+      "Empty screens say what to do next, with a button to do it",
+      "A bill's items show their category's name, under each item or grouped by category with subtotals (Settings > Layout)",
+      "Subscriptions show their category's name too",
+      "The date at the bottom of a printed recap is dark enough to read"
+    ]
+  },
+  {
+    "pr": 64,
+    "title": "Stylesheet split, type/spacing scales, text-size support, pie chart labels, tablet and laptop layouts",
+    "mergedOn": "2026-09-29",
+    "sha": "08fe2ad6cfe57813cdc5bbc626fb7fc22215f436",
+    "whatsNew": [
+      "Text follows your phone's or browser's own text-size setting",
+      "Pie charts print each larger slice's share beside it, and tapping a slice or its legend row highlights both and shows that category's amount in the middle",
+      "On a laptop or a tablet held sideways, a bill opens beside the bill list",
+      "On tablets and laptops, stats and graphs use the full width, with sections side by side",
+      "Text sizes and spacing tidied onto one consistent scale",
+      "The \"Remove\" links for members and guests use the warning colour, and the header's version number is small again"
+    ]
+  },
+  {
+    "pr": 65,
+    "title": "Put the design system in the repo, and test it against the app",
+    "mergedOn": "2026-09-29",
+    "sha": "49c7bcf6b863a9da3fa696a854764517a46504ed",
+    "behindTheScenes": [
+      "The design system now lives in the repo too (docs/design-system/), with a test that keeps it matching the app"
+    ]
+  }
+]

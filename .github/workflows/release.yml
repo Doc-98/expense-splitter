@@ -4,8 +4,9 @@ name: Release
 # (the version the app itself shows), named after the PR, with that PR's new
 # WHATS_NEW entries as its notes — a permanent changelog, since WHATS_NEW in
 # the app is replaced each release. See scripts/release.mjs and
-# src/lib/releaseNotes.js. A push that isn't a squash-merged PR, or a
-# re-run, creates nothing.
+# src/lib/releaseNotes.js. It also creates any missing release from
+# scripts/release-history.json (PRs #1–#65, from before this existed). A
+# push that isn't a squash-merged PR, or a re-run, creates nothing new.
 on:
   push:
     branches: [master]
