@@ -1165,6 +1165,13 @@ existed, were written by hand from each PR's description, since `WHATS_NEW`
 only started at #39 and wasn't always updated; they live in `scripts/release-history.json`, and the workflow creates any of
 them that's missing (all of them, the first time it runs).
 
+The workflow's built-in token isn't allowed to create a tag on a commit that
+changes a file under `.github/workflows/` (#35, #53 and #67 so far). The script
+skips those with a warning rather than failing the run. A `RELEASE_TOKEN`
+repository secret (a fine-grained token for this repository with Contents and
+Workflows set to read and write) is used instead when present, and can create
+them: add it, then re-run the Release workflow.
+
 ## Add to home screen
 
 `InstallPrompt.jsx`, also mounted at the app's root, shows a small one-time

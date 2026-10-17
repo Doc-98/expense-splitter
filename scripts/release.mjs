@@ -84,13 +84,30 @@ const existing = await existingTags()
 const missing = wanted.filter((r) => !existing.has(r.tag_name))
 if (!missing.length) console.log('Every release already exists; nothing to do.')
 
+// A 403 is GitHub refusing the workflow's token permission to create a tag
+// on a commit that changes a file under .github/workflows (here #35, #53
+// and #67). Those are skipped with a warning so the rest still get made;
+// a RELEASE_TOKEN secret with the Workflows permission can create them (see
+// release.yml), on the next run. Any other failure stops the run.
+const skipped = []
 for (const [i, release] of missing.entries()) {
-  // GitHub limits how fast content can be created; the first run makes 67.
+  // GitHub limits how fast content can be created; a first run makes dozens.
   if (i > 0) await new Promise((resolve) => setTimeout(resolve, 1000))
   const res = await fetch(api, { method: 'POST', headers, body: JSON.stringify(release) })
+  if (res.status === 403) {
+    skipped.push(release.tag_name)
+    console.log(`::warning::Not allowed to create ${release.tag_name}: ${await res.text()}`)
+    continue
+  }
   if (!res.ok) {
     console.error(`Creating ${release.tag_name} failed: ${res.status} ${await res.text()}`)
     process.exit(1)
   }
   console.log(`Created ${release.name}`)
+}
+if (skipped.length) {
+  console.log(
+    `::warning::Skipped ${skipped.join(', ')}: their commits change a workflow file, which the built-in token ` +
+      'may not tag. Add a RELEASE_TOKEN secret (see release.yml) and re-run this workflow to create them.'
+  )
 }
