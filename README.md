@@ -1160,9 +1160,9 @@ as its notes. Entries the list already had before the merge are left out, as
 they belong to an earlier release; a PR that doesn't touch the list gets "No
 changes you would notice in the app." That makes the releases page the full
 changelog the in-app list can't be, so write `WHATS_NEW` for each PR as its
-own release notes. Releases for PRs #1–#65 were written by hand from each PR's
-description, since `WHATS_NEW` only started at #39 and wasn't always updated;
-they live in `scripts/release-history.json`, and the workflow creates any of
+own release notes. Releases for PRs #1–#66, merged before this workflow
+existed, were written by hand from each PR's description, since `WHATS_NEW`
+only started at #39 and wasn't always updated; they live in `scripts/release-history.json`, and the workflow creates any of
 them that's missing (all of them, the first time it runs).
 
 ## Add to home screen

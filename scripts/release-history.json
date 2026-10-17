@@ -744,5 +744,15 @@
     "behindTheScenes": [
       "The design system now lives in the repo too (docs/design-system/), with a test that keeps it matching the app"
     ]
+  },
+  {
+    "pr": 66,
+    "title": "Softer outlines: a quiet border for rows and cards, the strong one for fields",
+    "mergedOn": "2026-10-17",
+    "sha": "78f0d2892a4a58592a282849bded78f0b22608ae",
+    "whatsNew": [
+      "Outlines around rows, cards and tiles are softer and match the app's greens, so they no longer overpower what's inside them; text fields keep their clearer outline",
+      "The start-date field for a subscription now looks like the app's other fields"
+    ]
   }
 ]
