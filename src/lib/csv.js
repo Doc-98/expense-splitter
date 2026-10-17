@@ -93,15 +93,19 @@ export function downloadCsv(filename, csvText) {
 }
 
 // Row builder for exporting one bill's items — kept separate from
-// downloadCsv so it can be tested without needing a real browser DOM.
-export function buildBillCsvRows(items, members) {
+// downloadCsv so it can be tested without needing a real browser DOM. Its
+// Category column follows buildGroupCsvRows below: the item's own category,
+// else the bill's, else "Uncategorized".
+export function buildBillCsvRows(items, members, categories = [], billCategoryId = null) {
   const nameOf = (id) => members.find((m) => m.id === id)?.name || 'Someone'
-  const header = ['Item', 'Quantity', 'Unit Price', 'Total Price', 'Split With']
+  const categoryNameOf = (id) => categories.find((c) => c.id === id)?.name
+  const header = ['Item', 'Quantity', 'Unit Price', 'Total Price', 'Category', 'Split With']
   const rows = items.map((item) => [
     item.name,
     item.quantity,
     Number(item.unit_price).toFixed(2),
     Number(item.total_price).toFixed(2),
+    categoryNameOf(item.category_id || billCategoryId) || 'Uncategorized',
     (item.item_shares || []).map((s) => nameOf(s.member_id)).join('; '),
   ])
   return { header, rows }

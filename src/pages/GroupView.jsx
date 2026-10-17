@@ -994,14 +994,14 @@ export default function GroupView({ activeBillId = null, printable = true }) {
       const { data, error: billsError } = await supabase
         .from('bills')
         .select(
-          'id, title, note, created_at, paid_by, items(name, quantity, unit_price, total_price, item_shares(member_id, shares)), bill_payers(member_id, amount)'
+          'id, title, note, created_at, paid_by, category_id, items(name, quantity, unit_price, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
         )
         .in('id', billIds)
         .order('created_at', { ascending: false })
       if (billsError) throw billsError
 
       const billsForRecap = (data || []).map((b) => ({ ...b, payers: b.bill_payers || [] }))
-      const text = formatMultiBillRecap(billsForRecap, allMembers, format)
+      const text = formatMultiBillRecap(billsForRecap, allMembers, format, categories)
       const title =
         billsForRecap.length === 1 ? billsForRecap[0].title : `${billsForRecap.length} bills — ${group?.name}`
       const result = await shareOrCopyText(text, title)

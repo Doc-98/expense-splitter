@@ -1652,10 +1652,19 @@ options, each only offered where it actually applies:
   `visibility: hidden` approach had (invisible content still reserved its
   full height, routinely producing a trailing blank page).
 - **Export as CSV** (`src/lib/csv.js`) — a bill's own CSV is one row per
-  item; a group's is its whole bill history. Used to be a second, separate
+  item; a group's is its whole bill history. Both have a Category column
+  (the item's own category, else its bill's, else "Uncategorized"). Used to be a second, separate
   button next to Share — folded into the same menu instead, since "share as
   a recap" and "export as a file" were really the same underlying action in
   a different format, not two different features.
+
+A bill's text and PDF recaps carry its categories the same way the bill
+page groups them (`summarizeCategories()` in `src/lib/itemGroups.js`):
+nothing when no item has a category, a "Category: …" line under the title
+when they all share one, and a **By category** list of subtotals ("No
+category" last) above the total when there are several. Sharing several
+selected bills adds the same subtotals across all of them above the grand
+total.
 
 `ShareButton` itself supports an icon-only mode (`icon`), used for the
 group page's own trigger and both stats pages' own headers (next to their
@@ -1885,8 +1894,6 @@ same list, plus what's in progress.
 - Cross-group category merging can rarely split into two entries if a
   category's exact casing changes elsewhere *after* a budget's been saved
   for it — re-saving it under the new casing fixes it
-- Category totals aren't reflected in recap text, PDFs, or CSV export yet —
-  those still just show items and prices
 
 ## Security notes
 

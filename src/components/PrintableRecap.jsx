@@ -7,11 +7,15 @@
 // instead of a single-tap file download.
 import { useCurrency } from '../context/CurrencyContext'
 import PrintPortal from './PrintPortal'
+import { summarizeCategories } from '../lib/itemGroups'
 
-export function PrintableBillRecap({ bill, items, members }) {
+// Categories as the shared text recap shows them: one for the whole bill is
+// a line under the title, several get a "By category" table after the total.
+export function PrintableBillRecap({ bill, items, members, categories = [] }) {
   const { format } = useCurrency()
   const nameOf = (id) => members.find((m) => m.id === id)?.name || 'Someone'
   const total = items.reduce((sum, it) => sum + Number(it.total_price), 0)
+  const categorySummary = summarizeCategories(items, categories, bill?.category_id)
 
   return (
     <PrintPortal>
@@ -22,6 +26,7 @@ export function PrintableBillRecap({ bill, items, members }) {
         ) : (
           bill?.paid_by && <p>Paid by {nameOf(bill.paid_by)}</p>
         )}
+        {categorySummary.only && <p>Category: {categorySummary.only.name}</p>}
         {bill?.note && <p className="print-note">{bill.note}</p>}
         <table className="print-table">
           <thead>
@@ -45,6 +50,16 @@ export function PrintableBillRecap({ bill, items, members }) {
           </tbody>
         </table>
         <p className="print-total">Total: {format(total)}</p>
+        <PrintStatsSection
+          title="By category"
+          rows={categorySummary.groups}
+          renderRow={(g) => (
+            <tr key={g.key}>
+              <td>{g.name}</td>
+              <td className="mono">{format(g.total)}</td>
+            </tr>
+          )}
+        />
         <p className="print-footer">Generated {new Date().toLocaleDateString()}</p>
       </div>
     </PrintPortal>

@@ -703,7 +703,7 @@ export default function BillView() {
   const paidByOptions = allMembers.filter((m) => m.active || m.id === bill?.paid_by)
 
   function exportCsv() {
-    const { header, rows } = buildBillCsvRows(items, allMembers)
+    const { header, rows } = buildBillCsvRows(items, allMembers, categories, bill?.category_id)
     const filename = `${(bill?.title || 'bill').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`
     downloadCsv(filename, toCsv(header, rows))
   }
@@ -770,7 +770,7 @@ export default function BillView() {
           menuAlign="right"
           label="Share recap"
           title={bill?.title}
-          getText={() => formatBillRecap({ ...bill, payers: billPayers }, items, allMembers, format)}
+          getText={() => formatBillRecap({ ...bill, payers: billPayers }, items, allMembers, format, categories)}
           onExportCsv={exportCsv}
         />
       </header>
@@ -1053,7 +1053,7 @@ export default function BillView() {
         </>
       )}
 
-      <PrintableBillRecap bill={{ ...bill, payers: billPayers }} items={items} members={allMembers} />
+      <PrintableBillRecap bill={{ ...bill, payers: billPayers }} items={items} members={allMembers} categories={categories} />
 
       <button type="button" className="btn-primary confirm-btn" onClick={() => navigate(`/groups/${groupId}`)}>
         Confirm

@@ -77,8 +77,21 @@ describe('buildBillCsvRows', () => {
       },
     ]
     const { header, rows } = buildBillCsvRows(items, members)
-    expect(header).toEqual(['Item', 'Quantity', 'Unit Price', 'Total Price', 'Split With'])
-    expect(rows).toEqual([['Pizza', 2, '8.00', '16.00', 'Alice; Bob']])
+    expect(header).toEqual(['Item', 'Quantity', 'Unit Price', 'Total Price', 'Category', 'Split With'])
+    expect(rows).toEqual([['Pizza', 2, '8.00', '16.00', 'Uncategorized', 'Alice; Bob']])
+  })
+
+  it("names each item's category: its own, else the bill's", () => {
+    const categories = [
+      { id: 'c-food', name: 'Food' },
+      { id: 'c-home', name: 'Home' },
+    ]
+    const items = [
+      { name: 'Pasta', quantity: 1, unit_price: 2, total_price: 2, item_shares: [] },
+      { name: 'Soap', quantity: 1, unit_price: 3, total_price: 3, category_id: 'c-home', item_shares: [] },
+    ]
+    const { rows } = buildBillCsvRows(items, members, categories, 'c-food')
+    expect(rows.map((r) => r[4])).toEqual(['Food', 'Home'])
   })
 
   it('falls back to "Someone" for a share whose member is gone', () => {
@@ -86,13 +99,13 @@ describe('buildBillCsvRows', () => {
       { name: 'Soda', quantity: 1, unit_price: 2, total_price: 2, item_shares: [{ member_id: 'ghost' }] },
     ]
     const { rows } = buildBillCsvRows(items, members)
-    expect(rows[0][4]).toBe('Someone')
+    expect(rows[0][5]).toBe('Someone')
   })
 
   it('handles an item with no shares at all', () => {
     const items = [{ name: 'Napkins', quantity: 1, unit_price: 0, total_price: 0 }]
     const { rows } = buildBillCsvRows(items, members)
-    expect(rows[0][4]).toBe('')
+    expect(rows[0][5]).toBe('')
   })
 })
 
