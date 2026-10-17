@@ -67,6 +67,10 @@ expectations, etc.) — read that first, every session.
   update it if not. It's drifted stale before (Settings > Updates showing
   a previous release's notes, not what actually just shipped) — standing
   preference, confirmed 2026-09-19.
+- `WHATS_NEW` also becomes the GitHub release notes when the PR merges
+  (`.github/workflows/release.yml`), minus any entry the list already had
+  before — so replace the list with this PR's own changes rather than
+  appending to the last release's.
 - `APP_VERSION` (same file) needs no equivalent check — it's computed
   automatically at build time from git history (`readAppVersion()` /
   `findLatestVersion()` in `vite.config.js`, driven by each squash-merge

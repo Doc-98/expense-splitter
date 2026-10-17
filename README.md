@@ -147,6 +147,8 @@ expense-splitter/
 ├── docs/
 │   └── design-system/          # The design system as plain files — see "Design system"
 ├── public/                     # Static PWA assets — icons, favicon
+├── scripts/
+│   └── release.mjs             # Turns each merged PR into a GitHub release — see "Updates section"
 ├── supabase/
 │   ├── migrations/             # Timestamped, additive SQL — see "Migrations & Supabase branching"
 │   └── schema.sql              # The full schema in one file, for a brand-new project
@@ -1141,6 +1143,16 @@ to what actually merged, instead of relying on whoever opens the next PR to
 remember to bump it by hand. `WHATS_NEW` stays hand-written — summarizing
 "what a human would care about" isn't something a commit subject alone can
 do — so replace that list with each PR that ships something user-visible.
+
+Every merged PR also becomes a [GitHub release](https://github.com/doc-98/expense-splitter/releases)
+(`.github/workflows/release.yml`, running `scripts/release.mjs`): tag
+`v1.<PR number>`, named after the PR, with that PR's new `WHATS_NEW` entries
+as its notes. Entries the list already had before the merge are left out, as
+they belong to an earlier release; a PR that doesn't touch the list gets "No
+changes you would notice in the app." That makes the releases page the full
+changelog the in-app list can't be, so write `WHATS_NEW` for each PR as its
+own release notes. Releases for PRs #1–#65 were written by hand from each PR's
+description, since `WHATS_NEW` only started at #39 and wasn't always updated.
 
 ## Add to home screen
 

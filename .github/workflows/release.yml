@@ -1,0 +1,34 @@
+name: Release
+
+# Every PR merged into master becomes a GitHub release: tag v1.<PR number>
+# (the version the app itself shows), named after the PR, with that PR's new
+# WHATS_NEW entries as its notes — a permanent changelog, since WHATS_NEW in
+# the app is replaced each release. See scripts/release.mjs and
+# src/lib/releaseNotes.js. A push that isn't a squash-merged PR, or a
+# re-run, creates nothing.
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The merge and its parent, to tell this release's WHATS_NEW
+          # entries from ones carried over from the previous release.
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/release.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
