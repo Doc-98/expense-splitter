@@ -476,11 +476,11 @@ knowing if you're extending this one or writing something similar:
   it and asserts the seeded value renders *before* the mocked fetch
   resolves (`GroupMembersSection.test.jsx`'s "paints from
   groupRosterCache" test never awaits anything — that's the point).
-- `window.confirm` gates both the admin-transfer and remove-member
-  actions here; `vi.spyOn(window, 'confirm').mockReturnValue(true)` in
-  `beforeEach`, overridden per test with `window.confirm.mockReturnValue(false)`
-  for the "cancelled" cases, covers both without duplicating the render
-  setup.
+- The admin-transfer and remove-member actions both ask through the
+  app's own confirm sheet (`useConfirm`), so a test answers it the way a
+  person would: a small `answerSheet(user, 'Remove')` / `answerSheet(user,
+  'Cancel')` helper clicks the button inside the dialog, covering both
+  outcomes without duplicating the render setup.
 
 `GroupDangerZoneSection.test.jsx` extends the lib-function pattern to a
 third module (`../lib/groupRole`'s `fetchGroupRole()`, alongside
@@ -585,7 +585,7 @@ same treatment, `localStorage.clear()` in `beforeEach`.
 
 `GroupCategoriesSection.test.jsx` is a pure lib-function case (`../lib/categories`'s
 `fetchCategories()`/`addCategory()`/`renameCategory()`/`deleteCategory()`/`updateCategoryColor()`)
-with `useParams` as its only router need and `window.confirm` gating the
+with `useParams` as its only router need and the confirm sheet gating the
 delete flow — same shapes as before. The one new wrinkle: `ColorSwatchPicker`
 (rendered for real here, unmocked, since it's self-contained) imports
 `CATEGORY_COLORS` from that same `../lib/categories` module, so the mock
@@ -1025,10 +1025,18 @@ Groups section's "⋮ → Leave group" need to do the exact same thing,
 snapshot included (see "How the data model works" below), not two copies
 that could quietly drift apart.
 
-Three different confirm patterns, by how much is at stake:
+Three different confirm patterns, by how much is at stake (the browser's
+own `window.confirm()` is never used):
 
 - **`ConfirmSheet.jsx`** (a bottom sheet) — a plain yes/no worth a beat of
-  "are you sure" but nothing more: Sign Out, Leave group.
+  "are you sure" but nothing more: Sign Out, Leave group, deleting a bill
+  or a category, removing a member, undoing a payment, making someone
+  admin (the one non-destructive confirm, so its button is the primary
+  colour rather than the warning one). Most go through `useConfirm()`,
+  which makes it `if (!(await confirm({ title, body, confirmLabel })))
+  return`, read the same as the `window.confirm()` it replaced. Focus moves
+  onto the sheet when it opens, and Escape only cancels the sheet, not
+  whatever the page behind it would otherwise do with Escape.
 - **`TypedConfirmSheet.jsx`** (same sheet chrome, plus a "type the exact
   word to confirm" gate) — the genuinely hard-to-reverse ones, where a
   click alone is too easy to do by habit: Delete all bills, Delete group.

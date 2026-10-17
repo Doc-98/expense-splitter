@@ -232,6 +232,18 @@ describe('useSwipeToDelete — the Remove tap on a phone', () => {
     expect(onDelete).toHaveBeenCalledTimes(1)
   })
 
+  it("keeps the touch's follow-up mousedown from moving focus back onto Remove", () => {
+    const { row } = setup()
+    slowDrag(row('a'), 100)
+    pointer(removeButton('a'), 'pointerDown', { x: 300 })
+    pointer(removeButton('a'), 'pointerUp', { x: 300 })
+    // false: default prevented, so the browser doesn't focus what was pressed.
+    expect(fireEvent.mouseDown(removeButton('a'))).toBe(false)
+    expect(fireEvent.mouseDown(row('b'))).toBe(true)
+    // The click that follows, so the guard doesn't outlive this test.
+    fireEvent.click(removeButton('a'))
+  })
+
   it('does not delete when the finger slides off Remove before lifting', () => {
     const { row, onDelete } = setup()
     slowDrag(row('a'), 100)

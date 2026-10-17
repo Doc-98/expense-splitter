@@ -53,4 +53,20 @@ describe('ConfirmSheet', () => {
     await user.keyboard('{Escape}')
     expect(onCancel).toHaveBeenCalledOnce()
   })
+
+  it('moves focus into the dialog, with Cancel next in line', async () => {
+    const user = userEvent.setup({ delay: null })
+    renderSheet()
+    expect(screen.getByRole('dialog')).toHaveFocus()
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus()
+  })
+
+  it('styles the action as destructive unless told otherwise', () => {
+    const { unmount } = renderSheet()
+    expect(screen.getByRole('button', { name: 'Leave' })).toHaveClass('btn-danger')
+    unmount()
+    renderSheet({ confirmLabel: 'Make admin', tone: 'primary' })
+    expect(screen.getByRole('button', { name: 'Make admin' })).toHaveClass('btn-primary')
+  })
 })

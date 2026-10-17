@@ -8,6 +8,8 @@ import { useClickOutside } from '../lib/useClickOutside'
 import ColorSwatchPicker from './ColorSwatchPicker'
 import CategoryColorButton from './CategoryColorButton'
 import { ArrowRightIcon } from './icons'
+import ConfirmSheet from './ConfirmSheet'
+import { useConfirm } from '../lib/useConfirm'
 
 // The "⋮" per-row menu — same shape as GroupSubscriptionsSection.jsx's own
 // TemplateMenu (Rename/Delete instead of Edit/Pause/Delete). Kept local to
@@ -49,6 +51,7 @@ function CategoryMenu({ category, onRename, onDelete }) {
 
 export default function GroupCategoriesSection() {
   const { groupId } = useParams()
+  const { confirm, sheetProps: confirmSheet } = useConfirm()
 
   // Seeded straight from groupCategoriesCache when there's anything there
   // — either a prefetch fired the instant the group page's own Settings
@@ -121,13 +124,12 @@ export default function GroupCategoriesSection() {
   }
 
   async function handleDeleteCategory(category) {
-    if (
-      !window.confirm(
-        `Delete "${category.name}"? Any bills or items tagged with it will become uncategorized — nothing about them is deleted.`
-      )
-    ) {
-      return
-    }
+    const confirmed = await confirm({
+      title: `Delete "${category.name}"?`,
+      body: 'Any bills or items tagged with it become uncategorized. Nothing about them is deleted.',
+      confirmLabel: 'Delete',
+    })
+    if (!confirmed) return
     setError(null)
     try {
       await deleteCategory(category.id)
@@ -206,6 +208,7 @@ export default function GroupCategoriesSection() {
       </form>
 
       {error && <p className="status-error">{error}</p>}
+      {confirmSheet && <ConfirmSheet {...confirmSheet} />}
     </>
   )
 }

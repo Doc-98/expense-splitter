@@ -58,17 +58,28 @@ const SETTLE_TRANSITION = 'transform 0.2s ease'
 // reader activation (a click with no pointer before it) still works.
 const CLICK_AFTER_REMOVE_MS = 600
 
-// Swallows the one click a pointer Remove is followed by, if it comes.
+// Swallows the one click a pointer Remove is followed by, if it comes, and
+// the mousedown a touch sends just before it, which would otherwise move
+// focus back onto the Remove button (away from a confirm sheet's Cancel).
 function swallowNextClick() {
   const until = performance.now() + CLICK_AFTER_REMOVE_MS
-  function onClick(e) {
+  function stop() {
     window.removeEventListener('click', onClick, true)
+    window.removeEventListener('mousedown', onMouseDown, true)
+  }
+  function onMouseDown(e) {
+    window.removeEventListener('mousedown', onMouseDown, true)
+    if (performance.now() <= until) e.preventDefault()
+  }
+  function onClick(e) {
+    stop()
     if (performance.now() > until) return
     e.preventDefault()
     e.stopPropagation()
   }
+  window.addEventListener('mousedown', onMouseDown, true)
   window.addEventListener('click', onClick, true)
-  setTimeout(() => window.removeEventListener('click', onClick, true), CLICK_AFTER_REMOVE_MS)
+  setTimeout(stop, CLICK_AFTER_REMOVE_MS)
 }
 
 export function useSwipeToDelete() {
@@ -217,8 +228,8 @@ export function useSwipeToDelete() {
       if (Math.abs(e.clientX - press.x) >= DRAG_THRESHOLD || Math.abs(e.clientY - press.y) >= DRAG_THRESHOLD) return
       e.stopPropagation()
       remove()
-      // Armed after onDelete returns: a confirm() it opens can stay up as
-      // long as the person likes, and the click only follows once it closes.
+      // Also keeps that click off a confirm sheet onDelete may have just
+      // opened, so it can't land on the backdrop and cancel it.
       swallowNextClick()
     }
 

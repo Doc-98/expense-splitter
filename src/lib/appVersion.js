@@ -17,4 +17,5 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
   "Swiping a row open and tapping Remove now removes it on the first tap, instead of needing a second one",
+  "Deleting a bill or a category, removing a member, undoing a payment and making someone admin now ask in the app's own sheet from the bottom of the screen, instead of the browser's plain pop-up",
 ]

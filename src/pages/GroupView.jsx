@@ -34,6 +34,7 @@ import { isTypingTarget } from '../lib/isTypingTarget'
 import { useListKeyboardNav } from '../lib/useListKeyboardNav'
 import { useLongPress } from '../lib/useLongPress'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
+import { useConfirm } from '../lib/useConfirm'
 import { useCurrency } from '../context/CurrencyContext'
 import { processDueRecurringBills } from '../lib/recurringBills'
 import { prefetchGroupSettings } from '../lib/prefetchGroupSettings'
@@ -51,6 +52,7 @@ import { SearchIcon, PieChartIcon, SettingsIcon, ArrowRightIcon, SettleIcon, Rec
 import BackButton from '../components/BackButton'
 import { LoadingState, Skeleton, SkeletonRows } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
+import ConfirmSheet from '../components/ConfirmSheet'
 
 const BILLS_PAGE_SIZE = 15
 const VERIFY_DELAY_MS = 30 * 1000
@@ -65,6 +67,9 @@ export default function GroupView({ activeBillId = null, printable = true }) {
   const location = useLocation()
   const { user } = useAuth()
   const { format } = useCurrency()
+  // Deleting bills asks through the app's own sheet; while it's up, Escape
+  // only cancels it (the page's own Escape handlers below pause).
+  const { confirm, sheetProps: confirmSheet, isConfirming } = useConfirm()
   const { showQuickStats, showLentBorrowedStatus, stickyFilters, highlightFullBalanceLine } = getGroupViewPreferences()
   // Only actually consulted when stickyFilters is on (see the state
   // declarations below and the write-back effect near the other filter
@@ -160,7 +165,7 @@ export default function GroupView({ activeBillId = null, printable = true }) {
   // anymore, so Escape (same convention as search/filters above) is what
   // lets someone back out of it without hunting for the bulk-select bar's
   // own Cancel.
-  useEscapeKey(() => toggleSelectMode(), selectMode)
+  useEscapeKey(() => toggleSelectMode(), selectMode && !isConfirming)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [shareStatus, setShareStatus] = useState(null)
   // { [billId]: { [memberId]: { paid, consumed } } } — computed from bills
@@ -189,7 +194,7 @@ export default function GroupView({ activeBillId = null, printable = true }) {
   // Same Escape-to-close convention as the filters panel just below — an
   // inline panel toggled by its own button, same shape as filtersOpen, so
   // it gets the same treatment.
-  useEscapeKey(() => setSearchOpen(false), searchOpen)
+  useEscapeKey(() => setSearchOpen(false), searchOpen && !isConfirming)
   // "/" jumps straight to this (see the keydown effect below), same
   // shortcut GitHub/Slack use for their own search boxes — so it needs a
   // real DOM node to call .focus() on, not just the value/onChange state
@@ -205,7 +210,7 @@ export default function GroupView({ activeBillId = null, printable = true }) {
     if (searchOpen) searchInputRef.current?.focus()
   }, [searchOpen])
   const [filtersOpen, setFiltersOpen] = useState(cachedFilters?.filtersOpen ?? false)
-  useEscapeKey(() => setFiltersOpen(false), filtersOpen)
+  useEscapeKey(() => setFiltersOpen(false), filtersOpen && !isConfirming)
   const [selectedTagIds, setSelectedTagIds] = useState(cachedFilters?.selectedTagIds ?? new Set())
   const [tagMatchMode, setTagMatchMode] = useState(cachedFilters?.tagMatchMode ?? 'any')
   // null until initialized from real data (see the effect below) — the
@@ -867,7 +872,12 @@ export default function GroupView({ activeBillId = null, printable = true }) {
   }
 
   async function deleteBill(bill) {
-    if (!window.confirm(`Delete "${bill.title}"? This removes all its items too.`)) return
+    const confirmed = await confirm({
+      title: `Delete "${bill.title}"?`,
+      body: 'This removes all its items too.',
+      confirmLabel: 'Delete',
+    })
+    if (!confirmed) return
     setError(null)
     const { error: deleteError } = await supabase.from('bills').delete().eq('id', bill.id)
     if (deleteError) setError(deleteError.message)
@@ -940,7 +950,12 @@ export default function GroupView({ activeBillId = null, printable = true }) {
       setError('Only the group admin can delete every bill in a group. Deselect at least one, or ask the admin.')
       return
     }
-    if (!window.confirm(`Delete ${count} bill${count === 1 ? '' : 's'}? This removes all their items too.`)) return
+    const confirmed = await confirm({
+      title: `Delete ${count} bill${count === 1 ? '' : 's'}?`,
+      body: count === 1 ? 'This removes all its items too.' : 'This removes all their items too.',
+      confirmLabel: 'Delete',
+    })
+    if (!confirmed) return
     setError(null)
     const { error: deleteError } = allBillsSelected
       ? await supabase.rpc('delete_all_group_bills', { target_group_id: groupId, delete_payments: false })
@@ -1616,6 +1631,7 @@ export default function GroupView({ activeBillId = null, printable = true }) {
       ) : (
         <PrintableSettlementRecap groupName={group?.name} transactions={settlement} members={allMembers} />
       )}
+      {confirmSheet && <ConfirmSheet {...confirmSheet} />}
     </div>
   )
 }

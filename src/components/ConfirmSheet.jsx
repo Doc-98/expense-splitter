@@ -1,18 +1,36 @@
+import { useEffect, useRef } from 'react'
 import { useEscapeKey } from '../lib/useEscapeKey'
 
-// A bottom-sheet confirm dialog — Settings' Sign Out, its Groups section's
-// Leave group, and Group Settings' own Danger Zone "Leave group" all use
-// this instead of a plain window.confirm(), for a plain yes/no that's
-// worth a beat of "are you sure" but doesn't need a typed confirmation
-// (see TypedConfirmSheet for the ones that do — Delete all bills, Delete
-// group) or the app's centered .modal-panel (MultiPayerModal and friends,
-// content-heavy dialogs unrelated to confirming an action).
-export default function ConfirmSheet({ title, body, confirmLabel, onConfirm, onCancel }) {
+// A bottom-sheet confirm dialog: every yes/no confirmation in the app uses
+// this, never the browser's own window.confirm() — Sign Out, Leave group,
+// deleting a bill, undoing a payment and so on (most through useConfirm,
+// which turns it into `await confirm(...)`). TypedConfirmSheet covers the
+// ones that need a typed confirmation (Delete all bills, Delete group), and
+// the centered .modal-panel content-heavy dialogs (MultiPayerModal and
+// friends) unrelated to confirming an action.
+//
+// `tone` is 'danger' (the default) for anything destructive, 'primary' for
+// a confirm that isn't (making someone admin). Focus moves onto the panel
+// itself, so a screen reader announces the question and Tab reaches Cancel
+// first; focusing Cancel instead drew the keyboard focus ring on it after a
+// plain finger tap. data-own-keys keeps a list's keyboard shortcuts behind
+// the sheet from acting on keys meant for it.
+export default function ConfirmSheet({ title, body, confirmLabel, tone = 'danger', onConfirm, onCancel }) {
   useEscapeKey(onCancel, true)
+  const panelRef = useRef(null)
+  useEffect(() => panelRef.current?.focus(), [])
 
   return (
-    <div className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="confirm-sheet-title">
+    <div className="sheet-backdrop" data-own-keys onClick={(e) => e.target === e.currentTarget && onCancel()}>
+      <div
+        className="sheet-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-sheet-title"
+        tabIndex={-1}
+        ref={panelRef}
+        style={{ outline: 'none' }}
+      >
         <div className="sheet-grabber" aria-hidden="true" />
         <h2 id="confirm-sheet-title">{title}</h2>
         <p>{body}</p>
@@ -20,7 +38,7 @@ export default function ConfirmSheet({ title, body, confirmLabel, onConfirm, onC
           <button type="button" className="btn-secondary" onClick={onCancel}>
             Cancel
           </button>
-          <button type="button" className="btn-danger" onClick={onConfirm}>
+          <button type="button" className={tone === 'primary' ? 'btn-primary' : 'btn-danger'} onClick={onConfirm}>
             {confirmLabel}
           </button>
         </div>

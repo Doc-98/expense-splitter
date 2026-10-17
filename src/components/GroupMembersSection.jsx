@@ -7,6 +7,8 @@ import { snapshotAndRemoveMember } from '../lib/leaveGroup'
 import { fetchGroupRosterData } from '../lib/prefetchGroupSettings'
 import { groupRosterCache } from '../lib/groupRosterCache'
 import InviteMenu from './InviteMenu'
+import ConfirmSheet from './ConfirmSheet'
+import { useConfirm } from '../lib/useConfirm'
 
 // Real accounts only — Guests moved to its own tab (see
 // GroupGuestsSection.jsx), and "Leave this group" moved out entirely, into
@@ -18,6 +20,7 @@ import InviteMenu from './InviteMenu'
 export default function GroupMembersSection() {
   const { groupId } = useParams()
   const { user } = useAuth()
+  const { confirm, sheetProps: confirmSheet } = useConfirm()
 
   // Seeded straight from groupRosterCache when there's anything there —
   // either a prefetch fired the instant the group page's own Settings
@@ -59,13 +62,13 @@ export default function GroupMembersSection() {
   }, [load])
 
   async function makeAdmin(member) {
-    if (
-      !window.confirm(
-        `Make ${member.name} the admin of this group? You'll no longer be able to remove other members yourself.`
-      )
-    ) {
-      return
-    }
+    const confirmed = await confirm({
+      title: `Make ${member.name} the admin?`,
+      body: "You'll no longer be able to remove other members yourself.",
+      confirmLabel: 'Make admin',
+      tone: 'primary',
+    })
+    if (!confirmed) return
     setError(null)
     const { error: transferError } = await supabase.rpc('transfer_admin', {
       target_group_id: groupId,
@@ -87,13 +90,12 @@ export default function GroupMembersSection() {
   // a dedicated round-trip when it's actually clicked beats keeping
   // category data in this section's state at all times just in case).
   async function removeMember(member) {
-    if (
-      !window.confirm(
-        'Are you sure you want to remove this person from the group? Their stats for this group are kept, just frozen as of right now.'
-      )
-    ) {
-      return
-    }
+    const confirmed = await confirm({
+      title: `Remove ${member.name} from the group?`,
+      body: 'Their stats for this group are kept, just frozen as of right now.',
+      confirmLabel: 'Remove',
+    })
+    if (!confirmed) return
     setError(null)
     try {
       const categories = await fetchCategories(groupId)
@@ -164,6 +166,7 @@ export default function GroupMembersSection() {
       )}
 
       {error && <p className="status-error">{error}</p>}
+      {confirmSheet && <ConfirmSheet {...confirmSheet} />}
     </>
   )
 }

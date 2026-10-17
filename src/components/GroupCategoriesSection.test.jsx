@@ -4,6 +4,10 @@ import userEvent from '@testing-library/user-event'
 import GroupCategoriesSection from './GroupCategoriesSection'
 import { groupCategoriesCache } from '../lib/groupCategoriesCache'
 
+
+// Answers the app's own confirm sheet (see useConfirm).
+const answerSheet = (user, name) => user.click(within(screen.getByRole('dialog')).getByRole('button', { name }))
+
 // Same vi.hoisted() reasoning as the other lib-function-mocked suites —
 // vi.mock() factories are hoisted above ordinary variable declarations.
 const { mockFetchCategories, mockAddCategory, mockRenameCategory, mockDeleteCategory, mockUpdateCategoryColor } =
@@ -50,7 +54,6 @@ beforeEach(() => {
   mockRenameCategory.mockReset().mockResolvedValue(undefined)
   mockDeleteCategory.mockReset().mockResolvedValue(undefined)
   mockUpdateCategoryColor.mockReset().mockResolvedValue(undefined)
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
   // Same reasoning as groupRosterCache.clear() elsewhere — this component
   // seeds its initial state straight from the shared, module-level
   // groupCategoriesCache, so a previous test's load() would otherwise leak
@@ -231,20 +234,21 @@ describe('GroupCategoriesSection — delete', () => {
 
     await user.click(within(row).getByRole('button', { name: 'Actions for Groceries' }))
     await user.click(within(row).getByText('Delete'))
+    await answerSheet(user, 'Delete')
 
     expect(mockDeleteCategory).toHaveBeenCalledWith('cat-groceries')
     await waitForCallCount(mockFetchCategories, 2)
   })
 
-  it('does not delete when the confirm is cancelled', async () => {
+  it('does not delete when the sheet is cancelled', async () => {
     const user = userEvent.setup({ delay: null })
-    window.confirm.mockReturnValue(false)
     render(<GroupCategoriesSection />)
     await screen.findByText('Groceries', { selector: '.category-label' })
     const row = rowFor('Groceries')
 
     await user.click(within(row).getByRole('button', { name: 'Actions for Groceries' }))
     await user.click(within(row).getByText('Delete'))
+    await answerSheet(user, 'Cancel')
 
     expect(mockDeleteCategory).not.toHaveBeenCalled()
   })
@@ -258,6 +262,7 @@ describe('GroupCategoriesSection — delete', () => {
 
     await user.click(within(row).getByRole('button', { name: 'Actions for Groceries' }))
     await user.click(within(row).getByText('Delete'))
+    await answerSheet(user, 'Delete')
 
     expect(await screen.findByText('could not delete category')).toBeInTheDocument()
   })
