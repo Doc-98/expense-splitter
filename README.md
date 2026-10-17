@@ -306,13 +306,14 @@ anything a person sees.
 5. Once you've deployed (**"3. Run it / deploy it"** below): set
    **Authentication → URL Configuration → Site URL** to your deployed app's
    URL, and add
-   `your-deployed-url/reset-password` under **Redirect URLs** on the same
-   page. Both matter — Supabase rejects a redirect target that isn't on
-   this allowlist. Magic links redirect to the Site URL's bare root
-   (already allowed by default), but password resets redirect to
-   `/reset-password` on top of it, which isn't — skip this and "forgot
-   password" specifically breaks silently, even though magic-link sign-in
-   works fine.
+   `your-deployed-url/**` under **Redirect URLs** on the same page (it
+   covers `/reset-password` too). Both matter — Supabase rejects a redirect
+   target that isn't on this allowlist. Emailed links for someone who
+   opened an invite first (a new account's confirmation, a magic link)
+   redirect to that invite's own page, and password resets to
+   `/reset-password` — skip this and "forgot password" breaks silently,
+   and an invite opened in a different browser than the one that asked
+   for the email lands on the groups list instead of the invite.
 
 ### 2. Get your API credentials
 
@@ -1459,8 +1460,14 @@ Opening an invite (or a guest's claim link) while signed out goes to the
 sign-in screen, which says why, and back to the invite once you're in —
 the link is remembered for a day in that browser (`src/lib/pendingRedirect.js`),
 so it survives a brand-new account's email confirmation opening in a new
-tab. A join link then joins straight away; a claim link still asks for one
-tap to confirm, since it takes over a guest's whole history.
+tab. The emailed link itself (a new account's confirmation, or a magic
+link) also points back at the invite, so it still lands there when it
+opens in a *different* browser, such as a mail app's built-in one, where
+nothing was remembered. That needs the deployed site's `/**` on Supabase's
+Redirect URLs allowlist (Setup step 5); without it Supabase sends the link
+to the bare site instead, which still works in the same browser. A join
+link then joins straight away; a claim link still asks for one tap to
+confirm, since it takes over a guest's whole history.
 
 ## Personal spending
 
@@ -1832,10 +1839,6 @@ project, built as time and interest allow. The
 same list, plus what's in progress.
 
 - Credits in the About section
-- An invite that survives signing up in a *different* browser (say, a
-  confirmation email opened in a mail app's built-in browser): carry the
-  invite in the confirmation link itself rather than only in this
-  browser's storage
 - Category-totals math moved into a Postgres function too, the way group
   balances and bill history already were, if a genuinely large group ever
   needs it beyond what client-side computation and caching already handle

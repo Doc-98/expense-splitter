@@ -46,6 +46,16 @@ export function takePendingRedirect(now = Date.now()) {
   return path
 }
 
+// Where an emailed sign-in or confirmation link should land: the invite
+// itself when there is one, so the link still leads to it when it's opened
+// in a different browser — a mail app's built-in one, say — where this
+// browser's storage isn't. Supabase only honours a target on its Redirect
+// URLs allowlist (README, Setup step 5); anything else lands on the Site
+// URL, which is where these links went before, so nothing breaks without it.
+export function emailRedirectUrl(origin, now = Date.now()) {
+  return `${origin}${peekPendingRedirect(now) || ''}`
+}
+
 // What the sign-in screen tells someone who arrived from a link.
 export function pendingRedirectReason(path) {
   if (path?.startsWith('/join/')) return 'join'
