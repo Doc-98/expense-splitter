@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { groupItemsByCategory } from './itemGroups'
+import { groupItemsByCategory, summarizeCategories } from './itemGroups'
 
 const CATEGORIES = [
   { id: 'food', name: 'Groceries' },
@@ -36,5 +36,32 @@ describe('groupItemsByCategory', () => {
   it("treats a deleted category like no category", () => {
     const [g] = groupItemsByCategory([item('a', 'gone', '1')], CATEGORIES, null)
     expect(g.category).toBeNull()
+  })
+})
+
+describe('summarizeCategories', () => {
+  it('says nothing when no item has a category', () => {
+    expect(summarizeCategories([item('a', null, 2), item('b', null, 3)], CATEGORIES, null)).toEqual({ only: null, groups: [] })
+  })
+
+  it("names the one category every item shares, the bill's own included", () => {
+    const summary = summarizeCategories([item('a', null, 2), item('b', 'food', 3)], CATEGORIES, 'food')
+    expect(summary).toEqual({ only: CATEGORIES[0], groups: [] })
+  })
+
+  it('gives subtotals when there is more than one, "No category" last', () => {
+    const summary = summarizeCategories(
+      [item('a', null, 1.1), item('b', 'home', 2), item('c', 'food', 2.2), item('d', 'food', 3.3)],
+      CATEGORIES,
+      null
+    )
+    expect(summary).toEqual({
+      only: null,
+      groups: [
+        { key: 'home', name: 'Household', total: 2 },
+        { key: 'food', name: 'Groceries', total: 5.5 },
+        { key: 'none', name: 'No category', total: 1.1 },
+      ],
+    })
   })
 })

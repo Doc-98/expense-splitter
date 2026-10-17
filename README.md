@@ -147,6 +147,8 @@ expense-splitter/
 ├── docs/
 │   └── design-system/          # The design system as plain files — see "Design system"
 ├── public/                     # Static PWA assets — icons, favicon
+├── scripts/
+│   └── release.mjs             # Turns each merged PR into a GitHub release — see "Updates section"
 ├── supabase/
 │   ├── migrations/             # Timestamped, additive SQL — see "Migrations & Supabase branching"
 │   └── schema.sql              # The full schema in one file, for a brand-new project
@@ -304,13 +306,14 @@ anything a person sees.
 5. Once you've deployed (**"3. Run it / deploy it"** below): set
    **Authentication → URL Configuration → Site URL** to your deployed app's
    URL, and add
-   `your-deployed-url/reset-password` under **Redirect URLs** on the same
-   page. Both matter — Supabase rejects a redirect target that isn't on
-   this allowlist. Magic links redirect to the Site URL's bare root
-   (already allowed by default), but password resets redirect to
-   `/reset-password` on top of it, which isn't — skip this and "forgot
-   password" specifically breaks silently, even though magic-link sign-in
-   works fine.
+   `your-deployed-url/**` under **Redirect URLs** on the same page (it
+   covers `/reset-password` too). Both matter — Supabase rejects a redirect
+   target that isn't on this allowlist. Emailed links for someone who
+   opened an invite first (a new account's confirmation, a magic link)
+   redirect to that invite's own page, and password resets to
+   `/reset-password` — skip this and "forgot password" breaks silently,
+   and an invite opened in a different browser than the one that asked
+   for the email lands on the groups list instead of the invite.
 
 ### 2. Get your API credentials
 
@@ -474,11 +477,11 @@ knowing if you're extending this one or writing something similar:
   it and asserts the seeded value renders *before* the mocked fetch
   resolves (`GroupMembersSection.test.jsx`'s "paints from
   groupRosterCache" test never awaits anything — that's the point).
-- `window.confirm` gates both the admin-transfer and remove-member
-  actions here; `vi.spyOn(window, 'confirm').mockReturnValue(true)` in
-  `beforeEach`, overridden per test with `window.confirm.mockReturnValue(false)`
-  for the "cancelled" cases, covers both without duplicating the render
-  setup.
+- The admin-transfer and remove-member actions both ask through the
+  app's own confirm sheet (`useConfirm`), so a test answers it the way a
+  person would: a small `answerSheet(user, 'Remove')` / `answerSheet(user,
+  'Cancel')` helper clicks the button inside the dialog, covering both
+  outcomes without duplicating the render setup.
 
 `GroupDangerZoneSection.test.jsx` extends the lib-function pattern to a
 third module (`../lib/groupRole`'s `fetchGroupRole()`, alongside
@@ -583,7 +586,7 @@ same treatment, `localStorage.clear()` in `beforeEach`.
 
 `GroupCategoriesSection.test.jsx` is a pure lib-function case (`../lib/categories`'s
 `fetchCategories()`/`addCategory()`/`renameCategory()`/`deleteCategory()`/`updateCategoryColor()`)
-with `useParams` as its only router need and `window.confirm` gating the
+with `useParams` as its only router need and the confirm sheet gating the
 delete flow — same shapes as before. The one new wrinkle: `ColorSwatchPicker`
 (rendered for real here, unmocked, since it's self-contained) imports
 `CATEGORY_COLORS` from that same `../lib/categories` module, so the mock
@@ -1023,10 +1026,18 @@ Groups section's "⋮ → Leave group" need to do the exact same thing,
 snapshot included (see "How the data model works" below), not two copies
 that could quietly drift apart.
 
-Three different confirm patterns, by how much is at stake:
+Three different confirm patterns, by how much is at stake (the browser's
+own `window.confirm()` is never used):
 
 - **`ConfirmSheet.jsx`** (a bottom sheet) — a plain yes/no worth a beat of
-  "are you sure" but nothing more: Sign Out, Leave group.
+  "are you sure" but nothing more: Sign Out, Leave group, deleting a bill
+  or a category, removing a member, undoing a payment, making someone
+  admin (the one non-destructive confirm, so its button is the primary
+  colour rather than the warning one). Most go through `useConfirm()`,
+  which makes it `if (!(await confirm({ title, body, confirmLabel })))
+  return`, read the same as the `window.confirm()` it replaced. Focus moves
+  onto the sheet when it opens, and Escape only cancels the sheet, not
+  whatever the page behind it would otherwise do with Escape.
 - **`TypedConfirmSheet.jsx`** (same sheet chrome, plus a "type the exact
   word to confirm" gate) — the genuinely hard-to-reverse ones, where a
   click alone is too easy to do by habit: Delete all bills, Delete group.
@@ -1141,6 +1152,18 @@ to what actually merged, instead of relying on whoever opens the next PR to
 remember to bump it by hand. `WHATS_NEW` stays hand-written — summarizing
 "what a human would care about" isn't something a commit subject alone can
 do — so replace that list with each PR that ships something user-visible.
+
+Every merged PR also becomes a [GitHub release](https://github.com/doc-98/expense-splitter/releases)
+(`.github/workflows/release.yml`, running `scripts/release.mjs`): tag
+`v1.<PR number>`, named after the PR, with that PR's new `WHATS_NEW` entries
+as its notes. Entries the list already had before the merge are left out, as
+they belong to an earlier release; a PR that doesn't touch the list gets "No
+changes you would notice in the app." That makes the releases page the full
+changelog the in-app list can't be, so write `WHATS_NEW` for each PR as its
+own release notes. Releases for PRs #1–#66, merged before this workflow
+existed, were written by hand from each PR's description, since `WHATS_NEW`
+only started at #39 and wasn't always updated; they live in `scripts/release-history.json`, and the workflow creates any of
+them that's missing (all of them, the first time it runs).
 
 ## Add to home screen
 
@@ -1437,8 +1460,14 @@ Opening an invite (or a guest's claim link) while signed out goes to the
 sign-in screen, which says why, and back to the invite once you're in —
 the link is remembered for a day in that browser (`src/lib/pendingRedirect.js`),
 so it survives a brand-new account's email confirmation opening in a new
-tab. A join link then joins straight away; a claim link still asks for one
-tap to confirm, since it takes over a guest's whole history.
+tab. The emailed link itself (a new account's confirmation, or a magic
+link) also points back at the invite, so it still lands there when it
+opens in a *different* browser, such as a mail app's built-in one, where
+nothing was remembered. That needs the deployed site's `/**` on Supabase's
+Redirect URLs allowlist (Setup step 5); without it Supabase sends the link
+to the bare site instead, which still works in the same browser. A join
+link then joins straight away; a claim link still asks for one tap to
+confirm, since it takes over a guest's whole history.
 
 ## Personal spending
 
@@ -1623,10 +1652,19 @@ options, each only offered where it actually applies:
   `visibility: hidden` approach had (invisible content still reserved its
   full height, routinely producing a trailing blank page).
 - **Export as CSV** (`src/lib/csv.js`) — a bill's own CSV is one row per
-  item; a group's is its whole bill history. Used to be a second, separate
+  item; a group's is its whole bill history. Both have a Category column
+  (the item's own category, else its bill's, else "Uncategorized"). Used to be a second, separate
   button next to Share — folded into the same menu instead, since "share as
   a recap" and "export as a file" were really the same underlying action in
   a different format, not two different features.
+
+A bill's text and PDF recaps carry its categories the same way the bill
+page groups them (`summarizeCategories()` in `src/lib/itemGroups.js`):
+nothing when no item has a category, a "Category: …" line under the title
+when they all share one, and a **By category** list of subtotals ("No
+category" last) above the total when there are several. Sharing several
+selected bills adds the same subtotals across all of them above the grand
+total.
 
 `ShareButton` itself supports an icon-only mode (`icon`), used for the
 group page's own trigger and both stats pages' own headers (next to their
@@ -1810,10 +1848,6 @@ project, built as time and interest allow. The
 same list, plus what's in progress.
 
 - Credits in the About section
-- An invite that survives signing up in a *different* browser (say, a
-  confirmation email opened in a mail app's built-in browser): carry the
-  invite in the confirmation link itself rather than only in this
-  browser's storage
 - Category-totals math moved into a Postgres function too, the way group
   balances and bill history already were, if a genuinely large group ever
   needs it beyond what client-side computation and caching already handle
@@ -1860,8 +1894,6 @@ same list, plus what's in progress.
 - Cross-group category merging can rarely split into two entries if a
   category's exact casing changes elsewhere *after* a budget's been saved
   for it — re-saving it under the new casing fixes it
-- Category totals aren't reflected in recap text, PDFs, or CSV export yet —
-  those still just show items and prices
 
 ## Security notes
 

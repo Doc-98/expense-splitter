@@ -6,8 +6,19 @@
 // from anywhere themselves — they're plain functions, not components, so
 // they can't use the useCurrency() hook directly; the caller (which *is*
 // a component) passes its own formatter straight through.
+import { summarizeCategories } from './itemGroups'
 
-export function formatBillRecap(bill, items, members, formatMoney) {
+// "By category" subtotals, or nothing (see summarizeCategories).
+function categoryTotalLines(groups, formatMoney) {
+  if (groups.length === 0) return []
+  return ['', 'By category', ...groups.map((g) => `${g.name} — ${formatMoney(g.total)}`)]
+}
+
+// `categories` is the group's own list, to name each item's category (its
+// own, or the bill's): one category for the whole bill gets a line under
+// the title, several get subtotals above the total.
+export function formatBillRecap(bill, items, members, formatMoney, categories = []) {
+  const summary = summarizeCategories(items, categories, bill?.category_id)
   const nameOf = (id) => members.find((m) => m.id === id)?.name || 'Someone'
   const lines = [`*${bill?.title || 'Bill'}*`]
   if (bill?.payers?.length > 0) {
@@ -16,6 +27,7 @@ export function formatBillRecap(bill, items, members, formatMoney) {
   } else if (bill?.paid_by) {
     lines.push(`Paid by ${nameOf(bill.paid_by)}`)
   }
+  if (summary.only) lines.push(`Category: ${summary.only.name}`)
   if (bill?.note) lines.push(`_${bill.note}_`)
   lines.push('')
 
@@ -29,6 +41,7 @@ export function formatBillRecap(bill, items, members, formatMoney) {
     lines.push(`${item.name}${qtyLabel} — ${formatMoney(price)}${splitLabel}`)
   }
 
+  lines.push(...categoryTotalLines(summary.groups, formatMoney))
   lines.push('')
   lines.push(`*Total: ${formatMoney(total)}*`)
   return lines.join('\n')
@@ -42,11 +55,13 @@ export function formatBillRecap(bill, items, members, formatMoney) {
 // grand total at the end. Bills are shared in whatever order they're
 // passed in — the caller decides that (typically the same newest-first
 // order the list itself displays), this just doesn't second-guess it.
-export function formatMultiBillRecap(bills, members, formatMoney) {
+// With categories, the grand total also gets the subtotals per category
+// across every bill shared.
+export function formatMultiBillRecap(bills, members, formatMoney, categories = []) {
   if (!bills || bills.length === 0) return 'No bills selected.'
   if (bills.length === 1) {
     const bill = bills[0]
-    return formatBillRecap(bill, bill.items || [], members, formatMoney)
+    return formatBillRecap(bill, bill.items || [], members, formatMoney, categories)
   }
 
   const lines = [`*${bills.length} bills*`, '']
@@ -54,9 +69,15 @@ export function formatMultiBillRecap(bills, members, formatMoney) {
   bills.forEach((bill, i) => {
     const items = bill.items || []
     grandTotal += items.reduce((sum, item) => sum + Number(item.total_price), 0)
-    lines.push(formatBillRecap(bill, items, members, formatMoney))
+    lines.push(formatBillRecap(bill, items, members, formatMoney, categories))
     if (i < bills.length - 1) lines.push('', '—', '')
   })
+  // Each item resolved to its effective category first: the bills each
+  // have their own fallback category.
+  const allItems = bills.flatMap((bill) =>
+    (bill.items || []).map((item) => ({ ...item, category_id: item.category_id || bill.category_id }))
+  )
+  lines.push(...categoryTotalLines(summarizeCategories(allItems, categories, null).groups, formatMoney))
   lines.push('', `*Grand total: ${formatMoney(grandTotal)}*`)
   return lines.join('\n')
 }

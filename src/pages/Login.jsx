@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { peekPendingRedirect, pendingRedirectReason } from '../lib/pendingRedirect'
+import { emailRedirectUrl, peekPendingRedirect, pendingRedirectReason } from '../lib/pendingRedirect'
 
 // Shown above the form when someone got here by opening an invite or
 // guest-claim link while signed out — once they're in, App.jsx's Shell
@@ -44,7 +44,7 @@ export default function Login() {
     // only changes what happens for an email Supabase doesn't recognize.
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin, shouldCreateUser: false },
+      options: { emailRedirectTo: emailRedirectUrl(window.location.origin), shouldCreateUser: false },
     })
     setLoading(false)
     // GoTrue's own message for this case ("Signups not allowed for otp")
@@ -99,7 +99,10 @@ export default function Login() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { display_name: displayName || email.split('@')[0] } },
+        options: {
+          data: { display_name: displayName || email.split('@')[0] },
+          emailRedirectTo: emailRedirectUrl(window.location.origin),
+        },
       })
       setLoading(false)
       if (error) return setStatus({ type: 'error', text: error.message })
@@ -107,7 +110,7 @@ export default function Login() {
         setStatus({
           type: 'success',
           text: reason
-            ? "Account created — check your email and open the confirmation link in this browser. You'll be signed in and taken straight back to your invite."
+            ? "Account created — check your email and open the confirmation link. You'll be signed in and taken straight to your invite."
             : 'Account created — check your email to confirm, then sign in.',
         })
       }

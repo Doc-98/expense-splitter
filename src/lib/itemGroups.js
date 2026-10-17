@@ -19,3 +19,18 @@ export function groupItemsByCategory(items, categories, billCategoryId) {
   const ordered = [...groups.values()].map((g) => ({ ...g, total: Math.round(g.total * 100) / 100 }))
   return [...ordered.filter((g) => g.category), ...ordered.filter((g) => !g.category)]
 }
+
+// What a recap (shared text, PDF) says about a bill's categories:
+// `only` names the one category every item shares; otherwise `groups` holds
+// the subtotal per category (with "No category" last), when there's more
+// than one. Both empty when nothing on the bill has a category, so a recap
+// of an uncategorized bill reads as it always did.
+export function summarizeCategories(items, categories, billCategoryId) {
+  const groups = groupItemsByCategory(items, categories, billCategoryId)
+  if (!groups.some((g) => g.category)) return { only: null, groups: [] }
+  if (groups.length === 1) return { only: groups[0].category, groups: [] }
+  return {
+    only: null,
+    groups: groups.map((g) => ({ key: g.key, name: g.category?.name ?? 'No category', total: g.total })),
+  }
+}

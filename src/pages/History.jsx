@@ -16,6 +16,8 @@ import Pagination from '../components/Pagination'
 import { LoadingState, SkeletonRows } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import { SettleIcon } from '../components/icons'
+import ConfirmSheet from '../components/ConfirmSheet'
+import { useConfirm } from '../lib/useConfirm'
 
 const PAGE_SIZE = 15
 
@@ -32,6 +34,7 @@ export default function History() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { format } = useCurrency()
+  const { confirm, sheetProps: confirmSheet } = useConfirm()
 
   const [group, setGroup] = useState(null)
   const [allMembers, setAllMembers] = useState([])
@@ -120,7 +123,12 @@ export default function History() {
   // had — the swipe-then-tap reveal is the "are you sure enough to even
   // reach for the button" step, not a replacement for actually asking.
   async function undoPayment(payment) {
-    if (!window.confirm('Undo this payment?')) return
+    const confirmed = await confirm({
+      title: 'Undo this payment?',
+      body: 'It comes off the history, and balances go back to what they were before it.',
+      confirmLabel: 'Undo payment',
+    })
+    if (!confirmed) return
     setError(null)
     const { error: deleteError } = await supabase.from('payments').delete().eq('id', payment.id)
     if (deleteError) {
@@ -215,6 +223,7 @@ export default function History() {
       )}
 
       <Pagination page={page} setPage={setPage} totalItems={(payments || []).length} pageSize={PAGE_SIZE} />
+      {confirmSheet && <ConfirmSheet {...confirmSheet} />}
     </div>
   )
 }

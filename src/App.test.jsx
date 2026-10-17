@@ -1,17 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import App from './App'
 
 // The sign-in round trip for an invite link opened while signed out: the
 // real App routing, AuthContext, RequireAuth and Login — with the pages at
 // either end (and the chrome around them) stubbed out.
 const { auth } = vi.hoisted(() => ({
-  auth: { listener: null, session: null },
+  auth: { listener: null, session: null, signUp: null },
 }))
 vi.mock('./supabaseClient', () => ({
   supabase: {
     auth: {
       getSession: async () => ({ data: { session: auth.session }, error: null }),
+      signUp: (...args) => auth.signUp(...args),
       onAuthStateChange: (cb) => {
         auth.listener = cb
         return { data: { subscription: { unsubscribe: () => {} } } }
@@ -45,6 +47,7 @@ beforeEach(() => {
   window.matchMedia ??= () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
   auth.session = null
   auth.listener = null
+  auth.signUp = vi.fn(async () => ({ data: { session: null }, error: null }))
 })
 
 afterEach(() => localStorage.clear())
@@ -76,6 +79,35 @@ describe('opening an invite link while signed out', () => {
     auth.session = SESSION
     render(<App />)
     expect(await screen.findAllByText('Join page')).not.toHaveLength(0)
+    expect(window.location.pathname).toBe('/join/abc123')
+  })
+})
+
+describe('confirming a new account from a different browser', () => {
+  it("sends the confirmation email back to the invite, not the site's front page", async () => {
+    const user = userEvent.setup({ delay: null })
+    await openAt('/join/abc123')
+    await user.click(screen.getByRole('button', { name: 'New here? Create an account' }))
+    await user.type(screen.getByLabelText('Your name'), 'Alex')
+    await user.type(screen.getByLabelText('Email'), 'friend@example.com')
+    await user.type(screen.getByLabelText('Password'), 'secret1')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+
+    expect(auth.signUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({ emailRedirectTo: `${window.location.origin}/join/abc123` }),
+      })
+    )
+    expect(await screen.findByText(/open the confirmation link\. You'll be signed in/)).toBeInTheDocument()
+  })
+
+  it('lands on the invite with nothing saved in that browser', async () => {
+    // A mail app's built-in browser: no saved invite, but the link itself
+    // points at it, and opening it signs the person in.
+    auth.session = SESSION
+    window.history.pushState({}, '', '/join/abc123')
+    render(<App />)
+    expect(await screen.findByText('Join page')).toBeInTheDocument()
     expect(window.location.pathname).toBe('/join/abc123')
   })
 })

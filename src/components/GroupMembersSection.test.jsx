@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import GroupMembersSection from './GroupMembersSection'
 import { groupRosterCache } from '../lib/groupRosterCache'
+
+
+// Answers the app's own confirm sheet (see useConfirm).
+const answerSheet = (user, name) => user.click(within(screen.getByRole('dialog')).getByRole('button', { name }))
 
 // Same vi.hoisted() reasoning as GroupGeneralSection.test.jsx — vi.mock()
 // factories are hoisted above ordinary variable declarations, so each
@@ -56,7 +60,6 @@ beforeEach(() => {
   mockRpc.mockReset().mockResolvedValue({ error: null })
   mockFetchCategories.mockReset().mockResolvedValue([])
   mockSnapshotAndRemoveMember.mockReset().mockResolvedValue(undefined)
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
   // A previous test's load() would otherwise leave this group's roster
   // cached in the shared, module-level groupRosterCache — this component
   // seeds its initial state straight from that cache, so a later test
@@ -132,6 +135,7 @@ describe('GroupMembersSection', () => {
     render(<GroupMembersSection />)
 
     await user.click((await screen.findByText('Bob')).closest('li').querySelector('.btn-link'))
+    await answerSheet(user, 'Make admin')
 
     expect(mockRpc).toHaveBeenCalledWith('transfer_admin', {
       target_group_id: 'group-1',
@@ -140,13 +144,13 @@ describe('GroupMembersSection', () => {
     await waitFor(() => expect(mockFetchGroupRosterData).toHaveBeenCalledTimes(2)) // initial load + reload
   })
 
-  it('does not transfer admin when the confirm is cancelled', async () => {
+  it('does not transfer admin when the sheet is cancelled', async () => {
     const user = userEvent.setup({ delay: null })
-    window.confirm.mockReturnValue(false)
     mockFetchGroupRosterData.mockResolvedValue(rosterAsAdmin())
     render(<GroupMembersSection />)
 
     await user.click((await screen.findByText('Bob')).closest('li').querySelector('.btn-link'))
+    await answerSheet(user, 'Cancel')
 
     expect(mockRpc).not.toHaveBeenCalled()
   })
@@ -158,6 +162,7 @@ describe('GroupMembersSection', () => {
     render(<GroupMembersSection />)
 
     await user.click((await screen.findByText('Bob')).closest('li').querySelector('.btn-link'))
+    await answerSheet(user, 'Make admin')
 
     expect(await screen.findByText('transfer failed')).toBeInTheDocument()
   })
@@ -171,6 +176,7 @@ describe('GroupMembersSection', () => {
 
     const bobRow = (await screen.findByText('Bob')).closest('li')
     await user.click(bobRow.querySelector('.dropdown-item-warn'))
+    await answerSheet(user, 'Remove')
 
     expect(mockFetchCategories).toHaveBeenCalledWith('group-1')
     expect(mockSnapshotAndRemoveMember).toHaveBeenCalledWith({
@@ -182,14 +188,14 @@ describe('GroupMembersSection', () => {
     await waitFor(() => expect(mockFetchGroupRosterData).toHaveBeenCalledTimes(2))
   })
 
-  it('does not remove a member when the confirm is cancelled', async () => {
+  it('does not remove a member when the sheet is cancelled', async () => {
     const user = userEvent.setup({ delay: null })
-    window.confirm.mockReturnValue(false)
     mockFetchGroupRosterData.mockResolvedValue(rosterAsAdmin())
     render(<GroupMembersSection />)
 
     const bobRow = (await screen.findByText('Bob')).closest('li')
     await user.click(bobRow.querySelector('.dropdown-item-warn'))
+    await answerSheet(user, 'Cancel')
 
     expect(mockFetchCategories).not.toHaveBeenCalled()
     expect(mockSnapshotAndRemoveMember).not.toHaveBeenCalled()
@@ -203,6 +209,7 @@ describe('GroupMembersSection', () => {
 
     const bobRow = (await screen.findByText('Bob')).closest('li')
     await user.click(bobRow.querySelector('.dropdown-item-warn'))
+    await answerSheet(user, 'Remove')
 
     expect(await screen.findByText('could not remove member')).toBeInTheDocument()
   })

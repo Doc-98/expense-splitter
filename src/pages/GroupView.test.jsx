@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import GroupView from './GroupView'
 import { CurrencyProvider } from '../context/CurrencyContext'
@@ -351,15 +351,44 @@ describe('GroupView — realtime changes patch just the affected bill', () => {
 describe("GroupView — the page's own edits", () => {
   it('deleting a bill re-fetches just that bill, straight away', async () => {
     await renderLoaded()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
     await user.click(screen.getByRole('button', { name: 'Actions for Groceries' }))
     await user.click(screen.getByRole('button', { name: 'Delete' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
 
     await waitFor(() => expect(billTitles()).toEqual(['Dinner', 'Taxi']))
     expect(patchLoads()).toEqual([expect.objectContaining({ bill_ids: ['bill-b'] })])
     expect(fullLoads()).toHaveLength(0)
+  })
+})
+
+describe('GroupView — confirming deletes', () => {
+  it('cancelling the sheet deletes nothing', async () => {
+    await renderLoaded()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Groceries' }))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(billTitles()).toEqual(['Dinner', 'Groceries', 'Taxi'])
+    expect(patchLoads()).toHaveLength(0)
+  })
+
+  it('Escape closes the sheet but stays in select mode', async () => {
+    await renderLoaded()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Groceries' }))
+    await user.click(screen.getByRole('button', { name: 'Select' }))
+    await user.click(screen.getByRole('button', { name: 'Delete selected' }))
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Delete 1 bill?')
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
   })
 })
 
@@ -375,11 +404,11 @@ describe('GroupView — patches only ever build on the complete list', () => {
     await screen.findByText(/Couldn't load this group's bills/)
     await screen.findByText('Groceries')
     mockRpc.mockClear()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
     await user.click(screen.getByRole('button', { name: 'Actions for Groceries' }))
     await user.click(screen.getByRole('button', { name: 'Delete' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
 
     await waitFor(() => expect(billTitles()).toEqual(['Dinner', 'Taxi']))
     expect(fullLoads()).toHaveLength(1)

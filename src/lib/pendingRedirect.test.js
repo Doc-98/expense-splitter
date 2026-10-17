@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  emailRedirectUrl,
   peekPendingRedirect,
   pendingRedirectReason,
   savePendingRedirect,
@@ -51,6 +52,16 @@ describe('pending redirect', () => {
     })
     expect(() => savePendingRedirect('/join/abc')).not.toThrow()
     expect(takePendingRedirect()).toBeNull()
+  })
+
+  it('points emailed links at the pending invite, or the bare site when there is none', () => {
+    const now = 1_000_000_000_000
+    expect(emailRedirectUrl('https://spesa.example', now)).toBe('https://spesa.example')
+    savePendingRedirect('/join/abc', now)
+    expect(emailRedirectUrl('https://spesa.example', now)).toBe('https://spesa.example/join/abc')
+    // Peeks, doesn't take: the same browser still finds it after signing in.
+    expect(peekPendingRedirect(now)).toBe('/join/abc')
+    expect(emailRedirectUrl('https://spesa.example', now + DAY + 1)).toBe('https://spesa.example')
   })
 
   it('names why someone is being asked to sign in', () => {
