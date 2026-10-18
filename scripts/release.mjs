@@ -3,7 +3,7 @@
 // named after the PR, with the PR's new WHATS_NEW entries as its notes.
 //
 // It first creates any release from scripts/release-history.json that
-// doesn't exist yet, oldest first: the notes for PRs #1–#66, merged before
+// doesn't exist yet, oldest first: the notes for PRs #1–#67, merged before
 // releases existed here, written by hand from each PR's description
 // (WHATS_NEW only started at #39, and wasn't always updated). Once those
 // exist, this step finds nothing to do.

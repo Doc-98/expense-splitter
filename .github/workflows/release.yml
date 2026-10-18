@@ -5,7 +5,7 @@ name: Release
 # WHATS_NEW entries as its notes — a permanent changelog, since WHATS_NEW in
 # the app is replaced each release. See scripts/release.mjs and
 # src/lib/releaseNotes.js. It also creates any missing release from
-# scripts/release-history.json (PRs #1–#66, from before this existed). A
+# scripts/release-history.json (PRs #1–#67, from before this existed). A
 # push that isn't a squash-merged PR, or a re-run, creates nothing new.
 on:
   push:

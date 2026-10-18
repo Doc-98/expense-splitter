@@ -754,5 +754,20 @@
       "Outlines around rows, cards and tiles are softer and match the app's greens, so they no longer overpower what's inside them; text fields keep their clearer outline",
       "The start-date field for a subscription now looks like the app's other fields"
     ]
+  },
+  {
+    "pr": 67,
+    "title": "First-tap Remove, the app's own confirm sheet, invites across browsers, category recaps, GitHub releases",
+    "mergedOn": "2026-10-17",
+    "sha": "1f0b32ff530d12d4280be227216447cf701b76bd",
+    "whatsNew": [
+      "Swiping a row open and tapping Remove now removes it on the first tap, instead of needing a second one",
+      "Deleting a bill or a category, removing a member, undoing a payment and making someone admin now ask in the app's own sheet from the bottom of the screen, instead of the browser's plain pop-up",
+      "An invite still works when a new account's confirmation email opens in a different browser, like your mail app's own: the link now leads straight back to the invite",
+      "A bill's shared recap and PDF show what it spent per category, and its spreadsheet export (CSV) has a Category column. Sharing several bills adds the per-category totals across all of them"
+    ],
+    "behindTheScenes": [
+      "A pull request template, and a GitHub release for every merge (this page)"
+    ]
   }
 ]
