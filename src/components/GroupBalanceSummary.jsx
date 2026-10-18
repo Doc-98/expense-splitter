@@ -41,7 +41,9 @@ export default function GroupBalanceSummary({
           <>
           {/* The total across the lines below — same coloring rules as
               they follow, and the direction is spelled out in words so the
-              color is never the only cue. */}
+              color is never the only cue. Only worth showing when it adds
+              something up: with a single debt it just repeats that line. */}
+          {myBalanceLines.length >= 2 && (
           <p className={`balance-line ${highlightFullBalanceLine ? netColorClass : ''}`}>
             {net === 0 ? (
               "Net balance: you're even overall"
@@ -52,6 +54,7 @@ export default function GroupBalanceSummary({
               </>
             )}
           </p>
+          )}
           {myBalanceLines.map((t, i) => {
             const iOwe = t.from === myParticipantId
             // Settings > Groups' own "Color the whole balance line"

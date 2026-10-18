@@ -93,6 +93,22 @@ export async function renameGuest(participantId, displayName) {
   if (error) throw error
 }
 
+// A guest's avatar in this group (one of AVATAR_ICONS' ids, or null for
+// the initial) — a plain update, same as renaming: any member may change a
+// guest.
+export async function setGuestAvatar(participantId, iconId) {
+  const { error } = await supabase.from('group_members').update({ avatar_icon: iconId }).eq('id', participantId)
+  if (error) throw error
+}
+
+// Another real member's avatar in this group, which only the admin may
+// change (set_member_avatar checks), to sort out two people who look the
+// same. null means "their account default" again.
+export async function setMemberAvatar(participantId, iconId) {
+  const { error } = await supabase.rpc('set_member_avatar', { target_member_id: participantId, icon: iconId })
+  if (error) throw error
+}
+
 // Hard-deletes an *archived* guest's row — unlike setGuestActive above,
 // this can't be undone, so it goes through the delete_guest_permanently
 // RPC rather than a plain client delete. That function is also the actual

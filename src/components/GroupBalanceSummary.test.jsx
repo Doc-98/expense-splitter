@@ -61,9 +61,16 @@ describe('GroupBalanceSummary net balance', () => {
   it('ignores debts between other people', () => {
     renderSummary([
       { from: 'a', to: 'me', amount: 3 },
+      { from: 'me', to: 'b', amount: 1 },
       { from: 'b', to: 'c', amount: 100 },
     ])
-    expect(netLine()).toHaveTextContent('3.00')
+    expect(netLine()).toHaveTextContent('2.00')
+  })
+
+  it('shows no net line for a single debt, which would only repeat it', () => {
+    renderSummary([{ from: 'a', to: 'me', amount: 19.9 }])
+    expect(screen.queryByText(/Net balance/)).not.toBeInTheDocument()
+    expect(screen.getByText(/owes You/)).toBeInTheDocument()
   })
 
   it('shows no net line when you are settled up', () => {

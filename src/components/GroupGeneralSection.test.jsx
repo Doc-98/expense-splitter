@@ -11,7 +11,11 @@ import { avatarIconCache } from '../lib/avatarIconCache'
 // hoists its *creation* right along with the mocks that reference it,
 // which is what lets `mockFrom` below be both configured per-test and
 // handed to the mocked supabase client.
-const { mockFrom, mockNavigate } = vi.hoisted(() => ({ mockFrom: vi.fn(), mockNavigate: vi.fn() }))
+const { mockFrom, mockNavigate, mockRoster } = vi.hoisted(() => ({
+  mockFrom: vi.fn(),
+  mockNavigate: vi.fn(),
+  mockRoster: vi.fn(),
+}))
 
 vi.mock('../supabaseClient', () => ({
   supabase: { from: mockFrom },
@@ -26,7 +30,10 @@ vi.mock('../supabaseClient', () => ({
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ groupId: 'group-1' }),
   useNavigate: () => mockNavigate,
+  useSearchParams: () => [new URLSearchParams()],
 }))
+// The rest of the group, for leaving taken icons out of the picker.
+vi.mock('../lib/members', () => ({ fetchAllGroupMembers: mockRoster }))
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' }, displayName: 'Marco' }),
 }))
@@ -61,6 +68,7 @@ beforeEach(() => {
   groupsSelectResult = { data: { name: 'Beach Trip' } }
   groupsUpdateResult = { error: null }
   membersSelectResult = { data: { id: 'member-1', avatar_icon: null } }
+  mockRoster.mockReset().mockResolvedValue([])
   membersUpdateResult = { error: null }
   mockFrom.mockImplementation((table) => (table === 'groups' ? groupsTable() : membersTable()))
   mockNavigate.mockReset()
@@ -157,5 +165,21 @@ describe('GroupGeneralSection', () => {
 
     expect(await screen.findByText('could not save icon')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('button', { name: 'Bomb' })).not.toHaveClass('is-selected'))
+  })
+
+  it("leaves out icons someone else in the group already has", async () => {
+    mockRoster.mockResolvedValue([
+      { id: 'member-1', name: 'Marco', active: true, avatarIcon: null },
+      { id: 'member-2', name: 'Dado', active: true, avatarIcon: 'bomb' },
+      { id: 'member-3', name: 'Ex', active: false, avatarIcon: 'duck' },
+    ])
+    const user = userEvent.setup({ delay: null })
+    render(<GroupGeneralSection />)
+
+    await screen.findByPlaceholderText('Group name')
+    await user.click(screen.getByRole('button', { name: 'Choose your avatar' }))
+    await screen.findByText(/already has aren't shown/)
+    expect(screen.queryByRole('button', { name: 'Bomb' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Duck' })).toBeInTheDocument()
   })
 })

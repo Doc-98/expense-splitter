@@ -7,7 +7,10 @@ import { memberInitial } from '../lib/memberInitial'
 // two resolve into whatever a bill's split-with avatars actually show.
 // `name` is only used to preview what "no icon" looks like on the first
 // tile — the real initial this picker's owner would otherwise show.
-export default function AvatarPicker({ value, onChange, name }) {
+// `hiddenIds` (a Set) leaves out icons someone else in the group already
+// shows (see takenAvatarIcons in avatarClashes.js), so a per-group pick
+// can't create a look-alike; the current pick always stays.
+export default function AvatarPicker({ value, onChange, name, hiddenIds }) {
   return (
     <div className="avatar-picker">
       <button
@@ -19,7 +22,7 @@ export default function AvatarPicker({ value, onChange, name }) {
       >
         {memberInitial(name)}
       </button>
-      {AVATAR_ICONS.map(({ id, label, Icon }) => (
+      {AVATAR_ICONS.filter(({ id }) => id === value || !hiddenIds?.has(id)).map(({ id, label, Icon }) => (
         <button
           key={id}
           type="button"

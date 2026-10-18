@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { ArrowRightIcon, ChevronIcon } from './icons'
 import AvatarPicker from './AvatarPicker'
 import AvatarGlyph from './AvatarGlyph'
 import { avatarIconCache } from '../lib/avatarIconCache'
+import { fetchAllGroupMembers } from '../lib/members'
+import { takenAvatarIcons } from '../lib/avatarClashes'
 import { isNotFoundError } from '../lib/notFound'
 
 // Lifted as-is from what used to be GroupSettings.jsx's own top section —
@@ -21,6 +23,9 @@ export default function GroupGeneralSection() {
   const { groupId } = useParams()
   const navigate = useNavigate()
   const { user, displayName } = useAuth()
+  // ?section=general comes from the group page's "look the same" notice
+  // (GroupAvatarClashNotice.jsx): the picker opens straight away.
+  const [searchParams] = useSearchParams()
   const [name, setName] = useState('')
   const [nameDraft, setNameDraft] = useState('')
   const [error, setError] = useState(null)
@@ -41,7 +46,11 @@ export default function GroupGeneralSection() {
   // picker — see that file's comment for why (an expand-in-place row,
   // not a bottom sheet, which this app reserves for confirming something
   // destructive).
-  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(() => searchParams.get('section') === 'general')
+  // Icons the others in this group already show — left out of the picker
+  // (see takenAvatarIcons). Empty until loaded, or if that load fails: the
+  // picker then just offers everything, as it did before.
+  const [roster, setRoster] = useState([])
 
   const loadGroup = useCallback(async () => {
     const { data, error: loadError } = await supabase.from('groups').select('name').eq('id', groupId).single()
@@ -87,7 +96,10 @@ export default function GroupGeneralSection() {
   useEffect(() => {
     loadGroup()
     loadMember()
-  }, [loadGroup, loadMember])
+    fetchAllGroupMembers(groupId)
+      .then(setRoster)
+      .catch(() => {})
+  }, [loadGroup, loadMember, groupId])
 
   async function saveName(e) {
     e.preventDefault()
@@ -177,7 +189,15 @@ export default function GroupGeneralSection() {
         <div className="xwrap" id="group-avatar-picker-panel">
           <div className="xinner">
             <div className="avatar-picker-panel-inner">
-              <AvatarPicker value={avatarIcon} onChange={pickAvatarIcon} name={displayName} />
+              <AvatarPicker
+                value={avatarIcon}
+                onChange={pickAvatarIcon}
+                name={displayName}
+                hiddenIds={takenAvatarIcons(roster, memberId)}
+              />
+              {takenAvatarIcons(roster, memberId).size > 0 && (
+                <p className="muted">Avatars someone else in this group already has aren't shown.</p>
+              )}
             </div>
           </div>
         </div>
