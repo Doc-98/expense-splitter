@@ -197,6 +197,21 @@ nothing to mock beyond its own actual dependencies (see "Running the
 tests" for exactly how). `components/`/`pages/` are the JSX layer on
 top, reading from `lib/` rather than duplicating logic inline.
 
+**How a big page is put together.** The group page and the bill page are
+the two busiest screens, so each one is split the same way. The data and
+keeping it current (first paint, realtime changes, resyncs, caches) is a
+hook in `lib/`: `useGroupViewData.js` and `useBillData.js`. Groups of
+related changes are hooks too: `useBillFilters.js` (search and filters on
+the group page) and `useBillItemActions.js` (everything done to a bill's
+items). Each part of the screen is its own component: on the group page
+`BillSearchPanel`, `GroupBalanceSummary`, `NewBillForm`, `BulkSelectBar`
+and `GroupBillList`; on the bill page `BillDetails`, `SimpleBillAmount`
+and `AddItemForm`. The page file itself (`GroupView.jsx`, `BillView.jsx`)
+puts those together and keeps only what ties them to each other, such as
+paging and selecting bills, or the bill's own payers and date. Start
+reading a page there; follow a hook or component when you need its
+detail.
+
 **Why four different folders with the same `index.js` + `strategies/`
 shape.** `billCategorization/`, `bank-statement-parsing/`,
 `bankStatementColumns/`, and `receipt-parsing/` are this app's four
@@ -1429,12 +1444,13 @@ round-trip:
   exact value into either number below it.
 
 Opening a bill and coming back normally resets all of this — plain
-component state on `GroupView.jsx`, which unmounts on that round trip since
-bills live on their own route. **Sticky filters** (Settings → Groups →
-Display, off by default) opts into keeping it instead:
+component state on the group page (`src/lib/useBillFilters.js`), which
+unmounts on that round trip since bills live on their own route.
+**Sticky filters** (Settings → Groups → Display, off by default) opts into
+keeping it instead:
 `src/lib/groupFilterState.js` is a small in-memory-only cache (deliberately
 no `sessionStorage` mirror, unlike most of this app's other caches — a real
-page refresh should still clear it) that `GroupView.jsx` seeds its filter
+page refresh should still clear it) that `useBillFilters.js` seeds its filter
 state from on mount and writes back to on every change, only while the
 preference is on.
 
@@ -1453,7 +1469,8 @@ swallows the click that still follows the eventual pointerup by calling
 `event.preventDefault()` from its own `onClick` — since `Link`'s own click
 handler only navigates `if (!event.defaultPrevented)`, that's enough to
 stop a long press from *also* navigating into the bill, no extra
-navigation-blocking logic needed on `GroupView.jsx`'s side.
+navigation-blocking logic needed on the bill list's side
+(`GroupBillList.jsx`).
 
 For wiping a group's *entire* bill history in one shot, Group Settings'
 **Danger Zone → Delete all bills** is the one bill-deleting action that's
@@ -1696,7 +1713,8 @@ group's — the underlying recap is just a different shape, since there's
 nobody to owe or be owed. `formatPersonalSpaceRecap()`/
 `PrintablePersonalSpaceRecap` share total spent, bill count, and a by-category
 breakdown, built entirely from `bills`/`categories` already sitting in
-`GroupView.jsx`'s own state (`GROUP_BILLS_SELECT` already carries each
+the group page's own state (`buildPersonalSpaceRecap()` in
+`src/lib/groupBillActions.js`; `GROUP_BILLS_SELECT` already carries each
 item's `total_price`/`category_id`) rather than a fresh fetch the way
 sharing one bill or a few selected ones does — `ShareButton`'s `getText` is
 called synchronously, and "Download as PDF" needs its printable content

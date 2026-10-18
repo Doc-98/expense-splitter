@@ -1,10 +1,8 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
-import { fetchAllGroupMembers } from '../lib/members'
-import { fetchCategories } from '../lib/categories'
-import { parseNumber, parseAmount } from '../lib/parseNumber'
-import { toDateInputValue, applyDateInputValue } from '../lib/billDate'
+import { parseAmount } from '../lib/parseNumber'
+import { applyDateInputValue } from '../lib/billDate'
 import InlineEditable from '../components/InlineEditable'
 import { formatBillRecap } from '../lib/recapText'
 import { buildBillCsvRows, toCsv, downloadCsv } from '../lib/csv'
@@ -12,64 +10,55 @@ import ItemRow from '../components/ItemRow'
 import ScanReceiptButton from '../components/ScanReceiptButton'
 import ShareButton from '../components/ShareButton'
 import MultiPayerModal from '../components/MultiPayerModal'
+import BillDetails from '../components/BillDetails'
+import SimpleBillAmount from '../components/SimpleBillAmount'
+import AddItemForm from '../components/AddItemForm'
 import { PrintableBillRecap } from '../components/PrintableRecap'
 import BackButton from '../components/BackButton'
-import { ArrowRightIcon, ChevronIcon, PlusIcon, ReceiptIcon } from '../components/icons'
+import { ReceiptIcon } from '../components/icons'
 import { useCurrency } from '../context/CurrencyContext'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
-import BuyerPicker from '../components/BuyerPicker'
 import { getGroupViewPreferences } from '../lib/groupViewPreferences'
-import { isNotFoundError } from '../lib/notFound'
-import { loadErrorMessage } from '../lib/loadErrorMessage'
-import { useCoalescedRunner } from '../lib/coalescedRunner'
-import { createKeyedQueue } from '../lib/keyedQueue'
-import { createRealtimeRelevance } from '../lib/realtimeRelevance'
-import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
+import { useBillData } from '../lib/useBillData'
+import { useBillItemActions } from '../lib/useBillItemActions'
 import { LoadingState, SkeletonLines } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import { groupItemsByCategory } from '../lib/itemGroups'
 import { categoryColor } from '../lib/categoryPalette'
 
+// The bill page. What it shows from the database, and keeping that
+// current, is useBillData's job; changes to items are useBillItemActions';
+// the details panel, the one-item amount card and the add-item form are
+// their own components. What's left here is the bill's own fields (title,
+// payers, category, date, who new items are split with), the receipt
+// itself, and scanning.
 export default function BillView() {
   const { groupId, billId } = useParams()
   const navigate = useNavigate()
   const { format } = useCurrency()
 
-  // Only ever needs the one flag — fetched once alongside the bill/members
-  // below, never refetched, since a bill can't change which group it
-  // belongs to.
-  const [group, setGroup] = useState(null)
-  const [bill, setBill] = useState(null)
-  const [billPayers, setBillPayers] = useState([]) // the last CONFIRMED multi-payer split, [] if this bill has a single payer
+  const {
+    group,
+    bill,
+    setBill,
+    billPayers,
+    setBillPayers,
+    allMembers,
+    categories,
+    items,
+    setItems,
+    itemsStatus,
+    error,
+    setError,
+    refreshItems,
+    deletingIdsRef,
+    buyerWritesPendingRef,
+  } = useBillData({ groupId, billId })
   const [payerModalOpen, setPayerModalOpen] = useState(false)
-  const [allMembers, setAllMembers] = useState([])
-  const [categories, setCategories] = useState([])
-  const [items, setItems] = useState([])
-  // 'loading' until the first successful load — an empty `items` alone can't
-  // tell "still loading" apart from "this bill really has no items".
-  const [itemsStatus, setItemsStatus] = useState('loading')
-  // Ids removed optimistically; a deleted UUID never legitimately comes back.
-  const deletingIdsRef = useRef(new Set())
-  // Per-item queue of pending buyer writes, and how many are still pending
-  // per item — see queueBuyerWrite.
-  const [enqueueBuyerWrite] = useState(createKeyedQueue)
-  const buyerWritesPendingRef = useRef(new Map())
   // Default "split with" saves, one after another — see saveDefaultBuyers.
   const defaultBuyersWriteRef = useRef(Promise.resolve())
-  // Which realtime events concern this bill — see realtimeRelevance.js.
-  const relevanceRef = useRef(createRealtimeRelevance())
-  const [newItem, setNewItem] = useState({ name: '', price: '', quantity: '1' })
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState(null)
-  const [noteDraft, setNoteDraft] = useState('')
-  const [noteSaved, setNoteSaved] = useState(false)
-  const [error, setError] = useState(null)
-  // Open by default — see .bill-summary below. Its "Next item split with"
-  // is the default for every item added next, so it should be in plain sight
-  // before the first item goes in; one tap folds it down to a summary line
-  // (note, paid by, category, default split, date) to give the receipt
-  // the room.
-  const [detailsOpen, setDetailsOpen] = useState(true)
   // No stored "mode" — a bill with exactly one item shows the simple
   // amount-card view below instead of the itemized receipt, purely
   // because items.length === 1 (see the "+ Add another item" ghost row
@@ -88,9 +77,9 @@ export default function BillView() {
   }, [items.length])
   const isSimpleView = items.length === 1 && !itemizing
 
+  // The add-item form's name field — the empty state's "Add an item"
+  // moves you there.
   const nameRef = useRef(null)
-  const priceRef = useRef(null)
-  const qtyRef = useRef(null)
 
   // One shared swipe-to-delete instance for the whole item list (see
   // useSwipeToDelete.js for why this is called once here rather than once
@@ -98,7 +87,6 @@ export default function BillView() {
   const { bind: bindSwipe } = useSwipeToDelete()
 
   const activeMembers = allMembers.filter((m) => m.active)
-  const nameOf = (id) => allMembers.find((m) => m.id === id)?.name || 'Someone'
 
   const { avatarSize, itemCategoryDisplay } = getGroupViewPreferences()
   // Settings > Layout's "Item categories": under each item (the default,
@@ -114,359 +102,34 @@ export default function BillView() {
     bill?.default_buyer_ids?.length ? bill.default_buyer_ids : activeMembers.map((m) => m.id)
   ).filter((id) => activeMembers.some((m) => m.id === id))
 
-  const loadItems = useCallback(async () => {
-    const { data, error: loadError } = await supabase
-      .from('items')
-      .select('*, item_shares(member_id, shares)')
-      .eq('bill_id', billId)
-      .order('created_at', { ascending: true })
-    if (loadError) {
-      // Leaves the currently-shown items alone rather than blanking the
-      // whole receipt to "no items yet" on a transient network failure —
-      // this runs after nearly every mutation on this page, so that would
-      // otherwise be an easy way to make a real receipt look empty.
-      setError(loadErrorMessage(loadError))
-      setItemsStatus((status) => (status === 'ready' ? 'ready' : 'error'))
-      return
-    }
-    // A load that started before an optimistic delete landed would otherwise
-    // put the just-removed row back on screen. Likewise, an item whose buyer
-    // writes are still queued keeps the buyers shown on screen — the server
-    // is mid-way through catching up (see queueBuyerWrite, which reloads
-    // once they're done).
-    setItems((current) =>
-      (data || [])
-        .filter((it) => !deletingIdsRef.current.has(it.id))
-        .map((it) => {
-          if (!buyerWritesPendingRef.current.has(it.id)) return it
-          const shown = current.find((c) => c.id === it.id)
-          return shown ? { ...it, item_shares: shown.item_shares } : it
-        })
-    )
-    setItemsStatus('ready')
-    relevanceRef.current.learn([{ id: billId, items: data || [] }])
-  }, [billId])
-
-  const loadBill = useCallback(async () => {
-    // Used for realtime updates only — deliberately doesn't touch
-    // noteDraft, or a bill_payers change from elsewhere would clobber
-    // whatever note text is currently being typed.
-    const { data: billData, error: loadError } = await supabase
-      .from('bills')
-      .select('*, bill_payers(member_id, amount)')
-      .eq('id', billId)
-      .single()
-    if (loadError) {
-      // This fires from the bills-table realtime subscription below, so a
-      // 0-row result specifically means the bill was just deleted — by you
-      // in another tab, or by someone else in the group — while this page
-      // was still open on it. Bouncing back to the group rather than
-      // leaving this page sitting on a bill that no longer exists (its
-      // note/payer fields still editable, an item list that'll only ever
-      // come back empty).
-      if (isNotFoundError(loadError)) {
-        navigate(`/groups/${groupId}`, { state: { notice: 'This bill was deleted.' } })
-        return
-      }
-      setError(loadErrorMessage(loadError))
-      return
-    }
-    setBill(billData)
-    setBillPayers(billData?.bill_payers || [])
-  }, [billId, groupId, navigate])
-
-  // See coalescedRunner.js — realtime handlers schedule(), this page's own
-  // writes call refreshItems().
-  const itemsRunner = useCoalescedRunner(loadItems)
-  const billRunner = useCoalescedRunner(loadBill)
-  const refreshItems = itemsRunner.now
-
-  // Catches whatever realtime didn't deliver — see realtimeResync.js.
-  const resyncBill = useCallback(() => {
-    itemsRunner.schedule()
-    billRunner.schedule()
-  }, [itemsRunner, billRunner])
-  useResync(resyncBill)
-
-  useEffect(() => {
-    async function loadBillAndMembers() {
-      setError(null)
-      try {
-        // Run in parallel and land in one setState pass, rather than four
-        // sequential awaits each committing its own render — the "paid by"/
-        // "split with" rows below only ever show once `group` is known
-        // (never for the split second beforehand where its absence would
-        // otherwise read as "not personal, go ahead and show them"), but a
-        // fetch that lagged behind the others still meant those rows
-        // flashed visible then vanished the instant it caught up. Fetching
-        // everything together removes that lag rather than just papering
-        // over it.
-        // fetchAllGroupMembers/fetchCategories already throw on failure
-        // (see lib/members.js, lib/categories.js) — the try/catch below is
-        // what actually catches that, rather than leaving an unhandled
-        // rejection that silently aborts this effect with the page stuck
-        // showing nothing and no error.
-        const [billResult, allMembersData, categoriesData, groupResult] = await Promise.all([
-          supabase.from('bills').select('*, bill_payers(member_id, amount)').eq('id', billId).single(),
-          fetchAllGroupMembers(groupId),
-          fetchCategories(groupId),
-          supabase.from('groups').select('is_personal').eq('id', groupId).single(),
-        ])
-        // A bill (or, far more rarely, the group itself) that's already
-        // gone by the time this page loads — a stale link, a delete that
-        // landed just before this one opened it, someone else in the group
-        // deleting it — used to surface PostgREST's own raw "JSON object
-        // requested, multiple (or no) rows returned" wording here instead
-        // of anything a person could make sense of. Bounce back instead,
-        // same as the realtime path in loadBill above.
-        if (isNotFoundError(billResult.error)) {
-          navigate(`/groups/${groupId}`, { state: { notice: 'This bill was deleted.' } })
-          return
-        }
-        if (isNotFoundError(groupResult.error)) {
-          navigate('/', { state: { notice: "This group is no longer available." } })
-          return
-        }
-        if (billResult.error) throw billResult.error
-        if (groupResult.error) throw groupResult.error
-        const billData = billResult.data
-        setBill(billData)
-        setBillPayers(billData?.bill_payers || [])
-        setNoteDraft(billData?.note || '')
-        setAllMembers(allMembersData)
-        setCategories(categoriesData)
-        setGroup(groupResult.data)
-      } catch (err) {
-        setError(loadErrorMessage(err))
-      }
-    }
-    loadBillAndMembers()
-    itemsRunner.now()
-
-    // `filter` narrows each subscription to *this* bill specifically —
-    // without it, any change to any bill in any group you're a member of
-    // (RLS already limits it to those, but not to the one bill you're
-    // actually looking at) triggers a refetch here. Only possible where
-    // the table has its own bill_id column: items/bill_payers both do.
-    // item_shares doesn't (it only carries item_id, one join step further
-    // from bill_id), and Realtime's filter can't express a join — that one
-    // stays unfiltered at the source, and relevance.isRelevant() drops the
-    // share changes that belong to other bills instead. A rejoin after a
-    // dropped connection triggers a full resync.
-    const relevance = createRealtimeRelevance()
-    relevanceRef.current = relevance
-    const onItemChange = (table) => (payload) => {
-      if (relevance.isRelevant(table, payload)) itemsRunner.schedule()
-    }
-    const billFilter = `bill_id=eq.${billId}`
-    const channel = supabase
-      .channel(`bill-${billId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: billFilter }, onItemChange('items'))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, onItemChange('item_shares'))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bill_payers', filter: billFilter }, () =>
-        billRunner.schedule()
-      )
-      .subscribe(resyncOnRejoin(resyncBill))
-
-    return () => supabase.removeChannel(channel)
-  }, [billId, groupId, navigate, itemsRunner, billRunner, resyncBill])
+  const {
+    addItem,
+    addScannedItems,
+    toggleBuyer,
+    setOnlyBuyer,
+    deleteItem,
+    updateItemField,
+    setItemCategory,
+  } = useBillItemActions({
+    billId,
+    items,
+    setItems,
+    refreshItems,
+    setError,
+    deletingIdsRef,
+    buyerWritesPendingRef,
+    defaultBuyerIds,
+    billCategoryId: bill?.category_id,
+    categories,
+  })
 
   const total = items.reduce((sum, it) => sum + Number(it.total_price), 0)
   const isMultiPayer = billPayers.length > 0
   const payerSum = billPayers.reduce((sum, p) => sum + Number(p.amount), 0)
   const payerMismatch = isMultiPayer && Math.abs(payerSum - total) > 0.01
 
-  async function insertItemWithShares(name, unitPrice, quantity, buyerIds, categoryId = null) {
-    const { data: inserted, error: insertError } = await supabase
-      .from('items')
-      .insert({
-        bill_id: billId,
-        name,
-        unit_price: unitPrice,
-        quantity,
-        total_price: Math.round(unitPrice * quantity * 100) / 100,
-        category_id: categoryId,
-      })
-      .select()
-      .single()
-    if (insertError) {
-      setError(insertError.message)
-      return null
-    }
-
-    if (inserted && buyerIds.length) {
-      const { error: sharesError } = await supabase
-        .from('item_shares')
-        .insert(buyerIds.map((id) => ({ item_id: inserted.id, member_id: id, shares: 1 })))
-      // The item itself exists either way — a failure here just leaves it
-      // unassigned, fixable directly from its own row (toggleBuyer below),
-      // not worth losing the item over.
-      if (sharesError) setError(sharesError.message)
-    }
-    return inserted
-  }
-
-  // Price alone goes through parseAmount, not plain parseNumber — this is
-  // the one field someone might type a quick "2,30-1,25" into by hand
-  // (splitting a shared line total, subtracting a discount) — see
-  // parseNumber.js for why that's a distinct, opt-in function rather than
-  // something every numeric field on this page just gets for free. Used
-  // both to gate the submit button (no price typed yet -> no arrow, same
-  // "nothing to confirm" reasoning as the name check) and inside addItem
-  // itself, so a row can't be added price-less by submitting the form
-  // directly (Enter in the name field) either.
-  function parsedNewItemPrice() {
-    if (!newItem.price.trim()) return NaN
-    return parseAmount(newItem.price)
-  }
-  const newItemPriceValid = !Number.isNaN(parsedNewItemPrice())
-
-  async function addItem(e) {
-    e.preventDefault()
-    if (!newItem.name.trim() || !newItemPriceValid) return
-    const quantity = parseNumber(newItem.quantity) || 1
-    const unitPrice = parsedNewItemPrice()
-
-    const inserted = await insertItemWithShares(newItem.name.trim(), unitPrice, quantity, defaultBuyerIds)
-    if (!inserted) return // insertItemWithShares already set the error
-
-    setNewItem({ name: '', price: '', quantity: '1' })
-    refreshItems()
-    // Ready for the next item without reaching for the mouse.
-    nameRef.current?.focus()
-  }
-
-  // Keeps Tab cycling only through name -> price -> qty -> name, instead of
-  // continuing on to the Add button and beyond, for fast by-hand entry.
-  function handleQtyKeyDown(e) {
-    if (e.key === 'Tab' && !e.shiftKey) {
-      e.preventDefault()
-      nameRef.current?.focus()
-    }
-  }
-  function handleNameKeyDown(e) {
-    if (e.key === 'Tab' && e.shiftKey) {
-      e.preventDefault()
-      qtyRef.current?.focus()
-    }
-  }
-
-  // Buyer changes show at once (optimistic), and each item's writes run one
-  // after another: a double tap sends a toggle and then "only this buyer"
-  // within a fraction of a second, and those must reach the server in that
-  // order. The items reload once an item's last queued write is done —
-  // it confirms what's shown, or puts back the truth if a write failed.
-  function setItemShares(itemId, update) {
-    setItems((current) => current.map((it) => (it.id === itemId ? { ...it, item_shares: update(it.item_shares) } : it)))
-  }
-
-  function queueBuyerWrite(itemId, write) {
-    const pending = buyerWritesPendingRef.current
-    pending.set(itemId, (pending.get(itemId) || 0) + 1)
-    enqueueBuyerWrite(itemId, write).then(({ idle, error: writeError }) => {
-      const left = pending.get(itemId) - 1
-      if (left > 0) pending.set(itemId, left)
-      else pending.delete(itemId)
-      if (writeError) setError(`Couldn't update who's splitting this item: ${loadErrorMessage(writeError)}`)
-      if (idle) refreshItems()
-    })
-  }
-
-  function toggleBuyer(item, memberId) {
-    const has = item.item_shares.some((s) => s.member_id === memberId)
-    setItemShares(item.id, (shares) =>
-      has ? shares.filter((s) => s.member_id !== memberId) : [...shares, { member_id: memberId, shares: 1 }]
-    )
-    queueBuyerWrite(item.id, async () => {
-      const { error: toggleError } = has
-        ? await supabase.from('item_shares').delete().eq('item_id', item.id).eq('member_id', memberId)
-        : await supabase.from('item_shares').insert({ item_id: item.id, member_id: memberId, shares: 1 })
-      if (toggleError) throw toggleError
-    })
-  }
-
-  // Double tap on an avatar: that member becomes the item's only buyer
-  // (keeping their existing share count, if they already had one).
-  function setOnlyBuyer(item, memberId) {
-    setItemShares(item.id, (shares) => [shares.find((s) => s.member_id === memberId) || { member_id: memberId, shares: 1 }])
-    queueBuyerWrite(item.id, async () => {
-      const { error: deleteError } = await supabase
-        .from('item_shares')
-        .delete()
-        .eq('item_id', item.id)
-        .neq('member_id', memberId)
-      if (deleteError) throw deleteError
-      const { error: insertError } = await supabase
-        .from('item_shares')
-        .upsert(
-          { item_id: item.id, member_id: memberId, shares: 1 },
-          { onConflict: 'item_id,member_id', ignoreDuplicates: true }
-        )
-      if (insertError) throw insertError
-    })
-  }
-
-  // Optimistic: the row disappears on the first tap, so a slow server never
-  // looks like "delete didn't work" and invites a second tap (both swipe and
-  // the "Remove item" button land here). Repeat taps for a row already being
-  // deleted are ignored; on failure the row is put back in its original spot.
-  async function deleteItem(itemId) {
-    if (deletingIdsRef.current.has(itemId)) return
-    const removed = items.find((it) => it.id === itemId)
-    deletingIdsRef.current.add(itemId)
-    setItems((current) => current.filter((it) => it.id !== itemId))
-    setError(null)
-
-    const { error: deleteError } = await supabase.from('items').delete().eq('id', itemId)
-    if (deleteError) {
-      deletingIdsRef.current.delete(itemId)
-      if (removed) {
-        setItems((current) =>
-          current.some((it) => it.id === itemId)
-            ? current
-            : [...current, removed].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-        )
-      }
-      setError(`Couldn't remove that item: ${loadErrorMessage(deleteError)}`)
-      return
-    }
-    refreshItems()
-  }
-
-  // Each of ItemRow's four click-to-edit fields (name, unit price,
-  // quantity, total price) edits independently — there's no single "save
-  // the whole row" step — so this is the one place that decides how
-  // editing any one of the three money-related fields reconciles the
-  // other two, keeping unit_price * quantity === total_price true after
-  // every edit, not just at creation:
-  //   - editing unit_price or quantity "forward-solves" total_price
-  //     (the other of the two stays fixed, the total follows)
-  //   - editing total_price "back-solves" unit_price instead (quantity
-  //     stays fixed) — the same reasoning as before: a scanned item like
-  //     "2x Milk, $1.29 each" corrected to a $3 total should keep
-  //     reporting quantity 2 and unit_price $1.50, not a stale $1.29 that
-  //     would silently disagree with the total in CSV/recap exports.
-  // Same Math.round(...*100)/100 cent-rounding insertItemWithShares uses
-  // going the other direction (unit price + quantity -> total) at creation.
-  async function updateItemField(item, field, value) {
-    const patch = { [field]: value }
-    if (field === 'unit_price') {
-      const quantity = Number(item.quantity) || 1
-      patch.total_price = Math.round(value * quantity * 100) / 100
-    } else if (field === 'quantity') {
-      const unitPrice = Number(item.unit_price) || 0
-      patch.total_price = Math.round(unitPrice * value * 100) / 100
-    } else if (field === 'total_price') {
-      const quantity = Number(item.quantity) || 1
-      patch.unit_price = Math.round((value / quantity) * 100) / 100
-    }
-    const { error: updateError } = await supabase.from('items').update(patch).eq('id', item.id)
-    if (updateError) setError(updateError.message)
-    refreshItems()
-  }
-
   // The simple view's own amount field — same total_price back-solve as
-  // updateItemField's 'total_price' branch above (quantity stays fixed at
+  // updateItemField's 'total_price' branch (useBillItemActions.js; quantity stays fixed at
   // 1, unit_price follows), just reached directly since the simple view
   // never shows quantity/unit price at all.
   function saveSimpleAmount(value) {
@@ -511,18 +174,6 @@ export default function BillView() {
     setBill((b) => ({ ...b, paid_by: null }))
     setBillPayers(payers.map((p) => ({ member_id: p.member_id, amount: p.amount })))
     setPayerModalOpen(false)
-  }
-
-  async function saveNote() {
-    const { error: saveError } = await supabase.from('bills').update({ note: noteDraft || null }).eq('id', billId)
-    if (saveError) {
-      // Without this check, "Saved" showed unconditionally regardless of
-      // whether the update actually went through.
-      setError(saveError.message)
-      return
-    }
-    setNoteSaved(true)
-    setTimeout(() => setNoteSaved(false), 1200)
   }
 
   function toggleDefaultBuyer(memberId) {
@@ -582,7 +233,7 @@ export default function BillView() {
 
   // The header title, click-to-edit like everything else InlineEditable
   // covers on this page (the date just above, the simple-view amount
-  // below) — the *other* way to rename a bill, GroupView.jsx's own ⋮ menu,
+  // below) — the *other* way to rename a bill, the group page's ⋮ menu (GroupBillList.jsx),
   // is a full replace-the-row form instead since it's picking one bill out
   // of a list rather than already looking straight at it. Trimming (and
   // the empty-stays-unrenamed guard) happens here rather than in
@@ -610,77 +261,9 @@ export default function BillView() {
     }
   }
 
-  async function setItemCategory(itemId, categoryId) {
-    const { error: updateError } = await supabase
-      .from('items')
-      .update({ category_id: categoryId || null })
-      .eq('id', itemId)
-    if (updateError) {
-      setError(updateError.message)
-      return
-    }
-    refreshItems()
-  }
-
   async function handleScanned(parsedItems) {
     setScanning(false)
-    // Case-insensitive match against this group's actual categories — the
-    // model's already constrained to these exact names (see
-    // buildExtractionPrompt() in receipt-parsing/extractionPrompt.js), this
-    // just covers the odd capitalization drift the same way
-    // parseClassifyResponse() does for the bill-categorization wizard.
-    const categoryIdByName = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]))
-    // One bulk insert for every item, then one bulk insert for every item's
-    // shares — not a sequential per-item await loop (that used to mean up
-    // to two round trips *per scanned item*, so a 20+ item receipt could
-    // take several seconds to fully save, wide open the whole time to
-    // navigating away or deleting the bill mid-save; see BillView's own
-    // not-found handling below for what used to happen when that race was
-    // lost). Every scanned item shares the exact same defaultBuyerIds, so
-    // batching doesn't change what gets assigned to whom, just how many
-    // requests it takes to get there.
-    const itemRows = parsedItems.map((p) => {
-      const unitPrice = Number(p.unit_price) || 0
-      const quantity = Number(p.quantity) || 1
-      const matchedCategoryId = typeof p.category === 'string' ? categoryIdByName.get(p.category.toLowerCase()) : null
-      // Nothing the model was confident enough to name on its own (including
-      // every item from the OCR-only strategy, which never suggests one at
-      // all) falls back to whatever category was already set on the bill
-      // itself, if any — chosen by a person before scanning, presumably
-      // because most of what's on this particular receipt is that kind of
-      // thing. Only when the bill has no category either does the item end
-      // up genuinely uncategorized, same as before.
-      const categoryId = matchedCategoryId || bill?.category_id || null
-      return {
-        bill_id: billId,
-        name: p.name || 'Item',
-        unit_price: unitPrice,
-        quantity,
-        total_price: Math.round(unitPrice * quantity * 100) / 100,
-        category_id: categoryId,
-      }
-    })
-    if (!itemRows.length) return
-
-    const { data: inserted, error: insertError } = await supabase.from('items').insert(itemRows).select()
-    if (insertError) {
-      setError(insertError.message)
-      return
-    }
-
-    if (defaultBuyerIds.length) {
-      const shareRows = (inserted || []).flatMap((item) =>
-        defaultBuyerIds.map((id) => ({ item_id: item.id, member_id: id, shares: 1 }))
-      )
-      // The items themselves exist either way — a failure here just leaves
-      // them unassigned, fixable directly from each row (toggleBuyer
-      // below), not worth losing the scanned items over.
-      if (shareRows.length) {
-        const { error: sharesError } = await supabase.from('item_shares').insert(shareRows)
-        if (sharesError) setError(sharesError.message)
-      }
-    }
-    refreshItems()
+    await addScannedItems(parsedItems)
   }
 
   // Lets you try the whole scan → review → assign-buyers flow without
@@ -697,32 +280,11 @@ export default function BillView() {
     ])
   }
 
-  // The "paid by" dropdown always needs an option matching whoever's
-  // currently set, even if they've since left the group — otherwise the
-  // select would silently show the wrong person.
-  const paidByOptions = allMembers.filter((m) => m.active || m.id === bill?.paid_by)
-
   function exportCsv() {
     const { header, rows } = buildBillCsvRows(items, allMembers, categories, bill?.category_id)
     const filename = `${(bill?.title || 'bill').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`
     downloadCsv(filename, toCsv(header, rows))
   }
-
-  // The one-line summary shown when the details panel below is collapsed —
-  // enough to answer "who paid, what category, when, is there a note"
-  // without opening it, same reasoning as any progressive-disclosure
-  // summary line: show what's usually enough, not everything.
-  const billCategory = categories.find((c) => c.id === bill?.category_id)
-  const summaryParts = []
-  if (group && !group.is_personal) {
-    summaryParts.push(isMultiPayer ? `Split ${billPayers.length} ways` : `Paid by ${nameOf(bill?.paid_by)}`)
-  }
-  summaryParts.push(billCategory ? billCategory.name : 'Uncategorized')
-  if (bill) {
-    summaryParts.push(new Date(bill.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))
-  }
-  if (noteDraft.trim()) summaryParts.push('note added')
-  const summaryText = summaryParts.join(' · ')
 
   const groupedByCategory = itemCategoryDisplay === 'grouped' && categories.length > 0
 
@@ -775,111 +337,25 @@ export default function BillView() {
         />
       </header>
 
-      {/* Note/Paid by/Category/default split/Date, open by default (see
-          detailsOpen) and collapsible to one summary line. Same CSS-only
-          grid-rows expand already used elsewhere (Scan Settings' provider
-          picker). */}
-      <div className={`bill-summary ${detailsOpen ? 'is-open' : ''}`}>
-        <button type="button" className="bill-summary-head" onClick={() => setDetailsOpen((o) => !o)}>
-          <span className="bill-summary-text">{summaryText}</span>
-          <ChevronIcon size={16} className="bill-summary-chev" />
-        </button>
-        <div className="xwrap">
-          <div className="xinner">
-            <div className="bill-summary-body">
-              <textarea
-                className="bill-note"
-                placeholder="Add a note — what this was for, who was around that week…"
-                value={noteDraft}
-                onChange={(e) => setNoteDraft(e.target.value)}
-                onBlur={saveNote}
-                rows={2}
-              />
-              {noteSaved && <span className="muted note-saved">Saved</span>}
-
-              {/* "Paid by" only ever means something when it could be
-                  someone other than you — a personal space has exactly one
-                  member, forever, so every bill is trivially paid by (and
-                  split with) just them; see createBill in GroupView.jsx,
-                  which already defaults paid_by to the creator with no
-                  picker involved. */}
-              {group && !group.is_personal && (
-                <div className="detail-row">
-                  <span className="detail-row-label">Paid by</span>
-                  {isMultiPayer ? (
-                    <button type="button" className="btn-link" onClick={() => setPayerModalOpen(true)}>
-                      {billPayers.map((p) => nameOf(p.member_id)).join(', ')} (split)
-                    </button>
-                  ) : (
-                    <select value={bill?.paid_by || ''} onChange={(e) => handlePaidBySelect(e.target.value)}>
-                      {paidByOptions.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                          {m.isGuest ? ' (guest)' : ''}
-                          {!m.active ? ' (left)' : ''}
-                        </option>
-                      ))}
-                      <option value="__multiple__">Multiple payers…</option>
-                    </select>
-                  )}
-                </div>
-              )}
-
-              <div className="detail-row">
-                <span className="detail-row-label">Category</span>
-                <select value={bill?.category_id || ''} onChange={(e) => setBillCategory(e.target.value)}>
-                  <option value="">Uncategorized</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Hidden while the bill has a single item: the amount card's
-                  own "Split with" is the one to use then, and the only way
-                  to add a next item (Add another item) copies it over — see
-                  startItemizing. */}
-              {group && !group.is_personal && !isSimpleView && (
-                <div className="detail-row">
-                  {/* "split with" drops to its own line when the row is
-                      too narrow for the whole label. */}
-                  <span className="detail-row-label next-item-split-label">
-                    Next item <span className="nowrap">split with</span>
-                  </span>
-                  <BuyerPicker
-                    members={activeMembers}
-                    selectedIds={defaultBuyerIds}
-                    onToggle={toggleDefaultBuyer}
-                    onOnly={setOnlyDefaultBuyer}
-                    avatarSize={avatarSize}
-                  />
-                </div>
-              )}
-
-              {bill && (
-                <div className="detail-row">
-                  <span className="detail-row-label">Date</span>
-                  <InlineEditable
-                    className="mono item-editable"
-                    inputClassName="item-editable-input"
-                    inputType="date"
-                    value={toDateInputValue(bill.created_at)}
-                    display={new Date(bill.created_at).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                    onSave={updateBillDate}
-                    ariaLabel="Bill date"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      <BillDetails
+        billId={billId}
+        bill={bill}
+        group={group}
+        billPayers={billPayers}
+        members={allMembers}
+        activeMembers={activeMembers}
+        categories={categories}
+        defaultBuyerIds={defaultBuyerIds}
+        showNextItemSplit={!isSimpleView}
+        avatarSize={avatarSize}
+        onPaidBySelect={handlePaidBySelect}
+        onOpenPayers={() => setPayerModalOpen(true)}
+        onCategoryChange={setBillCategory}
+        onToggleDefaultBuyer={toggleDefaultBuyer}
+        onOnlyDefaultBuyer={setOnlyDefaultBuyer}
+        onDateSave={updateBillDate}
+        setError={setError}
+      />
 
       {payerMismatch && (
         <p className="status-error">
@@ -893,44 +369,16 @@ export default function BillView() {
       {error && <p className="status-error">{error}</p>}
 
       {isSimpleView ? (
-        // No stored mode — this is purely items.length === 1 && !itemizing
-        // (see that state above). The item itself still exists underneath,
-        // same row a 2+-item bill would show; its name just stays hidden
-        // here since there's nothing to disambiguate it from yet.
-        <>
-          <div className="amount-card">
-            <span className="amount-card-label">Amount</span>
-            <InlineEditable
-              className="amount-card-value mono"
-              inputClassName="amount-card-value-input mono"
-              inputMode="decimal"
-              pattern="[-+*/0-9.,() ]*"
-              value={String(items[0].total_price)}
-              display={format(items[0].total_price)}
-              onSave={saveSimpleAmount}
-              ariaLabel="Bill amount"
-            />
-            {group && !group.is_personal && (
-              <div className="amount-card-split">
-                <span className="amount-card-label">Split with</span>
-                <BuyerPicker
-                  members={allMembers}
-                  selectedIds={items[0].item_shares.map((s) => s.member_id)}
-                  onToggle={(memberId) => toggleBuyer(items[0], memberId)}
-                  onOnly={(memberId) => setOnlyBuyer(items[0], memberId)}
-                  avatarSize={avatarSize}
-                />
-                {items[0].item_shares.length === 0 && (
-                  <p className="item-warning">No one's assigned yet — this bill won't be counted in the settle-up.</p>
-                )}
-              </div>
-            )}
-          </div>
-          <button type="button" className="ghost-row" onClick={startItemizing}>
-            <PlusIcon size={16} />
-            Add another item
-          </button>
-        </>
+        <SimpleBillAmount
+          item={items[0]}
+          members={allMembers}
+          showSplit={Boolean(group && !group.is_personal)}
+          avatarSize={avatarSize}
+          onSaveAmount={saveSimpleAmount}
+          onToggleBuyer={(memberId) => toggleBuyer(items[0], memberId)}
+          onOnlyBuyer={(memberId) => setOnlyBuyer(items[0], memberId)}
+          onAddAnother={startItemizing}
+        />
       ) : (
         <>
           <div className="receipt-tape">
@@ -984,60 +432,7 @@ export default function BillView() {
             </div>
           </div>
 
-          <form onSubmit={addItem} className="add-item-form">
-            <input
-              ref={nameRef}
-              placeholder="Item"
-              value={newItem.name}
-              onChange={(e) => setNewItem((v) => ({ ...v, name: e.target.value }))}
-              onKeyDown={handleNameKeyDown}
-            />
-            <input
-              ref={priceRef}
-              placeholder="Price"
-              inputMode="decimal"
-              // Deliberately permissive — a real character allowlist, not an
-              // attempt at validating a well-formed number/expression (that's
-              // parseAmount's job downstream, which already fails gracefully
-              // on garbage). This exists to get iOS to add a minus key to its
-              // decimal pad (any pattern containing "-" does that), and now
-              // also to admit everything parseAmount accepts — digits, either
-              // decimal separator, and a small arithmetic expression like
-              // "2,30-1,25" — without the browser's own pattern validation
-              // silently blocking the submit before it ever reaches that
-              // parsing. A stricter pattern here would just be two different
-              // definitions of "valid" to keep in sync for no real benefit.
-              pattern="[-+*/0-9.,() ]*"
-              value={newItem.price}
-              onChange={(e) => setNewItem((v) => ({ ...v, price: e.target.value }))}
-            />
-            <input
-              ref={qtyRef}
-              placeholder="Qty"
-              inputMode="decimal"
-              value={newItem.quantity}
-              onChange={(e) => setNewItem((v) => ({ ...v, quantity: e.target.value }))}
-              onKeyDown={handleQtyKeyDown}
-            />
-            {/* Same fading arrow-submit button Create group/Add bill/New
-                category use, not the plain "Add" text button this used to be
-                — reusing that pattern here even though it's a flex sibling
-                rather than living inside a single input the way it does
-                there (this form has three fields, so the input-with-submit
-                approach doesn't have one input to anchor to). Gated the same
-                way addItem() itself is: a name AND a real price are both
-                required — quantity alone still falls back to 1 if left
-                blank, but a price-less item was never a case worth letting
-                through silently (see newItemPriceValid above). */}
-            <button
-              type="submit"
-              className="row-submit-btn"
-              disabled={!newItem.name.trim() || !newItemPriceValid}
-              aria-label="Add item"
-            >
-              <ArrowRightIcon size={16} />
-            </button>
-          </form>
+          <AddItemForm nameRef={nameRef} onAdd={addItem} />
 
           <ScanReceiptButton
             scanning={scanning}

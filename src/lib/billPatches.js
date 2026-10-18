@@ -1,7 +1,7 @@
 // Per-bill updates for the group page: instead of re-downloading the whole
 // group (~800 KB for the largest one) when one item changes, fetch just the
 // bills a change touched and merge them into the list. The full reload stays
-// the backstop — see GroupView.jsx's syncBills for when it still runs.
+// the backstop — see useGroupViewData.js's syncBills for when it still runs.
 
 // Patching is on; a verification full fetch follows each burst of patches
 // and logs any difference to the console. Both switches are here so either

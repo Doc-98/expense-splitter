@@ -24,7 +24,7 @@ export function statsRawFromBills(rawBillsData) {
 // screen once its complete bill list is loaded — same members, categories
 // and bills (get_group_bills carries every field stats uses), so opening
 // Stats from the group page paints instantly with no fetch of its own.
-// GroupView.jsx keeps this current as bills change (realtime patches
+// The group page (useGroupViewData.js) keeps this current as bills change (realtime patches
 // included), so it's never staler than the group page itself.
 export function groupStatsSnapshotFromGroupView({ group, allMembers, categories, bills }) {
   return {

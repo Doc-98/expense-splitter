@@ -435,7 +435,7 @@ export function TrashIcon({ size = 20, ...props }) {
 }
 
 // The "+ Add another item" ghost row on a bill's simple one-item view —
-// see BillView.jsx.
+// see SimpleBillAmount.jsx.
 export function PlusIcon({ size = 20, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
