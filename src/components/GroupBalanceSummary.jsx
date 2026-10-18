@@ -21,6 +21,12 @@ export default function GroupBalanceSummary({
   // simplified list — everything else lives one tap away on the Settle Up
   // page (see the action row below), not here.
   const myBalanceLines = settlement.filter((t) => t.from === myParticipantId || t.to === myParticipantId)
+  // What's owed to you minus what you owe, across every line above. The
+  // simplified debts keep each person's net unchanged, so this is the same
+  // figure get_group_balances() holds for you; rounded to the cent against
+  // float drift from adding amounts.
+  const net = Math.round(myBalanceLines.reduce((sum, t) => sum + (t.to === myParticipantId ? t.amount : -t.amount), 0) * 100) / 100
+  const netColorClass = net > 0 ? 'balance-positive' : net < 0 ? 'balance-negative' : ''
 
   return (
     <>
@@ -32,7 +38,21 @@ export default function GroupBalanceSummary({
         {myBalanceLines.length === 0 ? (
           <p className="muted">You're all settled up in this group.</p>
         ) : (
-          myBalanceLines.map((t, i) => {
+          <>
+          {/* The total across the lines below — same coloring rules as
+              they follow, and the direction is spelled out in words so the
+              color is never the only cue. */}
+          <p className={`balance-line ${highlightFullBalanceLine ? netColorClass : ''}`}>
+            {net === 0 ? (
+              "Net balance: you're even overall"
+            ) : (
+              <>
+                Net balance: {net > 0 ? "you're owed" : 'you owe'}{' '}
+                <span className={`mono ${highlightFullBalanceLine ? '' : netColorClass}`}>{format(Math.abs(net))}</span>
+              </>
+            )}
+          </p>
+          {myBalanceLines.map((t, i) => {
             const iOwe = t.from === myParticipantId
             // Settings > Groups' own "Color the whole balance line"
             // toggle — on (the default) colors the whole <p>, which the
@@ -59,7 +79,8 @@ export default function GroupBalanceSummary({
                 )}
               </p>
             )
-          })
+          })}
+          </>
         )}
       </div>
       {/* Settle up is deliberately the loud one here (.btn-primary, its own
