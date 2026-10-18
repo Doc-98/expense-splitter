@@ -17,6 +17,7 @@ import { getStatsPreferences } from '../lib/statsPreferences'
 import { formatGroupStatsRecap } from '../lib/recapText'
 import { useCurrency } from '../context/CurrencyContext'
 import TimeRangeSelector from '../components/TimeRangeSelector'
+import GroupBudgetsSection from '../components/GroupBudgetsSection'
 import ComparisonBadge from '../components/ComparisonBadge'
 import ShareButton from '../components/ShareButton'
 import { PrintableGroupStatsRecap } from '../components/PrintableRecap'
@@ -61,6 +62,12 @@ export default function GroupStats() {
   // matter which stats page you land on.
   const [granularity, setGranularity] = useState(() => getStatsPreferences().defaultGranularity)
   const [offset, setOffset] = useState(0)
+  // Your own budgets for this group's categories, at the same end of the
+  // page as on Your Stats (Settings → Layout), or nowhere.
+  const [{ thresholdsPosition, budgetPeriod }] = useState(() => getStatsPreferences())
+  const budgetsSection = thresholdsPosition !== 'hidden' && (
+    <GroupBudgetsSection groupId={groupId} budgetPeriod={budgetPeriod} />
+  )
   const [error, setError] = useState(null)
   // 'loading' until the background backfill (see load() below) finishes,
   // 'complete' once this group's full history is in rawBills, 'failed' if
@@ -334,6 +341,8 @@ export default function GroupStats() {
         <StatsSkeleton label="Loading stats…" />
       ) : (
         <>
+        {thresholdsPosition === 'top' && budgetsSection}
+
         <TimeRangeSelector
           granularity={granularity}
           setGranularity={setGranularity}
@@ -476,6 +485,7 @@ export default function GroupStats() {
       )}
         </div>
 
+        {thresholdsPosition === 'bottom' && budgetsSection}
         </>
       )}
 

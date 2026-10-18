@@ -17,4 +17,6 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
   "Subscriptions now add their bill on the day it's due, even if nobody opens the app",
+  'Step back through past weeks or months of your budgets on Your Stats, and see how often each went over',
+  "Each group's stats page shows your budgets for its categories, and how much of that was spent there",
 ]

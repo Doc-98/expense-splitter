@@ -51,9 +51,9 @@ export function displayToMonthlyAmount(displayAmount, period) {
   return round2(displayAmount * MULTIPLIER[period])
 }
 
-// The date range "spent so far" is measured over when comparing against a
-// budget's own cap — always the *current* one (no offset), the same way
-// the caps themselves are never for a past or future period.
-export function budgetComparisonRange(period) {
-  return getPeriodRange(period, 0)
+// The date range spending is measured over when comparing against a
+// budget's cap: the current week or month by default, or an earlier one
+// (offset -1, -2, …) for a budget's history.
+export function budgetComparisonRange(period, offset = 0) {
+  return getPeriodRange(period, offset)
 }

@@ -21,6 +21,11 @@ const { mockFrom, mockRpc, mockNavigate, mockFetchAllGroupMembers } = vi.hoisted
 vi.mock('../supabaseClient', () => ({ supabase: { from: mockFrom, rpc: mockRpc } }))
 vi.mock('../lib/members', () => ({ fetchAllGroupMembers: mockFetchAllGroupMembers }))
 vi.mock('../lib/categories', () => ({ fetchCategories: () => Promise.resolve([]) }))
+// Loads its own data and has its own suite (GroupBudgetsSection.test.jsx);
+// here it only matters where the page puts it.
+vi.mock('../components/GroupBudgetsSection', () => ({
+  default: ({ budgetPeriod }) => <section>Your budgets ({budgetPeriod})</section>,
+}))
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ groupId: 'group-1' }),
   useNavigate: () => mockNavigate,
@@ -138,6 +143,20 @@ describe('Group Stats', () => {
     const [first, second] = billRequests()
     expect(first.since).toBeDefined()
     expect(second).toEqual({ target_group_id: 'group-1' })
+  })
+
+  it('puts your budgets where Settings → Layout says, or leaves them out', () => {
+    fillCacheLikeTheGroupPage()
+    setStatsPreferences({ thresholdsPosition: 'bottom', budgetPeriod: 'week' })
+    const { unmount } = renderPage(GroupStats)
+    const budgets = screen.getByText('Your budgets (week)')
+    const biggestBill = screen.getByRole('link', { name: 'Old ski trip' })
+    expect(biggestBill.compareDocumentPosition(budgets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    unmount()
+
+    setStatsPreferences({ thresholdsPosition: 'hidden' })
+    renderPage(GroupStats)
+    expect(screen.queryByText(/Your budgets/)).not.toBeInTheDocument()
   })
 })
 

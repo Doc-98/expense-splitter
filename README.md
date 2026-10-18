@@ -1253,10 +1253,22 @@ internally (state names, the `spending_thresholds` table, `lib/thresholds.js`)
 to avoid a database migration and a much wider rename for no visible
 benefit; only user-facing copy changed.
 
-Shows as a progress bar on **Your Stats** (`/stats`) once set — always
-compared to the *current* week or month (whichever the switch above picks),
+Shows as a progress bar on **Your Stats** (`/stats`) once set — compared
+to the *current* week or month (whichever the switch above picks),
 regardless of whatever period Your Stats' own selector shows, and always your own proportional share of what's
-been spent, never what you've fronted for anyone else.
+been spent, never what you've fronted for anyone else. Its own ‹ › arrows
+step back through past weeks or months (up to a year), and a small table
+underneath says how many of the last six each budget went over — measured
+against the budget as it is today, since only the current amount is
+stored.
+
+Each group's stats page has a **Your budgets** section too, for the
+budgets whose category that group has: the same this-week-or-month figure
+(still across every group, so it never disagrees with Your Stats), plus
+how much of it was spent in that group. It loads on its own, only if you
+have any budgets, and only fetches the current week or month.
+`src/lib/budgets.js` holds the maths both pages share;
+`src/components/BudgetBars.jsx` draws the bars on both.
 
 ## Period-over-period comparison
 
@@ -1287,11 +1299,12 @@ navigation](#keyboard-navigation).
 - **A shared default period** — every stats page opens on your saved default
   (out of the box, Month), set from Settings → Layout; it's one preference,
   not one per page — changing it there changes it everywhere.
-- **Where Budgets sits on Your Stats** — pinned to the very top or very
-  bottom of the page (never mid-page), since budgets are always this-month
-  regardless of the selector while everything else on the page moves with
-  it — or hidden altogether. A per-device choice, set from Settings →
-  Layout, no obviously-correct default.
+- **Where Budgets sits on the stats pages** — pinned to the very top or
+  very bottom of the page (never mid-page), since budgets follow their own
+  week or month regardless of the selector while everything else on the
+  page moves with it — or hidden altogether. One per-device choice for
+  both Your Stats and each group's page, set from Settings → Layout, no
+  obviously-correct default.
 - **Recent history loads first** — this year plus last year's bills load up
   front for an instant render; the rest backfills in the background. A small
   note shows if you page back (or check "All time") before that finishes.
@@ -1888,11 +1901,10 @@ same list, plus what's in progress.
 - Claim-guest links trust possession of the link, same model as the general
   group invite link
 - PDF export goes through the browser's print dialog, not a one-tap download
-- Budgets only cover the current week or month, no history view
+- A budget's history is measured against today's amount, since a change
+  to a budget isn't recorded
 - A snapshot recorded before category tracking existed has no category
   breakdown for its days, only the original totals
-- The budget indicator only shows on Your Stats, not any single group's own
-  stats page
 - Cross-group category merging can rarely split into two entries if a
   category's exact casing changes elsewhere *after* a budget's been saved
   for it — re-saving it under the new casing fixes it
