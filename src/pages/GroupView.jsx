@@ -753,12 +753,11 @@ export default function GroupView({ activeBillId = null, printable = true }) {
     // prefetching and filters there instead.
     recordGroupVisit(groupId)
 
-    // Opportunistic, not scheduled — this is what actually generates due
-    // recurring bills, running the moment anyone opens the group rather
-    // than in the background on their exact due date. A failure here
-    // shouldn't break the rest of the page, so it's logged rather than
-    // surfaced as a blocking error.
-    processDueRecurringBills(supabase, groupId, user.id)
+    // Subscriptions' due bills are made by the database every hour; this
+    // asks for this group's straight away too, so one due since the last
+    // run shows up now (see recurringBills.js). A failure here shouldn't
+    // break the rest of the page, so it's logged rather than surfaced.
+    processDueRecurringBills(supabase, groupId)
       .then((result) => {
         if (result.created > 0) reloadAll()
       })

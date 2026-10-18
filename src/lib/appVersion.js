@@ -16,8 +16,5 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
-  "Swiping a row open and tapping Remove now removes it on the first tap, instead of needing a second one",
-  "Deleting a bill or a category, removing a member, undoing a payment and making someone admin now ask in the app's own sheet from the bottom of the screen, instead of the browser's plain pop-up",
-  "An invite still works when a new account's confirmation email opens in a different browser, like your mail app's own: the link now leads straight back to the invite",
-  "A bill's shared recap and PDF show what it spent per category, and its spreadsheet export (CSV) has a Category column. Sharing several bills adds the per-category totals across all of them",
+  "Subscriptions now add their bill on the day it's due, even if nobody opens the app",
 ]

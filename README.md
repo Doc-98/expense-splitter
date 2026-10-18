@@ -1376,22 +1376,19 @@ Each subscription row has a "⋮" menu — **Edit**, **Pause**/**Resume**,
   genuinely valid (and, in a real group, at least one person is still
   selected to split with).
 
-There's no scheduled job anywhere in this app: `processDueRecurringBills()`
-runs whenever anyone opens the group and creates whatever's due — every
-missed occurrence in order if the group's gone quiet a while, not just the
-most recent one. A deliberate tradeoff against adding background
-infrastructure just for this; the honest cost is a bill appears when it's
-next generated, not exactly on its due date. Deleting a template asks
-whether to keep or delete the bills it's already generated.
-
-`computeDueOccurrences()` compares each template's `next_due_date` (a bare
-`"YYYY-MM-DD"` string straight out of Postgres) against local midnight
-today — it parses that string as local midnight itself (`` `${date}T00:00:00` ``),
-not via a bare `new Date(string)`, which JS parses as midnight *UTC*. Get
-that wrong and, in any timezone ahead of UTC, a template starting "today"
-silently doesn't fire its first occurrence until a day late (see
-`recurringBills.test.js`, which regression-tests this in a real subprocess —
-vitest's own worker pool doesn't honor a timezone change made mid-test).
+Due bills are made by the database, not the app:
+`generate_due_recurring_bills()` (`supabase/schema.sql`) runs every hour at
+five past, on its own, through Supabase's built-in scheduler (pg_cron), so a
+bill appears on its due day even if nobody opens the app. It creates every
+missed occurrence in order if one was somehow skipped, not just the most
+recent, with the same "the 31st lands on Feb 28, then back on Mar 31" rule
+(`recurring_next_due()`). It runs in one transaction and locks each
+subscription while it works, so two runs at once can never create the same
+bill twice. "Today" is the date in Europe/Rome, and each bill is dated
+midnight there. Opening a group also calls `process_due_recurring_bills()`
+for that group (members only), so a bill due since the last hourly run
+shows up straight away. Deleting a template asks whether to keep or delete
+the bills it's already generated.
 
 ## What a bill row shows
 
@@ -1866,8 +1863,6 @@ same list, plus what's in progress.
   simple lookup
 - True multi-currency support (conversion within a bill/group), distinct
   from today's display-only currency picker
-- A scheduled/background job for subscriptions, instead of the current
-  open-the-app trigger
 - More avatar icons added to the picker over time, beyond today's 16
 - Let people upload their own SVG and turn it into an avatar icon, instead
   of picking only from the built-in set
@@ -1888,8 +1883,8 @@ same list, plus what's in progress.
   `ReceiptParserStrategy` shape
 - A subscription covers one payer and a fixed split only — switch a
   specific generated occurrence to Multiple payers by hand if needed
-- Subscriptions generate on open, not on a schedule, so they can appear
-  "late"
+- Subscriptions follow one time zone (Europe/Rome) for "today", whoever's
+  phone is in another
 - Claim-guest links trust possession of the link, same model as the general
   group invite link
 - PDF export goes through the browser's print dialog, not a one-tap download
@@ -1914,7 +1909,10 @@ same list, plus what's in progress.
   goes through the `join_group_by_code()` Postgres function so `groups`
   itself doesn't need to be publicly readable.
 - None of the database functions can be called signed out, and trigger
-  functions can't be called through the API at all. Signed-in users can
+  functions can't be called through the API at all. Neither can
+  `generate_due_recurring_bills()`, which makes every group's due
+  subscription bills: only the hourly scheduled job runs it, and the app
+  goes through `process_due_recurring_bills()`, which checks membership. Signed-in users can
   call the rest, each of which checks group membership (or admin rights)
   itself.
 - Writes are narrowed by column, not just by row: a member can only rename
