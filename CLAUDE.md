@@ -58,6 +58,14 @@ expectations, etc.) — read that first, every session.
   `.claude/hooks/ask-before-destructive-sql.sh` enforces it on
   `execute_sql`/`apply_migration`; when a migration drops something, say
   in plain words what goes away before the prompt appears.
+- In cloud sessions that SQL can't run through the connector at all: the
+  user allows the hook's prompt, but Supabase's connector then asks for
+  its own confirmation of destructive statements, which the session can't
+  show, so the call comes back "cancelled" (seen three times on
+  2026-10-18). Instead, get the user's go-ahead in chat (saying what goes
+  away), commit the migration file, and let it apply on merge (Supabase's
+  GitHub integration runs new migrations on push to `master`); check the
+  live database after the merge.
 
 ## Release hygiene
 

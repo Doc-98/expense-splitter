@@ -1,62 +1,42 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
-import { fetchAllGroupMembers } from '../lib/members'
-import { fetchCategories } from '../lib/categories'
-import { categoryColor } from '../lib/categoryPalette'
-import { fetchAllRows } from '../lib/fetchAllRows'
-import { loadErrorMessage } from '../lib/loadErrorMessage'
-import { groupViewCache } from '../lib/groupViewCache'
-import { groupStatsCache } from '../lib/groupStatsCache'
-import { groupStatsSnapshotFromGroupView } from '../lib/groupStatsSnapshot'
-import { isNotFoundError } from '../lib/notFound'
-import { useCoalescedRunner } from '../lib/coalescedRunner'
-import { createRealtimeRelevance } from '../lib/realtimeRelevance'
-import {
-  applyBillPatch,
-  diffBillLists,
-  emptyPending,
-  planSync,
-  queueAffected,
-  VERIFY_BILL_PATCHES,
-} from '../lib/billPatches'
-import { useResync, resyncOnRejoin } from '../lib/realtimeResync'
-import { fetchGroupBills, computeGroupViewSnapshot } from '../lib/groupViewSnapshot'
-import { fetchGroupSettlement } from '../lib/groupBalances'
-import { getStatsWindowStart } from '../lib/timeRange'
-import { recordGroupVisit } from '../lib/recentGroups'
+import { useGroupViewData } from '../lib/useGroupViewData'
+import { useBillFilters } from '../lib/useBillFilters'
+import { fetchBillsForRecap, exportGroupCsv, buildPersonalSpaceRecap } from '../lib/groupBillActions'
 import { formatSettlementRecap, formatMultiBillRecap, formatPersonalSpaceRecap } from '../lib/recapText'
 import { shareOrCopyText } from '../lib/shareText'
-import { filterBills, billTotal } from '../lib/billFilters'
 import { useEscapeKey } from '../lib/useEscapeKey'
-import { isTypingTarget } from '../lib/isTypingTarget'
 import { useListKeyboardNav } from '../lib/useListKeyboardNav'
-import { useLongPress } from '../lib/useLongPress'
-import { useSwipeToDelete } from '../lib/useSwipeToDelete'
 import { useConfirm } from '../lib/useConfirm'
 import { useCurrency } from '../context/CurrencyContext'
-import { processDueRecurringBills } from '../lib/recurringBills'
 import { prefetchGroupSettings } from '../lib/prefetchGroupSettings'
 import { groupItemsByDate } from '../lib/dateGroups'
 import { getGroupViewPreferences } from '../lib/groupViewPreferences'
-import { parseAmount } from '../lib/parseNumber'
-import { groupFilterStateCache } from '../lib/groupFilterState'
-import { buildGroupCsvRows, toCsv, downloadCsv } from '../lib/csv'
 import ShareButton from '../components/ShareButton'
 import Pagination from '../components/Pagination'
-import BillActionsMenu from '../components/BillActionsMenu'
-import RangeSlider from '../components/RangeSlider'
+import BillSearchPanel from '../components/BillSearchPanel'
+import GroupBalanceSummary from '../components/GroupBalanceSummary'
+import NewBillForm from '../components/NewBillForm'
+import BulkSelectBar from '../components/BulkSelectBar'
+import GroupBillList from '../components/GroupBillList'
 import { PrintableSettlementRecap, PrintablePersonalSpaceRecap } from '../components/PrintableRecap'
-import { SearchIcon, PieChartIcon, SettingsIcon, ArrowRightIcon, SettleIcon, ReceiptIcon } from '../components/icons'
+import { SearchIcon, PieChartIcon, SettingsIcon, ReceiptIcon } from '../components/icons'
 import BackButton from '../components/BackButton'
 import { LoadingState, Skeleton, SkeletonRows } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import ConfirmSheet from '../components/ConfirmSheet'
 
 const BILLS_PAGE_SIZE = 15
-const VERIFY_DELAY_MS = 30 * 1000
 
+// The group page. What it shows from the database, and keeping that
+// current, is useGroupViewData's job; the search and filters are
+// useBillFilters'; each part of the screen is its own component (the
+// search panel, balance summary, new-bill form, select bar and bill
+// list). What's left here is putting them together, plus paging,
+// selecting, deleting and sharing bills.
+//
 // `activeBillId` and `printable` only come from GroupSplit.jsx's wide
 // layout, where this page shares the screen with an open bill: the open
 // bill's row is marked in the list, and the print recap is left to the
@@ -68,69 +48,31 @@ export default function GroupView({ activeBillId = null, printable = true }) {
   const { user } = useAuth()
   const { format } = useCurrency()
   // Deleting bills asks through the app's own sheet; while it's up, Escape
-  // only cancels it (the page's own Escape handlers below pause).
+  // only cancels it (the page's own Escape handlers pause).
   const { confirm, sheetProps: confirmSheet, isConfirming } = useConfirm()
   const { showQuickStats, showLentBorrowedStatus, stickyFilters, highlightFullBalanceLine } = getGroupViewPreferences()
-  // Only actually consulted when stickyFilters is on (see the state
-  // declarations below and the write-back effect near the other filter
-  // effects) — groupFilterStateCache.js has the full reasoning for why
-  // this is deliberately in-memory only, not mirrored to sessionStorage
-  // like most of this app's other caches.
-  const cachedFilters = stickyFilters ? groupFilterStateCache.get(groupId) : undefined
 
-  const [group, setGroup] = useState(null)
-  const [allMembers, setAllMembers] = useState([])
-  const [bills, setBills] = useState(null)
-  // Mirrors `bills` for loadRecentBillsForFirstPaint's own race-check to
-  // read from (see that function below), rather than closing over `bills`
-  // directly — the mount effect that calls it runs once per group, not on
-  // every `bills` change, so a plain closure would freeze it at whatever
-  // `bills` was (its initial `null`) when that effect first ran. A ref
-  // sidesteps that — always reads the latest value, with nothing to go
-  // stale.
-  const billsRef = useRef(null)
+  const {
+    group,
+    allMembers,
+    categories,
+    bills,
+    billPersonalTotals,
+    settlement,
+    weekTotal,
+    monthTotal,
+    historyComplete,
+    error,
+    setError,
+    reloadAll,
+    refreshBills,
+  } = useGroupViewData(groupId)
+  const filters = useBillFilters({ groupId, bills, historyComplete, stickyFilters, isConfirming })
+  const { searchQuery, searchOpen, setSearchOpen, filtersActive, filteredBills, clearFilters } = filters
+
   // The empty state's "Add a bill" just moves you to the New bill field.
   const newBillInputRef = useRef(null)
-  // Which realtime events concern this group — replaced per group in the
-  // subscription effect below (see realtimeRelevance.js).
-  const relevanceRef = useRef(createRealtimeRelevance())
-  // Work queued for the bills runner (see syncBills): a full reload, and/or
-  // specific bills to patch, and/or a verification pass.
-  const pendingRef = useRef(emptyPending())
-  // True once this group's complete list has loaded — patches only ever
-  // build on a complete list, never on the cache or the first-paint window.
-  const fullyLoadedRef = useRef(false)
-  // Bumped on every queued change; verifyPatches uses it to tell whether
-  // anything happened while its comparison fetch was in flight.
-  const changeCountRef = useRef(0)
-  const verifyTimerRef = useRef(null)
-  const billsRunnerRef = useRef(null)
-  useEffect(() => {
-    billsRef.current = bills
-  }, [bills])
-  // True once the definitive, complete (unwindowed) bill history has been
-  // fetched at least once this visit — used by the "select all"/Danger
-  // Zone check and the price-filter slider's own initialization (see each
-  // one's own comment), both of which need the real full list, not
-  // loadRecentBillsForFirstPaint's windowed preview. Starts true whenever
-  // cache hydration already found something (a cached snapshot is only
-  // ever written once complete — see the cache-write effect further
-  // down), false otherwise. The group's balance no longer waits on this at
-  // all — see loadSettlement below.
-  const [historyComplete, setHistoryComplete] = useState(false)
   const [billsPage, setBillsPage] = useState(0)
-  const [newBillTitle, setNewBillTitle] = useState('')
-  const [newBillAmount, setNewBillAmount] = useState('')
-  // null until the server-computed balance actually arrives (see
-  // fetchGroupSettlement/get_group_balances) — never derived from
-  // whatever's currently in `bills`, so there's no code path left that can
-  // show a wrong number computed from a partial/windowed bill list. Stays
-  // null (rather than flashing an empty "You're all settled up") for the
-  // brief moment before that first resolves.
-  const [settlement, setSettlement] = useState(null)
-  const [weekTotal, setWeekTotal] = useState(0)
-  const [monthTotal, setMonthTotal] = useState(0)
-  const [error, setError] = useState(null)
   // Carried over router state from a page that just bounced back here
   // because whatever it was showing (a bill, in practice) had already been
   // deleted — see BillView's own not-found handling. Read once, lazily, so
@@ -151,438 +93,47 @@ export default function GroupView({ activeBillId = null, printable = true }) {
   useEffect(() => {
     if (activeBillId) setNotice(null)
   }, [activeBillId])
-  // Which bill (if any) is mid-rename via the ⋮ menu's own "Rename" —
-  // same two-state shape (an id + a draft string) as GroupCategoriesSection/
-  // GroupGuestsSection's own editing*Id/editing*Name pairs, and the same
-  // reason: the draft needs to live in state independently of `bills`
-  // itself so typing doesn't touch the real title until Save actually
-  // commits it (see saveBillRename below).
-  const [editingBillId, setEditingBillId] = useState(null)
-  const [editingBillTitle, setEditingBillTitle] = useState('')
   const [selectMode, setSelectMode] = useState(false)
-  // Select mode's only entry point is now a bill's own "..." menu (see
-  // enterSelectModeWith below) — there's no dedicated "Select bills" button
-  // anymore, so Escape (same convention as search/filters above) is what
+  // Select mode's only entry point is a bill's own "..." menu or a long
+  // press (see enterSelectModeWith below) — there's no dedicated "Select
+  // bills" button, so Escape (same convention as search/filters) is what
   // lets someone back out of it without hunting for the bulk-select bar's
   // own Cancel.
   useEscapeKey(() => toggleSelectMode(), selectMode && !isConfirming)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [shareStatus, setShareStatus] = useState(null)
-  // { [billId]: { [memberId]: { paid, consumed } } } — computed from bills
-  // already fetched (see computeAndSetBillDerivedState below), independent
-  // of the group's own overall balance (which comes from the server now —
-  // see loadSettlement). Lets each bill row show what *this* bill
-  // specifically means for you, independent of the group's running
-  // balance.
-  const [billPersonalTotals, setBillPersonalTotals] = useState({})
-  const [categories, setCategories] = useState([])
-  // Every piece of filter-related state below seeds from cachedFilters
-  // when stickyFilters is on and this group has a cached entry (a return
-  // trip from a bill, most commonly) — otherwise the same plain defaults
-  // as before this preference existed. See the write-back effect further
-  // down for the other half of this.
-  const [searchQuery, setSearchQuery] = useState(cachedFilters?.searchQuery ?? '')
-  // Collapsed by default — a search bar plus a filters panel is a lot of
-  // screen real estate for something you might not touch for a while if
-  // you're just adding bills and settling up, not digging through old
-  // ones. The search icon that opens it lives in the header row (see the
-  // header's own JSX below); the section itself also carries its own ↑
-  // to retract (see the search section's
-  // JSX below), and "/" opens it too (see the keydown effect below),
-  // matching whichever way it was closed.
-  const [searchOpen, setSearchOpen] = useState(cachedFilters?.searchOpen ?? false)
-  // Same Escape-to-close convention as the filters panel just below — an
-  // inline panel toggled by its own button, same shape as filtersOpen, so
-  // it gets the same treatment.
-  useEscapeKey(() => setSearchOpen(false), searchOpen && !isConfirming)
-  // "/" jumps straight to this (see the keydown effect below), same
-  // shortcut GitHub/Slack use for their own search boxes — so it needs a
-  // real DOM node to call .focus() on, not just the value/onChange state
-  // every other input on this page gets away with.
-  const searchInputRef = useRef(null)
-  // Focuses the search box the moment it actually mounts — searchOpen and
-  // the ref becoming usable happen a render apart, so the keydown handler
-  // below can't just call .focus() straight after setSearchOpen(true) and
-  // expect the DOM node to already exist yet. Also fires on a sticky-
-  // filters remount that restores an already-open search box — harmless,
-  // just re-focuses it same as opening it fresh would.
-  useEffect(() => {
-    if (searchOpen) searchInputRef.current?.focus()
-  }, [searchOpen])
-  const [filtersOpen, setFiltersOpen] = useState(cachedFilters?.filtersOpen ?? false)
-  useEscapeKey(() => setFiltersOpen(false), filtersOpen && !isConfirming)
-  const [selectedTagIds, setSelectedTagIds] = useState(cachedFilters?.selectedTagIds ?? new Set())
-  const [tagMatchMode, setTagMatchMode] = useState(cachedFilters?.tagMatchMode ?? 'any')
-  // null until initialized from real data (see the effect below) — the
-  // slider has nothing to show until there's at least one bill to derive
-  // bounds from. Once set, a new pricier bill coming in later doesn't
-  // silently widen a range someone already narrowed on purpose. A
-  // restored non-null value from cachedFilters skips that initialization
-  // the same way an already-set one does — see that effect's own guard.
-  const [priceRange, setPriceRange] = useState(cachedFilters?.priceRange ?? null)
 
-  const priceBounds =
-    bills && bills.length > 0 ? { min: 0, max: Math.max(1, Math.ceil(Math.max(...bills.map(billTotal)))) } : null
-  const priceFilterActive = Boolean(
-    priceBounds && priceRange && (priceRange[0] > priceBounds.min || priceRange[1] < priceBounds.max)
-  )
-  const filtersActive = selectedTagIds.size > 0 || priceFilterActive
-  // Search/tags/price all apply before pagination — Pagination and the
-  // month/day grouping below only ever see whatever's left after
-  // filtering, same as they only ever saw the full list before this
-  // feature existed.
-  const filteredBills = bills
-    ? filterBills(bills, {
-        query: searchQuery,
-        tagIds: selectedTagIds,
-        tagMode: tagMatchMode,
-        minPrice: priceRange ? priceRange[0] : null,
-        maxPrice: priceRange ? priceRange[1] : null,
-      })
-    : []
   // Grouped by month/day for the date dividers — only the current page's
   // worth of (filtered) bills, same slice the flat list used before
   // dividers existed.
   const visibleBills = filteredBills.slice(billsPage * BILLS_PAGE_SIZE, (billsPage + 1) * BILLS_PAGE_SIZE)
   const billGroups = groupItemsByDate(visibleBills)
+  const maxPage = Math.max(0, Math.ceil(filteredBills.length / BILLS_PAGE_SIZE) - 1)
   // My own participant row in this group — bills/items/payments reference
   // group_members.id now, not the raw account ID, so anything I create
   // needs this resolved first (e.g. defaulting a new bill's payer to me).
   const myParticipantId = allMembers.find((m) => m.userId === user.id)?.id
   const isAdmin = myParticipantId && myParticipantId === group?.admin_id
-  // Used only by the balance summary below (settlement's own from/to are
-  // member ids, same as everywhere else this app resolves a name from
-  // one) — SettleUp.jsx/History.jsx/RecordPayment.jsx each keep their own
-  // copy rather than sharing this one, same as every other small per-file
-  // nameOf in this codebase.
-  const nameOf = (id) => allMembers.find((m) => m.id === id)?.name || 'Someone'
-  // The debts that actually involve you, out of the group's full
-  // simplified list — everything else now lives one tap away on the
-  // Settle Up page (see the action row below), not here. Personal space
-  // is always trivially "no one else to owe," same reasoning the whole
-  // action row is hidden there for.
-  const myBalanceLines =
-    group && !group.is_personal && settlement
-      ? settlement.filter((t) => t.from === myParticipantId || t.to === myParticipantId)
-      : []
   // Whether the current selection happens to cover every bill in the
   // group, not just the visible page — bills holds the group's full list
-  // once historyComplete (see loadBillsAndSettlement), so this is a real
+  // once historyComplete (see useGroupViewData), so this is a real
   // "delete everything" check, the same one delete_all_group_bills()
   // itself enforces server-side, not just a guess based on what's
   // currently on screen. Also requires historyComplete specifically:
-  // during loadRecentBillsForFirstPaint's brief windowed-preview phase,
-  // `bills` only holds a recent slice, and selecting all of *that* would
-  // otherwise still trigger the delete-everything RPC underneath a
-  // confirmation dialog that only mentioned the smaller, visible count —
-  // an honesty problem worth avoiding on a destructive, irreversible
-  // action even for the few seconds this window is normally open.
+  // during the brief first-paint windowed-preview phase, `bills` only
+  // holds a recent slice, and selecting all of *that* would otherwise
+  // still trigger the delete-everything RPC underneath a confirmation
+  // dialog that only mentioned the smaller, visible count — an honesty
+  // problem worth avoiding on a destructive, irreversible action even for
+  // the few seconds this window is normally open.
   const allBillsSelected = Boolean(
     bills && bills.length > 0 && selectedIds.size === bills.length && historyComplete
   )
 
-  // Every loader below used to just destructure `{ data }` and move on — a
-  // failed request (a dropped connection, an expired session, anything)
-  // silently looked identical to "this group genuinely has no bills," which
-  // is a much harder bug to spot than an error message would have been.
-  // Each one now checks `error` and surfaces it through the same banner the
-  // rest of the page already uses, and clears it first so a later successful
-  // reload doesn't leave a stale error sitting on screen.
-  const loadGroup = useCallback(async () => {
-    try {
-      const { data, error: groupError } = await supabase.from('groups').select('*').eq('id', groupId).single()
-      // A group that's already gone by the time this loads — deleted from
-      // its own Danger Zone by an admin, in another tab or by someone else
-      // in it, while this page was still open — used to just sit here
-      // showing PostgREST's own raw "no rows" wording forever, on a page
-      // with nothing left to load. Bounce back to the groups list instead,
-      // same as BillView does for a deleted bill.
-      if (isNotFoundError(groupError)) {
-        navigate('/', { state: { notice: 'This group is no longer available.' } })
-        return
-      }
-      if (groupError) throw groupError
-      setGroup(data)
-      setError(null)
-    } catch (err) {
-      setError(`Couldn't load this group: ${loadErrorMessage(err)}`)
-    }
-  }, [groupId, navigate])
-
-  const loadMembers = useCallback(async () => {
-    try {
-      setAllMembers(await fetchAllGroupMembers(groupId))
-      setError(null)
-    } catch (err) {
-      setError(`Couldn't load this group's members: ${loadErrorMessage(err)}`)
-    }
-  }, [groupId])
-
-  const loadCategories = useCallback(async () => {
-    try {
-      setCategories(await fetchCategories(groupId))
-      setError(null)
-    } catch (err) {
-      setError(`Couldn't load this group's categories: ${loadErrorMessage(err)}`)
-    }
-  }, [groupId])
-
-  // Derives billPersonalTotals/week/monthTotal from bills already fetched
-  // — deliberately separate from the fetch itself so both
-  // loadBillsAndSettlement and loadRecentBillsForFirstPaint below can share
-  // it. The actual derivation lives in groupViewSnapshot.js, shared with
-  // the app-boot prefetch (see prefetchGroup.js) so both compute this the
-  // same way. The group's own balance is set separately now, by
-  // loadSettlement just below — see that function's own comment for why.
-  function computeAndSetBillDerivedState(billsData) {
-    const { billPersonalTotals, weekTotal, monthTotal } = computeGroupViewSnapshot(billsData)
-    setBillPersonalTotals(billPersonalTotals)
-    setWeekTotal(weekTotal)
-    setMonthTotal(monthTotal)
-  }
-
-  // The group's balance — fetched entirely independently of whatever
-  // `bills` currently holds. get_group_balances (see groupBalances.js)
-  // always sums the group's *complete* history server-side, so unlike the
-  // old client-side computation this was never unsafe to run against a
-  // partial/windowed bill list — there's no bill list involved here at
-  // all anymore, which is also what fixes the "balance briefly shows a
-  // wildly wrong number, then corrects itself" bug this used to have: that
-  // was the background warm-up prefetch (see prefetchGroup.js) computing a
-  // balance from *all* payments ever made but only a recent window of
-  // bills, and there's simply no such mismatch possible once neither this
-  // function nor that prefetch ever computes a balance from bills at all.
-  // Called for both a real bill-list reload and a payments-only realtime
-  // update (see the subscription below) — either one can change the
-  // balance, and re-fetching it is cheap enough not to bother
-  // special-casing "just a payment."
-  const loadSettlement = useCallback(async () => {
-    try {
-      setSettlement(await fetchGroupSettlement(supabase, groupId))
-      setError(null)
-    } catch (err) {
-      setError(`Couldn't load balances: ${loadErrorMessage(err)}`)
-    }
-  }, [groupId])
-
-  // Paints the bill list — and the week/month totals, safe from a partial
-  // window since "this week"/"this month" is always inside it — fast, for
-  // the one case that actually needs it: a group with no cached snapshot
-  // at all yet (see the mount effect below, which only calls this when
-  // groupViewCache came up empty). Deliberately never touches
-  // `settlement` — loadSettlement above is the only thing that ever sets
-  // it now, real load or not.
-  const loadRecentBillsForFirstPaint = useCallback(async () => {
-    try {
-      const billsData = await fetchGroupBills(supabase, groupId, { since: getStatsWindowStart() })
-      // loadBillsAndSettlement might already have won this race — a
-      // small/young group with nothing to window in the first place, or
-      // just a faster response. Applying this now would only ever be a
-      // strictly worse, partial view of data the page already has in
-      // full, so skip it entirely rather than flash backwards.
-      if (billsRef.current) return
-      setBills(billsData)
-      setError(null)
-      computeAndSetBillDerivedState(billsData)
-    } catch {
-      // Best-effort only — loadBillsAndSettlement is what actually has to
-      // succeed; if this one fails there's simply nothing extra to show
-      // meanwhile, same as before this existed.
-    }
-  }, [groupId])
-
-  const loadBillsAndSettlement = useCallback(async () => {
-    try {
-      // Bills and the balance don't depend on each other, so fetch both at
-      // once rather than waiting on one before starting the other.
-      const [billsData, settlementData] = await Promise.all([
-        fetchGroupBills(supabase, groupId),
-        fetchGroupSettlement(supabase, groupId),
-      ])
-
-      // Set directly too (not only via the mirroring effect): a patch run
-      // queued right behind this one must merge into this list.
-      billsRef.current = billsData
-      setBills(billsData)
-      setSettlement(settlementData)
-      setError(null)
-      computeAndSetBillDerivedState(billsData)
-      // The one place this ever gets confirmed true — this is the only
-      // function that fetches the group's complete, unwindowed bill list.
-      setHistoryComplete(true)
-      // Complete list, so it's also what the realtime filter learns from,
-      // and what per-bill patches may now safely build on.
-      relevanceRef.current.learn(billsData)
-      fullyLoadedRef.current = true
-    } catch (err) {
-      setError(`Couldn't load this group's bills: ${loadErrorMessage(err)}`)
-    }
-  }, [groupId])
-
-  // Queues the verification pass ~30s after the latest patch (restarting the
-  // wait on each new one, so a busy stretch gets one check at the end).
-  const scheduleVerification = useCallback(() => {
-    clearTimeout(verifyTimerRef.current)
-    verifyTimerRef.current = setTimeout(() => {
-      pendingRef.current.verify = true
-      billsRunnerRef.current?.schedule()
-    }, VERIFY_DELAY_MS)
-  }, [])
-
-  // Refreshes just `billIds` (see billPatches.js) plus the balance. Throws
-  // on failure so syncBills can fall back to a full reload.
-  const patchBills = useCallback(
-    async (billIds) => {
-      const [fetched, settlementData] = await Promise.all([
-        fetchGroupBills(supabase, groupId, { billIds }),
-        fetchGroupSettlement(supabase, groupId),
-      ])
-      relevanceRef.current.learn(fetched)
-      const next = applyBillPatch(billsRef.current, billIds, fetched)
-      billsRef.current = next
-      setBills(next)
-      setSettlement(settlementData)
-      setError(null)
-      computeAndSetBillDerivedState(next)
-    },
-    [groupId]
-  )
-
-  // The verification period: some time after a burst of patches, fetch the
-  // whole list and compare. A difference means a patching bug — it's logged
-  // with the bills involved, and the screen is corrected on the spot.
-  // Skipped (not failed) if anything changed while fetching, since the
-  // comparison would be meaningless; the next patch re-arms it anyway.
-  const verifyPatches = useCallback(async () => {
-    const before = billsRef.current
-    const changesBefore = changeCountRef.current
-    let fresh
-    try {
-      fresh = await fetchGroupBills(supabase, groupId)
-    } catch {
-      return // best-effort; the periodic resync still covers correctness
-    }
-    if (changeCountRef.current !== changesBefore || billsRef.current !== before) return
-    const differing = diffBillLists(fresh, before)
-    if (differing.length === 0) return
-    console.warn('[bill patches] patched list differed from a full reload; corrected. Bills:', differing)
-    relevanceRef.current.learn(fresh)
-    billsRef.current = fresh
-    setBills(fresh)
-    computeAndSetBillDerivedState(fresh)
-  }, [groupId])
-
-  // The one task the bills runner executes: drains whatever's queued in
-  // pendingRef. What to do is decided by planSync (billPatches.js, tested);
-  // this only carries it out — and turns a failed patch into a full reload.
-  const syncBills = useCallback(async () => {
-    const plan = planSync(pendingRef.current, { fullyLoaded: fullyLoadedRef.current })
-    pendingRef.current = emptyPending()
-
-    if (plan.kind === 'full') {
-      await loadBillsAndSettlement()
-    } else if (plan.kind === 'patch') {
-      try {
-        await patchBills(plan.billIds)
-        if (VERIFY_BILL_PATCHES) scheduleVerification()
-      } catch (err) {
-        console.error('Bill patch failed, reloading the whole list instead:', err)
-        await loadBillsAndSettlement()
-      }
-    } else if (plan.kind === 'verify') {
-      await verifyPatches()
-    }
-  }, [loadBillsAndSettlement, patchBills, verifyPatches, scheduleVerification])
-
   useEffect(() => {
     if (!bills) return
-    const maxPage = Math.max(0, Math.ceil(filteredBills.length / BILLS_PAGE_SIZE) - 1)
     if (billsPage > maxPage) setBillsPage(maxPage)
-  }, [bills, filteredBills.length, billsPage])
-
-  // "/" jumps straight to the search box, from anywhere on the page —
-  // independent of the list-navigation hook below (works in select mode,
-  // or with zero bills currently matching a filter, since the box itself
-  // is still there to change either of those). Opens the search section
-  // first if it's currently collapsed — the useEffect above handles
-  // actually focusing it once it's mounted; the direct .focus() call here
-  // is for the already-open case, where there's no mount to wait on.
-  useEffect(() => {
-    function onKeyDown(e) {
-      if (e.key !== '/' || isTypingTarget(document.activeElement)) return
-      e.preventDefault()
-      setSearchOpen(true)
-      searchInputRef.current?.focus()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
-
-  // ←/→ flip pages, ↑/↓ move the selected bill, Enter opens it — see
-  // useListKeyboardNav.js. Disabled in select mode, where arrow keys/Enter
-  // already mean something else (moving through checkboxes).
-  const billNav = useListKeyboardNav({
-    page: billsPage,
-    setPage: setBillsPage,
-    maxPage: Math.max(0, Math.ceil(filteredBills.length / BILLS_PAGE_SIZE) - 1),
-    itemCount: visibleBills.length,
-    disabled: selectMode,
-    onOpen: (index) => {
-      const bill = visibleBills[index]
-      if (bill) navigate(`/groups/${groupId}/bills/${bill.id}`)
-    },
-  })
-
-  // Press-and-hold a bill row as a faster, mobile-friendly way into select
-  // mode alongside the existing "⋮ → Select" entry point — see
-  // enterSelectModeWith below, and useLongPress.js for the gesture itself.
-  const bindLongPress = useLongPress()
-  // Swipe-left-to-reveal-delete, same gesture/hook as ItemRow's item list
-  // and GroupGuestsSection's guest list — see useSwipeToDelete.js.
-  const { bind: bindSwipe } = useSwipeToDelete()
-
-  // A bill row needs *both* gestures on the same element — long-press
-  // (enters select mode) and swipe (reveals delete) — and each hook
-  // returns its own onPointerDown/Move/Up/Cancel, so spreading both
-  // objects onto one element would just have the second one silently
-  // clobber the first's same-named handlers instead of both ever running.
-  // Combined here by calling both hooks' versions of each shared handler.
-  // They don't fight over the gesture itself: a real drag crosses
-  // useSwipeToDelete's own 8px threshold before useLongPress's 10px
-  // move-tolerance cancels its timer, and each hook swallows the
-  // trailing click strictly on its *own* flag (wasDragRef for swipe,
-  // firedRef for long-press) — a genuine swipe never sets firedRef, and
-  // a genuine long-press (held still, no drag) never sets wasDragRef —
-  // so whichever one actually fired is the only one that intercepts the
-  // click, and open-then-tap-to-close (swipe's isOpen check) still works
-  // exactly as it does on any other swipeable row.
-  function bindBillRow(bill) {
-    const press = bindLongPress(() => enterSelectModeWith(bill.id))
-    const swipe = bindSwipe(bill.id, () => deleteBill(bill))
-    return {
-      row: {
-        ...press,
-        ...swipe.row,
-        onPointerDown: (e) => {
-          press.onPointerDown(e)
-          swipe.row.onPointerDown(e)
-        },
-        onPointerMove: (e) => {
-          press.onPointerMove(e)
-          swipe.row.onPointerMove(e)
-        },
-        onPointerUp: (e) => {
-          press.onPointerUp(e)
-          swipe.row.onPointerUp(e)
-        },
-        onPointerCancel: (e) => {
-          press.onPointerCancel(e)
-          swipe.row.onPointerCancel(e)
-        },
-      },
-      deleteButton: swipe.deleteButton,
-    }
-  }
+  }, [bills, maxPage, billsPage])
 
   // A fresh filter (or a changed price range) should start back on page 1
   // of its own results, not strand you on whatever page you happened to be
@@ -591,285 +142,22 @@ export default function GroupView({ activeBillId = null, printable = true }) {
   // page, not "the results changed" in general.
   useEffect(() => {
     setBillsPage(0)
-  }, [searchQuery, selectedTagIds, tagMatchMode, priceRange])
+  }, [searchQuery, filters.selectedTagIds, filters.tagMatchMode, filters.priceRange])
 
-  // The write half of the Sticky filters preference (see cachedFilters
-  // above) — keeps groupFilterStateCache current with exactly what's on
-  // screen so a later remount of this same group (opening a bill, then
-  // coming back) can restore it. A no-op whenever the preference is off,
-  // same as every write below it would otherwise do nothing useful with.
-  // billsPage deliberately isn't part of this — only the actual filter
-  // criteria are "sticky," not which page of results you'd scrolled to.
-  useEffect(() => {
-    if (!stickyFilters) return
-    groupFilterStateCache.set(groupId, {
-      searchQuery,
-      searchOpen,
-      filtersOpen,
-      selectedTagIds,
-      tagMatchMode,
-      priceRange,
-    })
-  }, [stickyFilters, groupId, searchQuery, searchOpen, filtersOpen, selectedTagIds, tagMatchMode, priceRange])
-
-  // Initializes the price slider from real data exactly once bills first
-  // load — see the priceRange state comment above for why a later reload
-  // (a new, pricier bill coming in) deliberately doesn't touch it again.
-  // Gated on historyComplete, not just `bills` being non-empty: bills can
-  // already be non-empty from loadRecentBillsForFirstPaint's windowed
-  // preview (see its own comment), and initializing the slider's max off
-  // of just that would silently exclude a pricier bill outside the window
-  // from ever showing up in a price-filtered search, forever, even once
-  // the real backfill lands — this waits for the real, complete picture
-  // instead, same reasoning as settlement.
-  useEffect(() => {
-    if (priceRange !== null || !bills || bills.length === 0 || !historyComplete) return
-    setPriceRange([0, Math.max(1, Math.ceil(Math.max(...bills.map(billTotal))))])
-  }, [bills, priceRange, historyComplete])
-
-  // Kept as its own name (rather than every call site just saying
-  // loadBillsAndSettlement directly) since "reload everything" is the
-  // concept call sites actually care about — bill create/delete, the
-  // recurring-bills sweep, and the bills/items/item_shares realtime
-  // subscription below all mean "the bill list itself changed," as
-  // opposed to loadSettlement's narrower "just the balance."
-  // All four go through coalesced runners (see coalescedRunner.js): realtime
-  // handlers schedule(), the page's own writes call now().
-  // The bills runner drains pendingRef through syncBills, so full reloads,
-  // per-bill patches and verification passes all run strictly one at a
-  // time: whatever is applied last was also fetched last.
-  const billsRunner = useCoalescedRunner(syncBills)
-  const settlementRunner = useCoalescedRunner(loadSettlement)
-  const membersRunner = useCoalescedRunner(loadMembers)
-  const categoriesRunner = useCoalescedRunner(loadCategories)
-  useEffect(() => {
-    billsRunnerRef.current = billsRunner
-  }, [billsRunner])
-
-  // The whole list, right away.
-  const reloadAll = useCallback(() => {
-    pendingRef.current.full = true
-    billsRunner.now()
-  }, [billsRunner])
-
-  // Just these bills, right away — after the page's own edit to them.
-  const refreshBills = useCallback(
-    (billIds) => {
-      for (const id of billIds) pendingRef.current.billIds.add(id)
-      changeCountRef.current++
-      billsRunner.now()
+  // ←/→ flip pages, ↑/↓ move the selected bill, Enter opens it — see
+  // useListKeyboardNav.js. Disabled in select mode, where arrow keys/Enter
+  // already mean something else (moving through checkboxes).
+  const billNav = useListKeyboardNav({
+    page: billsPage,
+    setPage: setBillsPage,
+    maxPage,
+    itemCount: visibleBills.length,
+    disabled: selectMode,
+    onOpen: (index) => {
+      const bill = visibleBills[index]
+      if (bill) navigate(`/groups/${groupId}/bills/${bill.id}`)
     },
-    [billsRunner]
-  )
-
-  // Catches whatever realtime didn't deliver (app backgrounded, connection
-  // dropped, or an event the relevance filter skipped) — see realtimeResync.js.
-  // Always a full reload: a resync is exactly the "might have missed
-  // something" case patches can't cover.
-  const resyncAll = useCallback(() => {
-    pendingRef.current.full = true
-    billsRunner.schedule()
-    membersRunner.schedule()
-    categoriesRunner.schedule()
-  }, [billsRunner, membersRunner, categoriesRunner])
-  useResync(resyncAll)
-
-  // Keeps the cache current with whatever's actually on screen — the
-  // initial load, a background reload, and a realtime update all funnel
-  // through the same state setters above, so this one effect covers all
-  // three without any loader needing to know the cache exists. Guarded on
-  // group/bills both being set so a still-loading (or failed-before-ever-
-  // loading) page doesn't cache a half-populated snapshot that would paint
-  // instantly-but-wrong the next time this group is opened — and now also
-  // on historyComplete, so loadRecentBillsForFirstPaint's own windowed
-  // preview (which does set `bills`, just not the full picture yet) is
-  // never mistaken for the real thing and persisted as if it were.
-  useEffect(() => {
-    if (!group || !bills || !historyComplete) return
-    // Stats (and Graphs) read the very same complete data, so they're
-    // filled from here too — opening them from this page is instant, with
-    // no loading of their own (see groupStatsSnapshot.js).
-    if (allMembers.length) {
-      groupStatsCache.set(groupId, groupStatsSnapshotFromGroupView({ group, allMembers, categories, bills }))
-    }
-    groupViewCache.set(groupId, {
-      group,
-      allMembers,
-      categories,
-      bills,
-      billPersonalTotals,
-      settlement,
-      weekTotal,
-      monthTotal,
-    })
-  }, [groupId, group, allMembers, categories, bills, billPersonalTotals, settlement, weekTotal, monthTotal, historyComplete])
-
-  useEffect(() => {
-    // Per-group patch state starts over: nothing learned, nothing queued,
-    // and no patching until this group's complete list has loaded.
-    const relevance = createRealtimeRelevance()
-    relevanceRef.current = relevance
-    pendingRef.current = emptyPending()
-    fullyLoadedRef.current = false
-
-    // Paints instantly from whatever was on screen last time this group was
-    // open, if anything — then the loads just below always run anyway, so
-    // a stale cache is never shown for more than the length of one fetch.
-    // Not gated behind a "was there a cache hit" check on the loads
-    // themselves; the point is a revisit is never *worse* than a fresh
-    // visit, only sometimes faster to first paint.
-    const cached = groupViewCache.get(groupId)
-    if (cached) {
-      setGroup(cached.group)
-      setAllMembers(cached.allMembers)
-      setCategories(cached.categories)
-      setBills(cached.bills)
-      setBillPersonalTotals(cached.billPersonalTotals)
-      setSettlement(cached.settlement)
-      setWeekTotal(cached.weekTotal)
-      setMonthTotal(cached.monthTotal)
-      // A cached snapshot is only ever written once complete (see the
-      // cache-write effect above) — never partial.
-      setHistoryComplete(true)
-    } else {
-      // Nothing cached at all — get *something* on screen fast (a recent
-      // window) while the real, complete load right behind it is still in
-      // flight, rather than showing nothing for however long a big or old
-      // group's full history takes to fetch. A cached revisit already has
-      // something to show immediately, so it skips straight to the one
-      // real fetch below, same as before this existed.
-      loadRecentBillsForFirstPaint()
-    }
-
-    loadGroup()
-    membersRunner.now()
-    categoriesRunner.now()
-    reloadAll()
-
-    // Feeds the app-boot warm-up (see recentGroups.js/prefetchGroup.js) —
-    // recording every visit, personal group included, is simpler than
-    // deciding here which groups are worth remembering; Groups.jsx is the
-    // one place that already knows which ids are real groups worth
-    // prefetching and filters there instead.
-    recordGroupVisit(groupId)
-
-    // Opportunistic, not scheduled — this is what actually generates due
-    // recurring bills, running the moment anyone opens the group rather
-    // than in the background on their exact due date. A failure here
-    // shouldn't break the rest of the page, so it's logged rather than
-    // surfaced as a blocking error.
-    processDueRecurringBills(supabase, groupId, user.id)
-      .then((result) => {
-        if (result.created > 0) reloadAll()
-      })
-      .catch((err) => console.error('Failed to process recurring bills:', err))
-
-    // `filter` narrows each subscription to *this* group specifically —
-    // without it, being a member of several groups means every change
-    // anywhere in any of them (RLS already limits it to groups you're
-    // actually in, but not to the one you're currently looking at)
-    // triggers a full reloadAll() here regardless of which group it was
-    // actually for. Only possible where the table has its own group_id
-    // column to filter on directly: bills/payments/group_members/
-    // categories all do. items/item_shares don't (they only carry
-    // bill_id/item_id, one join step further from group_id), and
-    // Realtime's filter can't express a join — those two stay unfiltered,
-    // same as before, which is the one real limitation here, not an
-    // oversight — relevance.affectedBills() drops the ones that belong to
-    // another group instead, and traces the rest to the one bill they touch
-    // so only that bill is re-fetched. Every handler queues and schedules
-    // rather than loading directly: realtime sends one event per row, so
-    // one scan is dozens of events. A rejoin after a dropped connection
-    // triggers a full resync.
-    const onBillChange = (table) => (payload) => {
-      if (!queueAffected(pendingRef.current, relevance.affectedBills(table, payload))) return
-      changeCountRef.current++
-      billsRunner.schedule()
-    }
-    const groupFilter = `group_id=eq.${groupId}`
-    const channel = supabase
-      .channel(`group-${groupId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: groupFilter }, onBillChange('bills'))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, onBillChange('items'))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_shares' }, onBillChange('item_shares'))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: groupFilter }, () =>
-        settlementRunner.schedule()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: groupFilter }, () =>
-        membersRunner.schedule()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter: groupFilter }, () =>
-        categoriesRunner.schedule()
-      )
-      .subscribe(resyncOnRejoin(resyncAll))
-
-    return () => {
-      supabase.removeChannel(channel)
-      clearTimeout(verifyTimerRef.current)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupId])
-
-  async function createBill(e) {
-    e.preventDefault()
-    if (!newBillTitle.trim()) return
-    const title = newBillTitle.trim()
-    const { data, error: createError } = await supabase
-      .from('bills')
-      .insert({
-        group_id: groupId,
-        title,
-        created_by: user.id,
-        paid_by: myParticipantId,
-      })
-      .select()
-      .single()
-
-    if (createError) {
-      setError(createError.message)
-      return
-    }
-    // An amount typed into the Amount field (only reachable once a title's
-    // been typed — see the form below) creates the bill with one item
-    // already in place (name mirrors the bill title, so it stays hidden
-    // behind BillView's simple one-item view) — same shape
-    // insertItemWithShares in BillView.jsx creates by hand, just done
-    // here so the bill lands there already filled in. Leaving it blank
-    // creates the bill with no items yet, same as this app has always
-    // done — it then expects more than one item, i.e. today's ordinary
-    // itemized bill.
-    const amount = parseAmount(newBillAmount)
-    if (amount) {
-      const { data: item, error: itemError } = await supabase
-        .from('items')
-        .insert({ bill_id: data.id, name: title, unit_price: amount, quantity: 1, total_price: amount })
-        .select()
-        .single()
-      if (itemError) {
-        // The bill itself was created fine — only this fast-path item
-        // failed to attach. Surfaced as an error and left un-navigated,
-        // rather than silently landing on what'd look like an empty,
-        // amount-less bill with no explanation for where the typed amount
-        // went — the bill's still reachable normally from the list below.
-        setError(`Bill created, but the amount didn't save: ${itemError.message}`)
-        return
-      }
-      const buyerIds = allMembers.filter((m) => m.active).map((m) => m.id)
-      if (item && buyerIds.length) {
-        const { error: sharesError } = await supabase
-          .from('item_shares')
-          .insert(buyerIds.map((id) => ({ item_id: item.id, member_id: id, shares: 1 })))
-        // Bill and item both exist and are visible either way — a failure
-        // here just leaves that one item unassigned, fixable directly from
-        // its own row (see BillView's toggleBuyer), not worth blocking the
-        // navigation below over.
-        if (sharesError) console.error('Failed to assign new bill item to members:', sharesError.message)
-      }
-    }
-    setNewBillTitle('')
-    setNewBillAmount('')
-    window.location.href = `/groups/${groupId}/bills/${data.id}`
-  }
+  })
 
   async function deleteBill(bill) {
     const confirmed = await confirm({
@@ -883,25 +171,6 @@ export default function GroupView({ activeBillId = null, printable = true }) {
     if (deleteError) setError(deleteError.message)
     // Just this bill: gone if the delete worked, back as it was if not.
     refreshBills([bill.id])
-  }
-
-  // Entry point is the ⋮ menu's own "Rename" (see BillActionsMenu below) —
-  // no confirm step, same as every other rename in this app (a group's own
-  // name, a category, a guest). Same empty-stays-unrenamed guard as those
-  // too, just inlined here rather than going through InlineEditable, since
-  // this is a full replace-the-row form (see the list's own JSX below),
-  // not a click-to-edit value in place.
-  async function saveBillRename(billId) {
-    const trimmed = editingBillTitle.trim()
-    if (!trimmed) return
-    setError(null)
-    const { error: renameError } = await supabase.from('bills').update({ title: trimmed }).eq('id', billId)
-    if (renameError) {
-      setError(renameError.message)
-      return
-    }
-    setEditingBillId(null)
-    refreshBills([billId])
   }
 
   // Selection is independent of pagination on purpose — picking bills on
@@ -920,22 +189,6 @@ export default function GroupView({ activeBillId = null, printable = true }) {
       else next.add(billId)
       return next
     })
-  }
-
-  function toggleTag(tagId) {
-    setSelectedTagIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(tagId)) next.delete(tagId)
-      else next.add(tagId)
-      return next
-    })
-  }
-
-  function clearFilters() {
-    setSearchQuery('')
-    setSelectedTagIds(new Set())
-    setTagMatchMode('any')
-    if (priceBounds) setPriceRange([priceBounds.min, priceBounds.max])
   }
 
   async function deleteSelectedBills() {
@@ -973,34 +226,20 @@ export default function GroupView({ activeBillId = null, printable = true }) {
     else refreshBills(deletedIds)
   }
 
-  // Entry point for the per-bill menu's own "Select" action — the only way
-  // into select mode now (see toggleSelectMode's own comment). Lands in
-  // the same state as entering select mode and then ticking this one row
-  // by hand.
+  // Entry point for the per-bill menu's own "Select" action and a long
+  // press — lands in the same state as entering select mode and then
+  // ticking this one row by hand.
   function enterSelectModeWith(billId) {
     setSelectMode(true)
     setSelectedIds(new Set([billId]))
   }
 
   // Shared by both the per-bill menu's "Share" and the bulk select bar's
-  // "Share" — fetched fresh on demand for the same reason exportGroupCsv()
-  // below is: the bill list above only ever holds lightweight rows, and
-  // sharing is rare enough that a dedicated round-trip per click is
-  // simpler than keeping every bill's full item detail in page state at
-  // all times just in case someone shares.
+  // "Share" — see groupBillActions.js for why it fetches fresh.
   async function shareBills(billIds) {
     setError(null)
     try {
-      const { data, error: billsError } = await supabase
-        .from('bills')
-        .select(
-          'id, title, note, created_at, paid_by, category_id, items(name, quantity, unit_price, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)'
-        )
-        .in('id', billIds)
-        .order('created_at', { ascending: false })
-      if (billsError) throw billsError
-
-      const billsForRecap = (data || []).map((b) => ({ ...b, payers: b.bill_payers || [] }))
+      const billsForRecap = await fetchBillsForRecap(supabase, billIds)
       const text = formatMultiBillRecap(billsForRecap, allMembers, format, categories)
       const title =
         billsForRecap.length === 1 ? billsForRecap[0].title : `${billsForRecap.length} bills — ${group?.name}`
@@ -1016,70 +255,16 @@ export default function GroupView({ activeBillId = null, printable = true }) {
     }
   }
 
-  // Fetched fresh on demand rather than kept in page state permanently —
-  // the bill list above only ever needs lightweight rows (no items/shares),
-  // and an export is infrequent enough that a dedicated round-trip when it's
-  // actually clicked is simpler than keeping every bill's full item detail
-  // loaded at all times just in case someone exports.
-  async function exportGroupCsv() {
+  async function exportCsv() {
     setError(null)
     try {
-      const [billsData, { data: categoriesData, error: categoriesError }] = await Promise.all([
-        fetchAllRows(() =>
-          supabase
-            .from('bills')
-            .select(
-              'id, title, created_at, paid_by, category_id, items(name, quantity, unit_price, total_price, category_id, item_shares(member_id, shares)), bill_payers(member_id, amount)',
-              { count: 'exact' }
-            )
-            .eq('group_id', groupId)
-            .order('created_at', { ascending: true })
-        ),
-        supabase.from('categories').select('id, name').eq('group_id', groupId),
-      ])
-      if (categoriesError) throw categoriesError
-
-      const bills = billsData.map((b) => ({ ...b, payers: b.bill_payers || [] }))
-      const { header, rows } = buildGroupCsvRows(bills, allMembers, categoriesData || [])
-      const filename = `${(group?.name || 'group').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-bills.csv`
-      downloadCsv(filename, toCsv(header, rows))
+      await exportGroupCsv(supabase, { groupId, groupName: group?.name, members: allMembers })
     } catch (err) {
       setError(err.message)
     }
   }
 
-  // The personal-space "Share" recap (see the header ShareButton below) —
-  // deliberately built from `bills`/`categories` already in state rather
-  // than a fresh fetch like exportGroupCsv/shareBills above: ShareButton's
-  // getText is called synchronously (same as formatSettlementRecap's own
-  // `settlement` for a real group) and "Download as PDF" needs the printed
-  // content already sitting in the DOM the instant window.print() fires —
-  // neither has anywhere to await an async fetch. bills' own item rows
-  // already carry total_price/category_id (see fetchGroupBills), which is
-  // all a total-and-by-category summary needs; only a full itemized
-  // transcript (name/quantity per item) would need the heavier fetch those
-  // two functions do, and that's exactly what selecting bills and sharing
-  // them from the list itself already covers for whoever wants that level
-  // of detail on a specific subset instead of "the whole space, right now."
-  const personalRecap = group?.is_personal
-    ? (() => {
-        const categoryNameById = new Map(categories.map((c) => [c.id, c.name]))
-        const byCategory = new Map() // name -> amount
-        let totalSpent = 0
-        for (const bill of bills || []) {
-          for (const item of bill.items || []) {
-            const amount = Number(item.total_price)
-            totalSpent += amount
-            const name = categoryNameById.get(item.category_id) || 'Uncategorized'
-            byCategory.set(name, (byCategory.get(name) || 0) + amount)
-          }
-        }
-        const categoryRows = [...byCategory.entries()]
-          .map(([name, amount]) => ({ key: name, name, amount }))
-          .sort((a, b) => b.amount - a.amount)
-        return { groupName: group?.name, totalSpent, billCount: (bills || []).length, categoryRows }
-      })()
-    : null
+  const personalRecap = group?.is_personal ? buildPersonalSpaceRecap(group, bills, categories) : null
 
   return (
     <div className="page">
@@ -1118,8 +303,8 @@ export default function GroupView({ activeBillId = null, printable = true }) {
         )}
         {/* Share/Stats/Settings — Share here is the group-level action
             (settle-up recap text/PDF for a real group, the personal-space
-            recap above for one's own space — see personalRecap's own
-            comment for why that one's built differently), merged with the
+            recap for one's own space — see buildPersonalSpaceRecap for
+            why that one's built differently), merged with the
             CSV export that used to sit in its own button further down the
             page (ShareButton's onExportCsv). Gated only on settlement
             itself having loaded — same for both group types now:
@@ -1139,7 +324,7 @@ export default function GroupView({ activeBillId = null, printable = true }) {
                 ? () => formatPersonalSpaceRecap(personalRecap, format)
                 : () => formatSettlementRecap(group?.name, settlement, allMembers, format)
             }
-            onExportCsv={bills && bills.length > 0 ? exportGroupCsv : undefined}
+            onExportCsv={bills && bills.length > 0 ? exportCsv : undefined}
           />
         )}
         <Link to={`/groups/${groupId}/stats`} className="icon-btn" aria-label="Stats" title="Stats">
@@ -1163,104 +348,7 @@ export default function GroupView({ activeBillId = null, printable = true }) {
       {notice && <p className="status-success">{notice}</p>}
       {error && <p className="status-error">{error}</p>}
 
-      {bills && bills.length > 0 && searchOpen && (
-        <>
-          <div className="receipt-tape bill-search-tape">
-            <input
-              ref={searchInputRef}
-              type="text"
-              className="guide-search-input"
-              placeholder="Search bills… (/)"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="Search bills"
-            />
-            <button
-              type="button"
-              className={`btn-link bill-filter-toggle ${filtersActive ? 'bill-filter-toggle-active' : ''}`}
-              onClick={() => setFiltersOpen((o) => !o)}
-            >
-              Filters{filtersActive ? ' •' : ''}
-            </button>
-            <button
-              type="button"
-              className="btn-icon bill-search-collapse"
-              onClick={() => setSearchOpen(false)}
-              aria-label="Hide search"
-            >
-              ↑
-            </button>
-          </div>
-
-          {filtersOpen && (
-            <div className="bill-filters-panel">
-              {categories.length > 0 && (
-                <div className="bill-filters-group">
-                  <div className="bill-filters-group-header">
-                    <span className="muted">Tags</span>
-                    <div className="tab-row bill-filters-tag-mode">
-                      <button
-                        type="button"
-                        className={`tab ${tagMatchMode === 'any' ? 'active' : ''}`}
-                        onClick={() => setTagMatchMode('any')}
-                      >
-                        Match any
-                      </button>
-                      <button
-                        type="button"
-                        className={`tab ${tagMatchMode === 'all' ? 'active' : ''}`}
-                        onClick={() => setTagMatchMode('all')}
-                      >
-                        Match all
-                      </button>
-                    </div>
-                  </div>
-                  <div className="chip-row">
-                    {categories.map((cat) => (
-                      <label key={cat.id} className={`buyer-chip ${selectedTagIds.has(cat.id) ? 'active' : ''}`}>
-                        <input
-                          type="checkbox"
-                          checked={selectedTagIds.has(cat.id)}
-                          onChange={() => toggleTag(cat.id)}
-                        />
-                        <span className="category-dot" style={{ background: categoryColor(cat.color) }} />
-                        {cat.name}
-                      </label>
-                    ))}
-                    <label className={`buyer-chip ${selectedTagIds.has('uncategorized') ? 'active' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={selectedTagIds.has('uncategorized')}
-                        onChange={() => toggleTag('uncategorized')}
-                      />
-                      Uncategorized
-                    </label>
-                  </div>
-                </div>
-              )}
-              {priceBounds && priceRange && priceBounds.max > priceBounds.min && (
-                <div className="bill-filters-group">
-                  <span className="muted">Amount</span>
-                  <RangeSlider
-                    min={priceBounds.min}
-                    max={priceBounds.max}
-                    valueMin={priceRange[0]}
-                    valueMax={priceRange[1]}
-                    onChangeMin={(v) => setPriceRange(([, hi]) => [v, hi])}
-                    onChangeMax={(v) => setPriceRange(([lo]) => [lo, v])}
-                    format={format}
-                  />
-                </div>
-              )}
-              {(searchQuery || filtersActive) && (
-                <button type="button" className="btn-link" onClick={clearFilters}>
-                  Clear filters
-                </button>
-              )}
-            </div>
-          )}
-        </>
-      )}
+      {bills && bills.length > 0 && searchOpen && <BillSearchPanel filters={filters} categories={categories} />}
 
       {/* The title, alone on its own row now — no icons sharing it (see
           the header above), so a long group name wraps cleanly instead of
@@ -1271,68 +359,14 @@ export default function GroupView({ activeBillId = null, printable = true }) {
         !error && <Skeleton className="skeleton-page-title" />
       )}
 
-      {/* The balance summary — everything a "how much did you spend"
-          question needs at a glance, unlike the full settlement below
-          (via the Settle Up button) which lists every debt in the group,
-          not just yours. Gated on settlement rather than myBalanceLines
-          itself, same as the button right after it: an empty group with
-          no settlement computed yet shouldn't flash "you're all settled
-          up" before it actually knows that. */}
       {!group?.is_personal && settlement && (
-        <div className="balance-summary">
-          {myBalanceLines.length === 0 ? (
-            <p className="muted">You're all settled up in this group.</p>
-          ) : (
-            myBalanceLines.map((t, i) => {
-              const iOwe = t.from === myParticipantId
-              // Settings > Groups' own "Color the whole balance line"
-              // toggle — on (the default) colors the whole <p>, which the
-              // amount span below then just inherits; off leaves the line
-              // in the ordinary text color and puts the same class on the
-              // amount alone instead. Either way it's the same two utility
-              // classes the rest of the app already colors a balance with
-              // (.balance-positive/.balance-negative on a bill row's own
-              // "You lent"/"You borrowed") — nothing new invented here.
-              const colorClass = iOwe ? 'balance-negative' : 'balance-positive'
-              const otherName = iOwe ? nameOf(t.to) : nameOf(t.from)
-              return (
-                <p key={i} className={`balance-line ${highlightFullBalanceLine ? colorClass : ''}`}>
-                  {iOwe ? (
-                    <>
-                      You owe <strong>{otherName}</strong>{' '}
-                      <span className={`mono ${highlightFullBalanceLine ? '' : colorClass}`}>{format(t.amount)}</span>
-                    </>
-                  ) : (
-                    <>
-                      <strong>{otherName}</strong> owes You{' '}
-                      <span className={`mono ${highlightFullBalanceLine ? '' : colorClass}`}>{format(t.amount)}</span>
-                    </>
-                  )}
-                </p>
-              )
-            })
-          )}
-        </div>
-      )}
-      {/* Settle up is deliberately the loud one here (.btn-primary, its own
-          icon) — it's the action that actually resolves something; Record
-          a payment and History are both just navigation to their own pages
-          (RecordPayment.jsx/History.jsx), plain .btn-secondary like any
-          other secondary action in this app. */}
-      {!group?.is_personal && settlement && (
-        <div className="settle-actions">
-          <Link to={`/groups/${groupId}/settle-up`} className="btn-primary btn-with-icon">
-            <SettleIcon size={16} />
-            Settle up
-          </Link>
-          <Link to={`/groups/${groupId}/record-payment`} className="btn-secondary">
-            Record payment
-          </Link>
-          <Link to={`/groups/${groupId}/history`} className="btn-secondary btn-with-icon">
-            <ReceiptIcon size={16} />
-            History
-          </Link>
-        </div>
+        <GroupBalanceSummary
+          groupId={groupId}
+          settlement={settlement}
+          members={allMembers}
+          myParticipantId={myParticipantId}
+          highlightFullBalanceLine={highlightFullBalanceLine}
+        />
       )}
 
       {/* Quick stats moved up here, right after the action row, and slimmed
@@ -1359,77 +393,23 @@ export default function GroupView({ activeBillId = null, printable = true }) {
         </>
       )}
 
-      {/* One form, not a choice between two (that used to be a per-space
-          Settings toggle — gone now, one form is simpler). The Amount
-          field sits on the same line as the title, at a quarter of
-          the row's width, and uses the exact same disabled-until-there's-
-          a-title fade the submit arrow already does (see .row-submit-btn)
-          rather than a separate visibility mechanism — disabled doubles as
-          "not worth touching yet" and "not yet visible," so there's only
-          one thing to keep in sync, and no layout shift when it fades in
-          since its width is always reserved. An amount typed here creates
-          the bill with one item already in place (BillView's simple
-          one-item view); left blank, it's the exact same zero-item bill
-          "Add bill" has always created — see createBill() above. */}
-      <form onSubmit={createBill} className="add-bill-row">
-        <input
-          ref={newBillInputRef}
-          value={newBillTitle}
-          onChange={(e) => setNewBillTitle(e.target.value)}
-          placeholder="New bill (e.g. Lidl - Tuesday)"
-          aria-label="New bill"
-        />
-        <input
-          value={newBillAmount}
-          onChange={(e) => setNewBillAmount(e.target.value)}
-          placeholder="Amount"
-          inputMode="decimal"
-          pattern="[-+*/0-9.,() ]*"
-          disabled={!newBillTitle.trim()}
-          className="add-bill-amount-input"
-          aria-label="Amount (optional — leave blank to itemize)"
-        />
-        <button type="submit" className="row-submit-btn" disabled={!newBillTitle.trim()} aria-label="Add bill">
-          <ArrowRightIcon size={16} />
-        </button>
-      </form>
-
-      {/* Select mode's only entry point now — the list's own top-level
-          toggle (and the "Add recurring bill" link that used to sit next
-          to it) are gone; a per-bill "..." menu's own "Select" action
-          (enterSelectModeWith) is enough on its own, and one fewer
-          always-on button in this row is exactly the kind of clutter this
-          round is trying to cut. Recurring bills now has its own link in
-          Group Settings. */}
+      <NewBillForm
+        groupId={groupId}
+        userId={user.id}
+        myParticipantId={myParticipantId}
+        members={allMembers}
+        onError={setError}
+        inputRef={newBillInputRef}
+      />
 
       {selectMode && (
-        <div className="bulk-select-bar">
-          <span>{selectedIds.size} selected</span>
-          <div className="bulk-select-actions">
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={selectedIds.size === 0}
-              onClick={() => shareBills(Array.from(selectedIds))}
-            >
-              Share
-            </button>
-            <button
-              type="button"
-              className="btn-danger"
-              disabled={selectedIds.size === 0 || (allBillsSelected && !isAdmin)}
-              onClick={deleteSelectedBills}
-            >
-              Delete selected
-            </button>
-            <button type="button" className="btn-link" onClick={toggleSelectMode}>
-              Cancel
-            </button>
-          </div>
-          {allBillsSelected && !isAdmin && (
-            <p className="muted bulk-select-hint">Only the group admin can delete every bill at once.</p>
-          )}
-        </div>
+        <BulkSelectBar
+          selectedCount={selectedIds.size}
+          adminOnlyDelete={allBillsSelected && !isAdmin}
+          onShare={() => shareBills(Array.from(selectedIds))}
+          onDelete={deleteSelectedBills}
+          onCancel={toggleSelectMode}
+        />
       )}
       {shareStatus && <p className="muted share-status">{shareStatus}</p>}
 
@@ -1465,155 +445,25 @@ export default function GroupView({ activeBillId = null, printable = true }) {
         </EmptyState>
       )}
 
-      <div className="bill-groups" onMouseMove={billNav.onListMouseMove}>
-        {billGroups.map((monthGroup) => (
-          <div key={monthGroup.key} className="bill-month-group">
-            <h3 className="bill-month-divider">{monthGroup.label}</h3>
-            {monthGroup.days.map((dayGroup) => (
-              <div key={dayGroup.key}>
-                <div className="bill-day-divider">{dayGroup.label}</div>
-                <ul className="card-list">
-                  {dayGroup.items.map((bill) => {
-                    const billLabel = (
-                      <span className="card-list-item-main">
-                        <span className="card-list-item-title">{bill.title}</span>
-                        {bill.note && <span className="card-list-item-note">{bill.note}</span>}
-                      </span>
-                    )
-                    // Undefined (not just zero) means "never touched this
-                    // bill in either direction" — computeSpendingTotals
-                    // only creates an entry for someone who paid and/or
-                    // had at least one item assigned, same convention as
-                    // the group's own overall balance.
-                    const mine = billPersonalTotals[bill.id]?.[myParticipantId]
-                    const net = mine ? Math.round((mine.paid - mine.consumed) * 100) / 100 : null
-                    const billAmount = (
-                      <span className="bill-amount-block">
-                        <span className="mono bill-amount-total">{format(billTotal(bill))}</span>
-                        {/* "Lent"/"borrowed" only means anything when there's
-                            someone else in the bill to lend to or borrow
-                            from — in the Personal space it's always just your
-                            own money, so this line never says anything a
-                            personal user doesn't already know. */}
-                        {group &&
-                          !group.is_personal &&
-                          showLentBorrowedStatus &&
-                          (net === null ? (
-                            <span className="bill-amount-status bill-amount-status-neutral">
-                              You are not involved
-                            </span>
-                          ) : net < 0 ? (
-                            <span className="bill-amount-status balance-negative">
-                              You borrowed <span className="balance-amount">{format(-net)}</span>
-                            </span>
-                          ) : (
-                            <span className="bill-amount-status balance-positive">
-                              You lent <span className="balance-amount">{format(net)}</span>
-                            </span>
-                          ))}
-                      </span>
-                    )
-                    const flatIndex = visibleBills.findIndex((b) => b.id === bill.id)
-                    const isFocused = billNav.active && !selectMode && flatIndex === billNav.focusedIndex
-                    return (
-                      <li
-                        key={bill.id}
-                        className={`bill-list-item${isFocused ? ' list-row-focused' : ''}`}
-                        ref={isFocused ? billNav.rowRef : null}
-                      >
-                        {editingBillId === bill.id ? (
-                          // Reuses .guest-rename-form's shape verbatim —
-                          // Categories already does the same rather than
-                          // this being its own bespoke form — with its own
-                          // border/padding/radius here matching
-                          // .bill-row-outer exactly (see styles.css) so
-                          // swapping into "renaming" and back doesn't shift
-                          // this row's size against its still-normal
-                          // siblings in the same list.
-                          <form
-                            className="guest-rename-form"
-                            onSubmit={(e) => {
-                              e.preventDefault()
-                              saveBillRename(bill.id)
-                            }}
-                          >
-                            <input
-                              value={editingBillTitle}
-                              onChange={(e) => setEditingBillTitle(e.target.value)}
-                              aria-label={`Rename ${bill.title}`}
-                              autoFocus
-                            />
-                            <button type="submit" className="btn-link">
-                              Save
-                            </button>
-                            <button type="button" className="btn-link" onClick={() => setEditingBillId(null)}>
-                              Cancel
-                            </button>
-                          </form>
-                        ) : selectMode ? (
-                          <label className="card-list-item bill-select-row">
-                            {billLabel}
-                            <span className="bill-row-right">
-                              {billAmount}
-                              <input
-                                type="checkbox"
-                                checked={selectedIds.has(bill.id)}
-                                onChange={() => toggleSelected(bill.id)}
-                              />
-                            </span>
-                          </label>
-                        ) : (
-                          (() => {
-                            const billBind = bindBillRow(bill)
-                            return (
-                              // One bordered rectangle for the whole row, same
-                              // shape as GroupGuestsSection's .guest-row-outer —
-                              // the ⋮ menu sits inside it, at the far right,
-                              // replacing what used to be a decorative chevron
-                              // that didn't actually do anything. It's a fixed
-                              // sibling of the swipe shell rather than nested
-                              // inside the sliding Link: its popover needs to
-                              // escape this row's own bounds, which it can't do
-                              // from inside a container that clips overflow to
-                              // slide the row.
-                              <div className="bill-row-outer">
-                                <div className="bill-row-shell">
-                                  <button type="button" className="item-row-delete-action" {...billBind.deleteButton}>
-                                    Remove
-                                  </button>
-                                  <Link
-                                    to={`/groups/${groupId}/bills/${bill.id}`}
-                                    className={`card-list-item ${String(bill.id) === activeBillId ? 'is-current' : ''}`}
-                                    aria-current={String(bill.id) === activeBillId ? 'page' : undefined}
-                                    {...billBind.row}
-                                  >
-                                    {billLabel}
-                                    <span className="bill-row-right">{billAmount}</span>
-                                  </Link>
-                                </div>
-                                <BillActionsMenu
-                                  billTitle={bill.title}
-                                  onRename={() => {
-                                    setEditingBillId(bill.id)
-                                    setEditingBillTitle(bill.title)
-                                  }}
-                                  onSelect={() => enterSelectModeWith(bill.id)}
-                                  onShare={() => shareBills([bill.id])}
-                                  onDelete={() => deleteBill(bill)}
-                                />
-                              </div>
-                            )
-                          })()
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
+      <GroupBillList
+        groupId={groupId}
+        group={group}
+        billGroups={billGroups}
+        visibleBills={visibleBills}
+        billNav={billNav}
+        activeBillId={activeBillId}
+        billPersonalTotals={billPersonalTotals}
+        myParticipantId={myParticipantId}
+        showLentBorrowedStatus={showLentBorrowedStatus}
+        selectMode={selectMode}
+        selectedIds={selectedIds}
+        onToggleSelected={toggleSelected}
+        onEnterSelectMode={enterSelectModeWith}
+        onShare={shareBills}
+        onDelete={deleteBill}
+        setError={setError}
+        refreshBills={refreshBills}
+      />
       <Pagination page={billsPage} setPage={setBillsPage} totalItems={filteredBills.length} pageSize={BILLS_PAGE_SIZE} />
 
       {/* Share settle-up + Export CSV both moved up into the page header

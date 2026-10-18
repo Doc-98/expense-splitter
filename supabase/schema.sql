@@ -417,6 +417,9 @@ create index bill_payers_member_id_idx on bill_payers (member_id);
 create index bills_paid_by_idx on bills (paid_by);
 create index payments_from_member_idx on payments (from_member);
 create index payments_to_member_idx on payments (to_member);
+-- Deleting a category sets these to null ("on delete set null").
+create index bills_category_id_idx on bills (category_id);
+create index items_category_id_idx on items (category_id);
 
 -- ============================================================================
 -- Row Level Security — every table is locked to "active [real-account]
@@ -531,16 +534,19 @@ create policy "members can add guests to their group" on group_members
 -- display_name/active/avatar_icon/claim_token — user_id and group_id never
 -- change directly. Deactivating a real member only happens through
 -- remove_group_member(), which checks for the admin and writes their
--- departure snapshot.
-create policy "members can update guests" on group_members
+-- departure snapshot. One policy for both, not two: Postgres evaluates
+-- every permissive policy on every row (see
+-- 20261018085615_member_update_policy_category_indexes.sql).
+create policy "members can update guests and their own membership" on group_members
   for update
-  using (user_id is null and public.is_group_member(group_id))
-  with check (user_id is null and public.is_group_member(group_id));
-
-create policy "members can update their own membership" on group_members
-  for update
-  using (user_id = (select auth.uid()) and public.is_group_member(group_id))
-  with check (user_id = (select auth.uid()));
+  using (
+    public.is_group_member(group_id)
+    and (user_id is null or user_id = (select auth.uid()))
+  )
+  with check (
+    (user_id is null and public.is_group_member(group_id))
+    or user_id = (select auth.uid())
+  );
 
 -- categories: open to any active member, same as guest management — this
 -- is shared group configuration, not the "only the admin can remove a
@@ -1317,6 +1323,108 @@ end;
 $$;
 
 -- ============================================================================
+-- Subscriptions (recurring_bills) generate their bills here, in the
+-- database: every hour on their own (pg_cron, scheduled at the end of this
+-- file) and for one group whenever it's opened. One transaction per run,
+-- each subscription locked while it's processed, so no occurrence is ever
+-- created twice; "today" is the date in Europe/Rome. See
+-- supabase/migrations/20261018085513_scheduled_subscriptions.sql.
+-- ============================================================================
+create extension if not exists pg_cron with schema pg_catalog;
+
+create function public.recurring_next_due(d date, frequency text, target_day integer)
+returns date
+language sql
+immutable
+set search_path = public
+as $$
+  select case frequency
+    when 'weekly' then d + 7
+    when 'monthly' then (
+      select m + (least(coalesce(target_day, extract(day from d)::int),
+                        extract(day from (m + interval '1 month' - interval '1 day'))::int) - 1)
+      from (select (date_trunc('month', d) + interval '1 month')::date as m) s
+    )
+    when 'yearly' then (
+      select m + (least(coalesce(target_day, extract(day from d)::int),
+                        extract(day from (m + interval '1 month' - interval '1 day'))::int) - 1)
+      from (select (date_trunc('month', d) + interval '1 year')::date as m) s
+    )
+  end
+$$;
+
+-- All groups when target_group_id is null (the hourly job), else just that
+-- one. Returns how many bills it created.
+create function public.generate_due_recurring_bills(target_group_id uuid default null)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  today date := (now() at time zone 'Europe/Rome')::date;
+  t record;
+  due date;
+  new_bill_id uuid;
+  new_item_id uuid;
+  occurrences integer;
+  created integer := 0;
+begin
+  for t in
+    select * from recurring_bills
+    where active
+      and next_due_date <= today
+      and (target_group_id is null or group_id = target_group_id)
+    order by id
+    for update skip locked
+  loop
+    due := t.next_due_date;
+    occurrences := 0;
+    -- The cap only guards against corrupted data looping forever.
+    while due is not null and due <= today and occurrences < 1000 loop
+      insert into bills (group_id, title, note, paid_by, category_id, default_buyer_ids,
+                         recurring_bill_id, created_by, created_at)
+      values (t.group_id, t.title, t.note, t.paid_by, t.category_id, t.split_member_ids,
+              t.id, t.created_by, due::timestamp at time zone 'Europe/Rome')
+      returning id into new_bill_id;
+
+      insert into items (bill_id, name, unit_price, quantity, total_price, category_id)
+      values (new_bill_id, t.title, t.amount, 1, t.amount, t.category_id)
+      returning id into new_item_id;
+
+      insert into item_shares (item_id, member_id, shares)
+      select distinct new_item_id, member_id, 1
+      from unnest(coalesce(t.split_member_ids, '{}'::uuid[])) as member_id;
+
+      due := public.recurring_next_due(due, t.frequency, t.day_of_month);
+      occurrences := occurrences + 1;
+    end loop;
+
+    update recurring_bills set next_due_date = due where id = t.id;
+    created := created + occurrences;
+  end loop;
+
+  return created;
+end;
+$$;
+
+-- What the app calls when someone opens a group: that group's due bills,
+-- for its members only.
+create function public.process_due_recurring_bills(target_group_id uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if target_group_id is null or not public.is_group_member(target_group_id) then
+    return 0;
+  end if;
+  return public.generate_due_recurring_bills(target_group_id);
+end;
+$$;
+
+-- ============================================================================
 -- API privileges. Nothing is callable signed out: every page is behind a
 -- login, and the functions that act "as the caller" assume there is one.
 -- Trigger functions aren't API endpoints at all (a trigger fires regardless
@@ -1354,6 +1462,17 @@ grant update (name) on groups to authenticated;
 
 revoke update on group_members from anon, authenticated;
 grant update (display_name, active, avatar_icon, claim_token) on group_members to authenticated;
+
+-- Only the hourly job runs the all-groups version of subscription
+-- generation; signed-in users get process_due_recurring_bills, which
+-- checks membership.
+revoke execute on function public.generate_due_recurring_bills(uuid) from authenticated;
+
+select cron.schedule(
+  'generate-due-subscriptions',
+  '5 * * * *',
+  $$select public.generate_due_recurring_bills()$$
+);
 
 -- ============================================================================
 -- Realtime: after running this file, go to

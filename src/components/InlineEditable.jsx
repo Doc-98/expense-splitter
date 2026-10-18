@@ -21,8 +21,8 @@ import { useEffect, useRef, useState } from 'react'
 // then just falls back to showing the unchanged `value` prop.
 //
 // `inputType` (default "text") is passed straight through to the input
-// while editing — e.g. "date" for a bill's date (see the .bill-date-row
-// in BillView.jsx), which gets the browser's native date picker instead
+// while editing — e.g. "date" for a bill's date (see the Date row
+// in BillDetails.jsx), which gets the browser's native date picker instead
 // of a plain text box, with `value`/`onSave` working in the input's own
 // "YYYY-MM-DD" format either way; the empty-reverts-always rule above
 // applies to that the same as any other value.

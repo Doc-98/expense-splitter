@@ -74,7 +74,7 @@ export function useLongPress({ delay = 500, moveTolerance = 10, vibrate = true }
       // for an element this is bound to. iOS Safari doesn't route its
       // equivalent callout through `contextmenu` at all; that half needs
       // a CSS `-webkit-touch-callout: none` on the element itself (see
-      // wherever `bind()` is actually used — e.g. GroupView.jsx's bill
+      // wherever `bind()` is actually used — e.g. GroupBillList.jsx's bill
       // rows), which this hook has no element of its own to attach.
       onContextMenu: (e) => e.preventDefault(),
     }),

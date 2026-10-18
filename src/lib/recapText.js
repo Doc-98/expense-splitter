@@ -102,8 +102,8 @@ export function formatSettlementRecap(groupName, transactions, members, formatMo
 // short, always-current summary in spirit (total spent, by category)
 // rather than a per-bill itemized transcript. Deliberately built from
 // `recap` (the same shape PrintablePersonalSpaceRecap takes, computed once
-// by GroupView.jsx from whatever's already loaded — see that component's
-// own comment for why this can't fetch anything on demand the way sharing
+// by buildPersonalSpaceRecap in groupBillActions.js from whatever the group
+// page has already loaded — see its own comment for why this can't fetch anything on demand the way sharing
 // one bill or a few selected ones does).
 export function formatPersonalSpaceRecap({ groupName, totalSpent, billCount, categoryRows }, formatMoney) {
   const lines = [`*${groupName}*`, '']

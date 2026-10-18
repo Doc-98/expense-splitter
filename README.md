@@ -197,6 +197,21 @@ nothing to mock beyond its own actual dependencies (see "Running the
 tests" for exactly how). `components/`/`pages/` are the JSX layer on
 top, reading from `lib/` rather than duplicating logic inline.
 
+**How a big page is put together.** The group page and the bill page are
+the two busiest screens, so each one is split the same way. The data and
+keeping it current (first paint, realtime changes, resyncs, caches) is a
+hook in `lib/`: `useGroupViewData.js` and `useBillData.js`. Groups of
+related changes are hooks too: `useBillFilters.js` (search and filters on
+the group page) and `useBillItemActions.js` (everything done to a bill's
+items). Each part of the screen is its own component: on the group page
+`BillSearchPanel`, `GroupBalanceSummary`, `NewBillForm`, `BulkSelectBar`
+and `GroupBillList`; on the bill page `BillDetails`, `SimpleBillAmount`
+and `AddItemForm`. The page file itself (`GroupView.jsx`, `BillView.jsx`)
+puts those together and keeps only what ties them to each other, such as
+paging and selecting bills, or the bill's own payers and date. Start
+reading a page there; follow a hook or component when you need its
+detail.
+
 **Why four different folders with the same `index.js` + `strategies/`
 shape.** `billCategorization/`, `bank-statement-parsing/`,
 `bankStatementColumns/`, and `receipt-parsing/` are this app's four
@@ -1253,10 +1268,22 @@ internally (state names, the `spending_thresholds` table, `lib/thresholds.js`)
 to avoid a database migration and a much wider rename for no visible
 benefit; only user-facing copy changed.
 
-Shows as a progress bar on **Your Stats** (`/stats`) once set — always
-compared to the *current* week or month (whichever the switch above picks),
+Shows as a progress bar on **Your Stats** (`/stats`) once set — compared
+to the *current* week or month (whichever the switch above picks),
 regardless of whatever period Your Stats' own selector shows, and always your own proportional share of what's
-been spent, never what you've fronted for anyone else.
+been spent, never what you've fronted for anyone else. Its own ‹ › arrows
+step back through past weeks or months (up to a year), and a small table
+underneath says how many of the last six each budget went over — measured
+against the budget as it is today, since only the current amount is
+stored.
+
+Each group's stats page has a **Your budgets** section too, for the
+budgets whose category that group has: the same this-week-or-month figure
+(still across every group, so it never disagrees with Your Stats), plus
+how much of it was spent in that group. It loads on its own, only if you
+have any budgets, and only fetches the current week or month.
+`src/lib/budgets.js` holds the maths both pages share;
+`src/components/BudgetBars.jsx` draws the bars on both.
 
 ## Period-over-period comparison
 
@@ -1287,11 +1314,12 @@ navigation](#keyboard-navigation).
 - **A shared default period** — every stats page opens on your saved default
   (out of the box, Month), set from Settings → Layout; it's one preference,
   not one per page — changing it there changes it everywhere.
-- **Where Budgets sits on Your Stats** — pinned to the very top or very
-  bottom of the page (never mid-page), since budgets are always this-month
-  regardless of the selector while everything else on the page moves with
-  it — or hidden altogether. A per-device choice, set from Settings →
-  Layout, no obviously-correct default.
+- **Where Budgets sits on the stats pages** — pinned to the very top or
+  very bottom of the page (never mid-page), since budgets follow their own
+  week or month regardless of the selector while everything else on the
+  page moves with it — or hidden altogether. One per-device choice for
+  both Your Stats and each group's page, set from Settings → Layout, no
+  obviously-correct default.
 - **Recent history loads first** — this year plus last year's bills load up
   front for an instant render; the rest backfills in the background. A small
   note shows if you page back (or check "All time") before that finishes.
@@ -1376,22 +1404,19 @@ Each subscription row has a "⋮" menu — **Edit**, **Pause**/**Resume**,
   genuinely valid (and, in a real group, at least one person is still
   selected to split with).
 
-There's no scheduled job anywhere in this app: `processDueRecurringBills()`
-runs whenever anyone opens the group and creates whatever's due — every
-missed occurrence in order if the group's gone quiet a while, not just the
-most recent one. A deliberate tradeoff against adding background
-infrastructure just for this; the honest cost is a bill appears when it's
-next generated, not exactly on its due date. Deleting a template asks
-whether to keep or delete the bills it's already generated.
-
-`computeDueOccurrences()` compares each template's `next_due_date` (a bare
-`"YYYY-MM-DD"` string straight out of Postgres) against local midnight
-today — it parses that string as local midnight itself (`` `${date}T00:00:00` ``),
-not via a bare `new Date(string)`, which JS parses as midnight *UTC*. Get
-that wrong and, in any timezone ahead of UTC, a template starting "today"
-silently doesn't fire its first occurrence until a day late (see
-`recurringBills.test.js`, which regression-tests this in a real subprocess —
-vitest's own worker pool doesn't honor a timezone change made mid-test).
+Due bills are made by the database, not the app:
+`generate_due_recurring_bills()` (`supabase/schema.sql`) runs every hour at
+five past, on its own, through Supabase's built-in scheduler (pg_cron), so a
+bill appears on its due day even if nobody opens the app. It creates every
+missed occurrence in order if one was somehow skipped, not just the most
+recent, with the same "the 31st lands on Feb 28, then back on Mar 31" rule
+(`recurring_next_due()`). It runs in one transaction and locks each
+subscription while it works, so two runs at once can never create the same
+bill twice. "Today" is the date in Europe/Rome, and each bill is dated
+midnight there. Opening a group also calls `process_due_recurring_bills()`
+for that group (members only), so a bill due since the last hourly run
+shows up straight away. Deleting a template asks whether to keep or delete
+the bills it's already generated.
 
 ## What a bill row shows
 
@@ -1419,12 +1444,13 @@ round-trip:
   exact value into either number below it.
 
 Opening a bill and coming back normally resets all of this — plain
-component state on `GroupView.jsx`, which unmounts on that round trip since
-bills live on their own route. **Sticky filters** (Settings → Groups →
-Display, off by default) opts into keeping it instead:
+component state on the group page (`src/lib/useBillFilters.js`), which
+unmounts on that round trip since bills live on their own route.
+**Sticky filters** (Settings → Groups → Display, off by default) opts into
+keeping it instead:
 `src/lib/groupFilterState.js` is a small in-memory-only cache (deliberately
 no `sessionStorage` mirror, unlike most of this app's other caches — a real
-page refresh should still clear it) that `GroupView.jsx` seeds its filter
+page refresh should still clear it) that `useBillFilters.js` seeds its filter
 state from on mount and writes back to on every change, only while the
 preference is on.
 
@@ -1443,7 +1469,8 @@ swallows the click that still follows the eventual pointerup by calling
 `event.preventDefault()` from its own `onClick` — since `Link`'s own click
 handler only navigates `if (!event.defaultPrevented)`, that's enough to
 stop a long press from *also* navigating into the bill, no extra
-navigation-blocking logic needed on `GroupView.jsx`'s side.
+navigation-blocking logic needed on the bill list's side
+(`GroupBillList.jsx`).
 
 For wiping a group's *entire* bill history in one shot, Group Settings'
 **Danger Zone → Delete all bills** is the one bill-deleting action that's
@@ -1686,7 +1713,8 @@ group's — the underlying recap is just a different shape, since there's
 nobody to owe or be owed. `formatPersonalSpaceRecap()`/
 `PrintablePersonalSpaceRecap` share total spent, bill count, and a by-category
 breakdown, built entirely from `bills`/`categories` already sitting in
-`GroupView.jsx`'s own state (`GROUP_BILLS_SELECT` already carries each
+the group page's own state (`buildPersonalSpaceRecap()` in
+`src/lib/groupBillActions.js`; `GROUP_BILLS_SELECT` already carries each
 item's `total_price`/`category_id`) rather than a fresh fetch the way
 sharing one bill or a few selected ones does — `ShareButton`'s `getText` is
 called synchronously, and "Download as PDF" needs its printable content
@@ -1866,8 +1894,6 @@ same list, plus what's in progress.
   simple lookup
 - True multi-currency support (conversion within a bill/group), distinct
   from today's display-only currency picker
-- A scheduled/background job for subscriptions, instead of the current
-  open-the-app trigger
 - More avatar icons added to the picker over time, beyond today's 16
 - Let people upload their own SVG and turn it into an avatar icon, instead
   of picking only from the built-in set
@@ -1888,16 +1914,15 @@ same list, plus what's in progress.
   `ReceiptParserStrategy` shape
 - A subscription covers one payer and a fixed split only — switch a
   specific generated occurrence to Multiple payers by hand if needed
-- Subscriptions generate on open, not on a schedule, so they can appear
-  "late"
+- Subscriptions follow one time zone (Europe/Rome) for "today", whoever's
+  phone is in another
 - Claim-guest links trust possession of the link, same model as the general
   group invite link
 - PDF export goes through the browser's print dialog, not a one-tap download
-- Budgets only cover the current week or month, no history view
+- A budget's history is measured against today's amount, since a change
+  to a budget isn't recorded
 - A snapshot recorded before category tracking existed has no category
   breakdown for its days, only the original totals
-- The budget indicator only shows on Your Stats, not any single group's own
-  stats page
 - Cross-group category merging can rarely split into two entries if a
   category's exact casing changes elsewhere *after* a budget's been saved
   for it — re-saving it under the new casing fixes it
@@ -1914,7 +1939,10 @@ same list, plus what's in progress.
   goes through the `join_group_by_code()` Postgres function so `groups`
   itself doesn't need to be publicly readable.
 - None of the database functions can be called signed out, and trigger
-  functions can't be called through the API at all. Signed-in users can
+  functions can't be called through the API at all. Neither can
+  `generate_due_recurring_bills()`, which makes every group's due
+  subscription bills: only the hourly scheduled job runs it, and the app
+  goes through `process_due_recurring_bills()`, which checks membership. Signed-in users can
   call the rest, each of which checks group membership (or admin rights)
   itself.
 - Writes are narrowed by column, not just by row: a member can only rename

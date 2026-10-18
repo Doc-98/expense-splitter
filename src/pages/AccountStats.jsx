@@ -15,7 +15,15 @@ import { overallBalanceFrom, totalsByBill } from '../lib/accountStatsMath'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { accountStatsCache } from '../lib/accountStatsCache'
 import { getStatsPreferences } from '../lib/statsPreferences'
-import { monthlyToDisplayAmount, budgetComparisonRange } from '../lib/budgetPeriod'
+import { budgetComparisonRange } from '../lib/budgetPeriod'
+import {
+  budgetRows,
+  budgetTrackRecord,
+  describeTrackRecord,
+  makeSpendForRange,
+  BUDGET_HISTORY_MAX_STEPS,
+  BUDGET_TRACK_RECORD_PERIODS,
+} from '../lib/budgets'
 import {
   getPeriodRange,
   filterByDateRange,
@@ -35,6 +43,7 @@ import BackButton from '../components/BackButton'
 import { LineChartIcon, PieChartIcon } from '../components/icons'
 import { StatsSkeleton } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
+import BudgetBars from '../components/BudgetBars'
 
 function monthKey(dateStr) {
   const d = new Date(dateStr)
@@ -75,6 +84,9 @@ export default function AccountStats() {
   // from Settings → Profile now, not from any control on this page itself.
   const [thresholdsPosition] = useState(() => getStatsPreferences().thresholdsPosition)
   const [budgetPeriod] = useState(() => getStatsPreferences().budgetPeriod)
+  // Which week or month the Budgets section shows: 0 is the current one,
+  // -1 the one before, and so on (its own ‹ › arrows, not the page's).
+  const [budgetOffset, setBudgetOffset] = useState(0)
   const [error, setError] = useState(null)
   // 'loading' until the background backfill (see load() below) finishes,
   // 'complete' once every one of my groups' full history is in rawBills,
@@ -268,12 +280,6 @@ export default function AccountStats() {
   const { start, end, label, yearLabel } = getPeriodRange(granularity, offset)
   const { bills, items, itemShares } = filterByDateRange(rawBills, rawItems, rawShares, start, end)
 
-  // Budgets are always compared against their own fixed period — the
-  // current calendar week or month, whichever Settings → Budgets has set
-  // (see lib/budgetPeriod.js) — independent of whatever period this page's
-  // own selector is showing above.
-  const budgetRange = budgetComparisonRange(budgetPeriod)
-  const budgetFiltered = filterByDateRange(rawBills, rawItems, rawShares, budgetRange.start, budgetRange.end)
   const myParticipantIds = new Set(myParticipantByGroup.values())
   const categoryNameById = new Map(rawCategories.map((c) => [c.id, c.name]))
   const categoryColorByKey = new Map(mergeCategoriesByName(rawCategories).map((c) => [c.name.toLowerCase(), c.color]))
@@ -290,35 +296,25 @@ export default function AccountStats() {
     )
   }
 
-  const myCategorySpend = mergeCategorySpend(
-    computeMyCategorySpend({
-      bills: budgetFiltered.bills,
-      items: budgetFiltered.items,
-      itemShares: budgetFiltered.itemShares,
-      myParticipantIds,
-      categoryNameById,
-    }),
-    snapshotCategorySpendForRange(budgetRange.start, budgetRange.end)
-  )
-  const thresholdRows = thresholds
-    .map((t) => {
-      const key = t.category_name.trim().toLowerCase()
-      const spent = myCategorySpend[key]?.amount || 0
-      // t.amount is always the raw monthly figure stored in
-      // spending_thresholds — converted to whatever this device currently
-      // displays (and, above, whatever window `spent` was just measured
-      // over) so the two always move together. See lib/budgetPeriod.js.
-      const amount = monthlyToDisplayAmount(Number(t.amount), budgetPeriod)
-      return {
-        key,
-        name: t.category_name,
-        color: categoryColor(categoryColorByKey.get(key)),
-        spent,
-        amount,
-        over: spent > amount,
-      }
-    })
-    .sort((a, b) => a.name.localeCompare(b.name))
+  // Budgets follow their own period, not the selector above: the week or
+  // month Settings → Budgets has set (lib/budgetPeriod.js), the current one
+  // unless the Budgets section's own arrows have stepped back. The track
+  // record always looks at the weeks or months before the current one.
+  const spendForRange = makeSpendForRange({
+    bills: rawBills,
+    items: rawItems,
+    itemShares: rawShares,
+    myParticipantIds,
+    categoryNameById,
+    snapshots,
+  })
+  const budgetRange = budgetComparisonRange(budgetPeriod, budgetOffset)
+  const thresholdRows = budgetRows(thresholds, spendForRange(budgetRange), budgetPeriod).map((row) => ({
+    ...row,
+    color: categoryColor(categoryColorByKey.get(row.key)),
+  }))
+  const trackRecord = budgetTrackRecord(thresholds, spendForRange, budgetPeriod)
+  const budgetUnit = budgetPeriod === 'week' ? 'week' : 'month'
 
   const showMonthly = granularity === 'all' || granularity === 'year'
   const monthly = {}
@@ -511,32 +507,55 @@ export default function AccountStats() {
   const thresholdsSection = thresholdRows.length > 0 && (
     <section className="stats-section">
       <h2 className="settings-section-title">Budgets</h2>
-      <div className="stats-bars">
-        {thresholdRows.map((t) => (
-          <div key={t.key} className="stats-bar-row">
-            <span className="stats-bar-label">
-              <span className="category-dot" style={{ background: t.color }} />
-              {t.name}
-            </span>
-            <div className="stats-bar-track">
-              <div
-                className={`stats-bar-fill ${t.over ? 'over-budget' : ''}`}
-                style={{
-                  width: `${Math.min(100, (t.spent / t.amount) * 100)}%`,
-                  background: t.over ? undefined : t.color,
-                }}
-              />
-            </div>
-            <span className={`mono threshold-bar-value ${t.over ? 'balance-negative' : ''}`}>
-              <span className="stats-bar-amount">{format(t.spent)}</span> /{' '}
-              <span className="stats-bar-amount">{format(t.amount)}</span>
-            </span>
-          </div>
-        ))}
+      <div className="time-range-nav">
+        <button
+          type="button"
+          className="btn-icon"
+          onClick={() => setBudgetOffset((o) => o - 1)}
+          disabled={budgetOffset <= -BUDGET_HISTORY_MAX_STEPS[budgetPeriod]}
+          aria-label={`Previous ${budgetUnit}`}
+        >
+          ‹
+        </button>
+        <span className="time-range-label-stack">
+          {budgetRange.yearLabel && <span className="time-range-year mono">{budgetRange.yearLabel}</span>}
+          <span className="time-range-label">{budgetRange.label}</span>
+        </span>
+        <button
+          type="button"
+          className="btn-icon"
+          onClick={() => setBudgetOffset((o) => Math.min(0, o + 1))}
+          disabled={budgetOffset >= 0}
+          aria-label={`Next ${budgetUnit}`}
+        >
+          ›
+        </button>
       </div>
+      <BudgetBars rows={thresholdRows} />
+      <table className="stats-table">
+        <thead>
+          <tr>
+            <th>Budget</th>
+            <th>
+              Last {BUDGET_TRACK_RECORD_PERIODS} {budgetUnit}s
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {thresholdRows.map((t) => (
+            <tr key={t.key}>
+              <td>{t.name}</td>
+              <td className={trackRecord[t.key] > 0 ? 'balance-negative' : undefined}>
+                {describeTrackRecord(trackRecord[t.key], budgetPeriod)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       <p className="muted stats-note">
-        Always {budgetPeriod === 'week' ? 'the current week (Monday–Sunday)' : 'this calendar month'},
-        and always your own share — not scoped to the period selected above. Manage budgets, or
+        {budgetPeriod === 'week' ? 'Weeks run Monday–Sunday. ' : ''}Always your own share, for the{' '}
+        {budgetUnit} picked here rather than the page&rsquo;s own period; past {budgetUnit}s are
+        compared with each budget as it is today. Manage budgets, or
         switch between weekly and monthly, from <strong>Settings → Budgets</strong>; where this
         section sits on the page is set from <strong>Settings → Layout</strong>.
       </p>

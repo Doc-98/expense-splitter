@@ -12,7 +12,7 @@ const DEFAULTS = {
   showQuickStats: true,
   // A bill row's own "You lent …" / "You borrowed …" / "You are not
   // involved" line — already hidden in the Personal space regardless
-  // (see GroupView.jsx), since it never says anything there a personal
+  // (see GroupBillList.jsx), since it never says anything there a personal
   // user doesn't already know.
   showLentBorrowedStatus: true,
   // Off by default — the existing "opening a bill clears your filters"
@@ -23,12 +23,12 @@ const DEFAULTS = {
   // groupFilterState.js) instead of resetting them the moment the page
   // remounts.
   stickyFilters: false,
-  // The "Split with" avatar circles — BillView.jsx's own default-split row
+  // The "Split with" avatar circles — BillDetails.jsx's own default-split row
   // plus each item's in ItemRow.jsx. 'small' is the size these launched
   // at (see AVATAR_SIZE_SPECS below); global rather than per-bill/per-item,
   // same reasoning as the toggles above.
   avatarSize: 'small',
-  // GroupView.jsx's own "You owe X" / "X owes You" balance lines, right
+  // GroupBalanceSummary.jsx's "You owe X" / "X owes You" balance lines, right
   // under the group title — true colors the whole line red/green (You
   // owe/You're owed), false leaves the line in the ordinary text color
   // and colors only the amount. Renamed from colorWholeBalanceLine (the

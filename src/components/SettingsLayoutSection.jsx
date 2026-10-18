@@ -157,7 +157,7 @@ export default function SettingsLayoutSection() {
       <div className={openPreview === 'budgetsPosition' ? 'is-open' : ''}>
         <div className="settings-row">
           <button type="button" className="settings-row-label-btn" onClick={() => toggleLabel('budgetsPosition')}>
-            Budgets position on Your Stats
+            Budgets position on stats pages
             <ChevronIcon size={14} className="settings-row-chevron" />
           </button>
         </div>
@@ -584,7 +584,7 @@ function BudgetsPositionPreview({ position, format }) {
     return (
       <div className="settings-preview-stats-mock">
         {rest}
-        <p className="settings-preview-empty-note">Not shown on Your Stats at all.</p>
+        <p className="settings-preview-empty-note">Not shown on the stats pages at all.</p>
       </div>
     )
   }

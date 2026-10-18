@@ -7,7 +7,7 @@ import { ChevronIcon, TrashIcon } from './icons'
 import { categoryColor } from '../lib/categoryPalette'
 
 // onUpdate(field, value) is called with one of 'name' | 'unit_price' |
-// 'quantity' | 'total_price' and the raw new value — BillView.jsx's
+// 'quantity' | 'total_price' and the raw new value — useBillItemActions.js's
 // updateItemField() is the one place that knows how the other two money
 // fields reconcile for each case (see the comment there). This component
 // only validates that what was typed is well-formed at all (non-empty

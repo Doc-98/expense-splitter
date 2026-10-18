@@ -39,7 +39,7 @@ export async function fetchBillsForGroups(supabase, groupIds, options) {
 // regardless of how much of it billsData actually covers — this function
 // only ever derives from whatever bills it's handed, which used to make it
 // an easy way to compute a *wrong* balance from a partial/windowed fetch
-// (see loadRecentBillsForFirstPaint's own comment in GroupView.jsx for the
+// (see loadRecentBillsForFirstPaint's own comment in useGroupViewData.js for the
 // bug that actually caused). Safe to still call this with a windowed bill
 // list for a fast preview — billPersonalTotals/week/monthTotal were never
 // the problem, only the balance was.

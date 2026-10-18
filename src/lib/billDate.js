@@ -2,7 +2,7 @@
 // as the bill's date everywhere in the app (sorting, month/day grouping,
 // stats), including for imported bills, whose `created_at` is deliberately
 // set to the historical date rather than the moment the import ran. Editing
-// it after the fact (see the click-to-edit date in BillView.jsx) is
+// it after the fact (see the click-to-edit date in BillDetails.jsx) is
 // consistent with that existing convention, not a new one — no migration
 // needed, just a plain UPDATE on the column that was already doing this job.
 
