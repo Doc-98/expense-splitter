@@ -5,7 +5,7 @@ name: Release
 # WHATS_NEW entries as its notes — a permanent changelog, since WHATS_NEW in
 # the app is replaced each release. See scripts/release.mjs and
 # src/lib/releaseNotes.js. It also creates any missing release from
-# scripts/release-history.json (PRs #1–#66, from before this existed). A
+# scripts/release-history.json (PRs #1–#67, from before this existed). A
 # push that isn't a squash-merged PR, or a re-run, creates nothing new.
 on:
   push:
@@ -32,4 +32,9 @@ jobs:
           node-version: 22
       - run: node scripts/release.mjs
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The built-in token can't create a tag on a commit that changes a
+          # file under .github/workflows (#35, #53, #67 so far); the script
+          # skips those with a warning. A RELEASE_TOKEN secret, a
+          # fine-grained token for this repository with Contents and
+          # Workflows set to read and write, can, and is used when present.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}

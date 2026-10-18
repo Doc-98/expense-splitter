@@ -1160,10 +1160,17 @@ as its notes. Entries the list already had before the merge are left out, as
 they belong to an earlier release; a PR that doesn't touch the list gets "No
 changes you would notice in the app." That makes the releases page the full
 changelog the in-app list can't be, so write `WHATS_NEW` for each PR as its
-own release notes. Releases for PRs #1–#66, merged before this workflow
-existed, were written by hand from each PR's description, since `WHATS_NEW`
+own release notes. Releases for PRs #1–#67, merged before this workflow
+first ran successfully, were written by hand from each PR's description, since `WHATS_NEW`
 only started at #39 and wasn't always updated; they live in `scripts/release-history.json`, and the workflow creates any of
 them that's missing (all of them, the first time it runs).
+
+The workflow's built-in token isn't allowed to create a tag on a commit that
+changes a file under `.github/workflows/` (#35, #53 and #67 so far). The script
+skips those with a warning rather than failing the run. A `RELEASE_TOKEN`
+repository secret (a fine-grained token for this repository with Contents and
+Workflows set to read and write) is used instead when present, and can create
+them: add it, then re-run the Release workflow.
 
 ## Add to home screen
 
