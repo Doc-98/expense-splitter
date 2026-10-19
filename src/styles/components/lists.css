@@ -295,6 +295,17 @@
   font-size: var(--text-md);
 }
 .member-list-item.former { border-style: dashed; }
+/* Members and Guests rows that start with the person's avatar in this
+   group (MemberAvatar.jsx). The row card holds the row itself and, folded
+   underneath (.xwrap, opened by .is-open), the avatar picker. */
+.member-list-item.has-avatar { display: block; padding: 6px 6px 6px 10px; }
+.member-row { display: flex; align-items: center; gap: 12px; }
+.member-row-name { flex: 1; min-width: 0; }
+.member-row-avatar.is-static { cursor: default; }
+.member-row-avatar.is-editing { border-color: var(--accent); color: var(--accent-dark); box-shadow: 0 0 0 2px var(--accent-light); }
+.member-avatar-panel { padding: 4px 4px 6px; }
+.member-avatar-panel .avatar-picker { margin: 4px 0 6px; }
+.member-avatar-hint { font-size: var(--text-xs); margin: 0; }
 .member-list-actions { display: flex; gap: 10px; }
 .guest-rename-form { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; }
 .guest-rename-form input { flex: 1; min-width: 0; }
@@ -336,6 +347,11 @@
   font-size: var(--text-md);
   touch-action: pan-y;
 }
+/* With the avatar first: a little less padding, more room between it and
+   the name. The picker folds out under the row card. */
+.guest-row-name.has-avatar { gap: 12px; padding: 6px 14px 6px 10px; }
+.guest-row-outer > .row-menu-wrap { align-self: center; }
+.guest-row > .xwrap .member-avatar-panel { padding: 4px 4px 2px; }
 .guest-row > .guest-rename-form {
   background: var(--surface);
   border: 1px solid var(--border);

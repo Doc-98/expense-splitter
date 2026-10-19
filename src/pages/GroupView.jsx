@@ -18,6 +18,7 @@ import ShareButton from '../components/ShareButton'
 import Pagination from '../components/Pagination'
 import BillSearchPanel from '../components/BillSearchPanel'
 import GroupBalanceSummary from '../components/GroupBalanceSummary'
+import GroupAvatarClashNotice from '../components/GroupAvatarClashNotice'
 import NewBillForm from '../components/NewBillForm'
 import BulkSelectBar from '../components/BulkSelectBar'
 import GroupBillList from '../components/GroupBillList'
@@ -50,7 +51,8 @@ export default function GroupView({ activeBillId = null, printable = true }) {
   // Deleting bills asks through the app's own sheet; while it's up, Escape
   // only cancels it (the page's own Escape handlers pause).
   const { confirm, sheetProps: confirmSheet, isConfirming } = useConfirm()
-  const { showQuickStats, showLentBorrowedStatus, stickyFilters, highlightFullBalanceLine } = getGroupViewPreferences()
+  const { showQuickStats, showLentBorrowedStatus, stickyFilters, highlightFullBalanceLine, netBalanceStyle } =
+    getGroupViewPreferences()
 
   const {
     group,
@@ -359,6 +361,15 @@ export default function GroupView({ activeBillId = null, printable = true }) {
         !error && <Skeleton className="skeleton-page-title" />
       )}
 
+      {group && !group.is_personal && (
+        <GroupAvatarClashNotice
+          groupId={groupId}
+          members={allMembers}
+          myParticipantId={myParticipantId}
+          isAdmin={Boolean(isAdmin)}
+        />
+      )}
+
       {!group?.is_personal && settlement && (
         <GroupBalanceSummary
           groupId={groupId}
@@ -366,6 +377,7 @@ export default function GroupView({ activeBillId = null, printable = true }) {
           members={allMembers}
           myParticipantId={myParticipantId}
           highlightFullBalanceLine={highlightFullBalanceLine}
+          netBalanceStyle={netBalanceStyle}
         />
       )}
 

@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import GroupGeneralSection from './GroupGeneralSection'
-import { avatarIconCache } from '../lib/avatarIconCache'
 
 // vi.hoisted() rather than a plain top-level `const` — vi.mock() calls are
 // hoisted above the rest of the file (including imports), so a factory
@@ -11,47 +10,28 @@ import { avatarIconCache } from '../lib/avatarIconCache'
 // hoists its *creation* right along with the mocks that reference it,
 // which is what lets `mockFrom` below be both configured per-test and
 // handed to the mocked supabase client.
-const { mockFrom, mockNavigate, mockRoster } = vi.hoisted(() => ({
-  mockFrom: vi.fn(),
-  mockNavigate: vi.fn(),
-  mockRoster: vi.fn(),
-}))
+const { mockFrom, mockNavigate } = vi.hoisted(() => ({ mockFrom: vi.fn(), mockNavigate: vi.fn() }))
 
 vi.mock('../supabaseClient', () => ({
   supabase: { from: mockFrom },
 }))
 
-// This component only ever calls useParams() (for groupId), useNavigate()
-// (to bounce back if the group's gone — see loadGroup) and useAuth() (for
-// user.id/displayName) — neither a real Router nor a real AuthProvider is
-// needed (AuthProvider itself talks to supabase.auth on mount, which would
-// just be more to mock for no benefit here), so both are replaced outright
-// rather than wrapped.
+// This component only ever calls useParams() (for groupId) and
+// useNavigate() (to bounce back if the group's gone — see loadGroup), so
+// no real Router is needed.
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ groupId: 'group-1' }),
   useNavigate: () => mockNavigate,
-  useSearchParams: () => [new URLSearchParams()],
-}))
-// The rest of the group, for leaving taken icons out of the picker.
-vi.mock('../lib/members', () => ({ fetchAllGroupMembers: mockRoster }))
-vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1' }, displayName: 'Marco' }),
 }))
 
 // Mirrors the exact chain shapes GroupGeneralSection.jsx actually calls
-// (see loadGroup/loadMember/saveName/saveAvatarIcon there) rather than a
+// (see loadGroup/saveName there) rather than a
 // generic catch-all query builder — easier to read, and just as easy to
 // extend if a future test here needs a chain this doesn't cover yet.
 function groupsTable() {
   return {
     select: () => ({ eq: () => ({ single: () => Promise.resolve(groupsSelectResult) }) }),
     update: () => ({ eq: () => Promise.resolve(groupsUpdateResult) }),
-  }
-}
-function membersTable() {
-  return {
-    select: () => ({ eq: () => ({ eq: () => ({ single: () => Promise.resolve(membersSelectResult) }) }) }),
-    update: () => ({ eq: () => Promise.resolve(membersUpdateResult) }),
   }
 }
 
@@ -61,23 +41,15 @@ function membersTable() {
 // mockImplementation each time.
 let groupsSelectResult
 let groupsUpdateResult
-let membersSelectResult
-let membersUpdateResult
 
 beforeEach(() => {
   groupsSelectResult = { data: { name: 'Beach Trip' } }
   groupsUpdateResult = { error: null }
-  membersSelectResult = { data: { id: 'member-1', avatar_icon: null } }
-  mockRoster.mockReset().mockResolvedValue([])
-  membersUpdateResult = { error: null }
-  mockFrom.mockImplementation((table) => (table === 'groups' ? groupsTable() : membersTable()))
+  mockFrom.mockImplementation((table) => {
+    if (table !== 'groups') throw new Error(`unexpected table: ${table}`)
+    return groupsTable()
+  })
   mockNavigate.mockReset()
-  // A previous test's saveAvatarIcon success would otherwise leave this
-  // group's icon cached in the shared, module-level avatarIconCache —
-  // GroupGeneralSection seeds its initial avatarIcon state straight from
-  // that cache, so a later test would start from stale state instead of
-  // this file's own fresh membersSelectResult above.
-  avatarIconCache.clear()
 })
 
 describe('GroupGeneralSection', () => {
@@ -138,48 +110,5 @@ describe('GroupGeneralSection', () => {
 
     expect(await screen.findByText('network error')).toBeInTheDocument()
     expect(input).toHaveValue('Mountain Trip') // draft survives the failed save
-  })
-
-  it('picks an avatar icon, saving it optimistically', async () => {
-    const user = userEvent.setup({ delay: null })
-    render(<GroupGeneralSection />)
-
-    await screen.findByPlaceholderText('Group name') // wait for the initial loads to settle
-    await user.click(screen.getByRole('button', { name: 'Choose your avatar' }))
-    await user.click(screen.getByRole('button', { name: 'Bomb' }))
-
-    // Optimistic: the tile lights up before the (mocked) request even
-    // resolves, matching saveAvatarIcon's own setAvatarIcon-before-await.
-    expect(screen.getByRole('button', { name: 'Bomb' })).toHaveClass('is-selected')
-    await waitFor(() => expect(mockFrom).toHaveBeenCalledWith('group_members'))
-  })
-
-  it('reverts the icon and shows an error when saving it fails', async () => {
-    const user = userEvent.setup({ delay: null })
-    render(<GroupGeneralSection />)
-
-    await screen.findByPlaceholderText('Group name')
-    await user.click(screen.getByRole('button', { name: 'Choose your avatar' }))
-    membersUpdateResult = { error: { message: 'could not save icon' } }
-    await user.click(screen.getByRole('button', { name: 'Bomb' }))
-
-    expect(await screen.findByText('could not save icon')).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Bomb' })).not.toHaveClass('is-selected'))
-  })
-
-  it("leaves out icons someone else in the group already has", async () => {
-    mockRoster.mockResolvedValue([
-      { id: 'member-1', name: 'Marco', active: true, avatarIcon: null },
-      { id: 'member-2', name: 'Dado', active: true, avatarIcon: 'bomb' },
-      { id: 'member-3', name: 'Ex', active: false, avatarIcon: 'duck' },
-    ])
-    const user = userEvent.setup({ delay: null })
-    render(<GroupGeneralSection />)
-
-    await screen.findByPlaceholderText('Group name')
-    await user.click(screen.getByRole('button', { name: 'Choose your avatar' }))
-    await screen.findByText(/already has aren't shown/)
-    expect(screen.queryByRole('button', { name: 'Bomb' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Duck' })).toBeInTheDocument()
   })
 })

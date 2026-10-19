@@ -11,7 +11,7 @@ const MEMBERS = [
   { id: 'c', name: 'Carol' },
 ]
 
-function renderSummary(settlement) {
+function renderSummary(settlement, netBalanceStyle) {
   return render(
     <MemoryRouter>
       <CurrencyProvider>
@@ -21,13 +21,14 @@ function renderSummary(settlement) {
           members={MEMBERS}
           myParticipantId="me"
           highlightFullBalanceLine
+          netBalanceStyle={netBalanceStyle}
         />
       </CurrencyProvider>
     </MemoryRouter>
   )
 }
 
-const netLine = () => screen.getByText(/Net balance/)
+const netLine = () => screen.getByText(/Net balance/).closest('p')
 
 describe('GroupBalanceSummary net balance', () => {
   it('sums what you are owed from several people', () => {
@@ -77,5 +78,34 @@ describe('GroupBalanceSummary net balance', () => {
     renderSummary([{ from: 'b', to: 'c', amount: 100 }])
     expect(screen.queryByText(/Net balance/)).not.toBeInTheDocument()
     expect(screen.getByText(/all settled up/)).toBeInTheDocument()
+  })
+
+  it('puts "Net balance:" in bold above the debts by default', () => {
+    renderSummary([
+      { from: 'a', to: 'me', amount: 10 },
+      { from: 'b', to: 'me', amount: 4.5 },
+    ])
+    expect(screen.getByText('Net balance:').tagName).toBe('STRONG')
+    expect(netLine()).toBe(document.querySelector('.balance-summary').firstElementChild)
+  })
+
+  it('can show the total under a line after the debts, or as a small footnote, or not at all', () => {
+    const lines = [
+      { from: 'a', to: 'me', amount: 10 },
+      { from: 'me', to: 'b', amount: 25 },
+    ]
+    const { unmount } = renderSummary(lines, 'total')
+    const total = document.querySelector('.balance-net-total')
+    expect(total).toHaveTextContent(/Net\s*you owe €15\.00/)
+    expect(total).toBe(document.querySelector('.balance-summary').lastElementChild)
+    unmount()
+
+    const second = renderSummary(lines, 'note')
+    expect(document.querySelector('.balance-net-note')).toHaveTextContent("Overall you owe €15.00")
+    expect(document.querySelector('.balance-net-note .mono')).toHaveClass('balance-negative')
+    second.unmount()
+
+    renderSummary(lines, 'off')
+    expect(screen.queryByText(/Net|Overall/)).not.toBeInTheDocument()
   })
 })

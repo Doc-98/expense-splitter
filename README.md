@@ -486,7 +486,7 @@ call this component still makes on its own. Two other things worth
 knowing if you're extending this one or writing something similar:
 
 - `groupRosterCache` (a real, module-level LRU cache — same kind as
-  `avatarIconCache` in `GroupGeneralSection.test.jsx`) is left real rather
+  `avatarIconCache`, which Settings > Profile uses) is left real rather
   than mocked, and cleared in `beforeEach` — a component that seeds its
   initial state from a cache like this is worth a test that pre-populates
   it and asserts the seeded value renders *before* the mocked fetch
@@ -1005,7 +1005,9 @@ long scroll: **Profile** (display name, avatar, currency), **Groups** (every
 group you're in, with a way to leave one directly, plus Sticky filters),
 **Layout** (every per-device display preference — theme, the color-blind
 category palette, default stats period, where Budgets sits, group-page
-display toggles, whether a bill's items show their category under each item
+display toggles, where your net balance in a group shows (above the debts,
+as a total under them, as a small footnote, or not at all), whether a bill's
+items show their category under each item
 or grouped under a heading per category with subtotals — most with a small
 live preview of what the setting changes), **Budgets**, **Scan**, **How to
 Use**, **Updates**, and **About**. **Sign Out** sits at the bottom of the nav,
@@ -1102,6 +1104,25 @@ personal space has exactly one member (you) forever, with no invite code
 ever surfaced to change that (see `is_personal` on the `groups` table), so
 neither tab is offered there at all rather than existing and showing
 nothing.
+
+### Avatars in a group
+
+Every row in Members and Guests starts with that person's avatar in this
+group: the circle bills show for them, so you can tell who's who.
+Tapping it, or **Choose avatar** in the row's ⋮ menu, opens the picker
+under the row (`MemberAvatar.jsx`, `useMemberAvatars.js`). You can change
+your own and any guest's; the admin can change everyone's, through
+`set_member_avatar()`. A member's "nothing chosen" tile is their account
+default from Settings → Profile; a guest's is their initial. The picker
+leaves out avatars someone else in the group already has.
+
+Two people still "look the same" when they share an icon, or have no icon
+and the same initial (`lib/avatarClashes.js`). The group page then says so
+in a small card with the two circles (`GroupAvatarClashNotice.jsx`), only
+to someone who can fix it: the people involved, anyone when a guest is
+involved, and the admin. **Pick avatars** opens Group settings on that
+person's row with the picker open (`?section=…&avatar=…`); × hides it on
+this device until the set of people involved changes.
 
 Danger Zone has three actions, not all shown to everyone:
 
@@ -1948,7 +1969,8 @@ same list, plus what's in progress.
 - Writes are narrowed by column, not just by row: a member can only rename
   a group (never change its admin, invite code, or personal flag directly),
   can edit guests but no other real member's membership, and can only
-  change their own avatar in a group. Joining, leaving, claiming a guest,
+  change their own avatar in a group (the admin can change anyone's
+  avatar there, and nothing else, through `set_member_avatar()`). Joining, leaving, claiming a guest,
   and admin changes all go through the functions above — see
   `supabase/migrations/20260925040000_security_hardening.sql`.
 - Supabase's leaked-password protection (checking new passwords against

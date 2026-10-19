@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useCurrency } from '../context/CurrencyContext'
 import { SettleIcon, ReceiptIcon } from './icons'
+import NetBalanceLine from './NetBalanceLine'
 
 // A real group's "where do I stand" block on the group page: the debts
 // that involve you, then Settle up / Record payment / History. Rendered
@@ -12,6 +13,7 @@ export default function GroupBalanceSummary({
   members,
   myParticipantId,
   highlightFullBalanceLine,
+  netBalanceStyle = 'top',
 }) {
   const { format } = useCurrency()
   // Settlement's own from/to are member ids, same as everywhere else this
@@ -25,8 +27,10 @@ export default function GroupBalanceSummary({
   // simplified debts keep each person's net unchanged, so this is the same
   // figure get_group_balances() holds for you; rounded to the cent against
   // float drift from adding amounts.
-  const net = Math.round(myBalanceLines.reduce((sum, t) => sum + (t.to === myParticipantId ? t.amount : -t.amount), 0) * 100) / 100
-  const netColorClass = net > 0 ? 'balance-positive' : net < 0 ? 'balance-negative' : ''
+  const net =
+    Math.round(myBalanceLines.reduce((sum, t) => sum + (t.to === myParticipantId ? t.amount : -t.amount), 0) * 100) /
+    100
+  const showNet = myBalanceLines.length >= 2 && netBalanceStyle !== 'off'
 
   return (
     <>
@@ -39,21 +43,11 @@ export default function GroupBalanceSummary({
           <p className="muted">You're all settled up in this group.</p>
         ) : (
           <>
-          {/* The total across the lines below — same coloring rules as
-              they follow, and the direction is spelled out in words so the
-              color is never the only cue. Only worth showing when it adds
-              something up: with a single debt it just repeats that line. */}
-          {myBalanceLines.length >= 2 && (
-          <p className={`balance-line ${highlightFullBalanceLine ? netColorClass : ''}`}>
-            {net === 0 ? (
-              "Net balance: you're even overall"
-            ) : (
-              <>
-                Net balance: {net > 0 ? "you're owed" : 'you owe'}{' '}
-                <span className={`mono ${highlightFullBalanceLine ? '' : netColorClass}`}>{format(Math.abs(net))}</span>
-              </>
-            )}
-          </p>
+          {/* The net only adds something with two or more debts to add
+              up; with a single one it would just repeat that line. Above
+              the list, or below it, per Settings > Layout. */}
+          {showNet && netBalanceStyle === 'top' && (
+            <NetBalanceLine net={net} layout="top" highlight={highlightFullBalanceLine} />
           )}
           {myBalanceLines.map((t, i) => {
             const iOwe = t.from === myParticipantId
@@ -83,6 +77,9 @@ export default function GroupBalanceSummary({
               </p>
             )
           })}
+          {showNet && netBalanceStyle !== 'top' && (
+            <NetBalanceLine net={net} layout={netBalanceStyle} highlight={highlightFullBalanceLine} />
+          )}
           </>
         )}
       </div>

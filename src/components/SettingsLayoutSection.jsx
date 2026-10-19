@@ -6,6 +6,7 @@ import {
   getGroupViewPreferences,
   setGroupViewPreferences,
   PAYMENT_FORM_LAYOUT_OPTIONS,
+  NET_BALANCE_STYLE_OPTIONS,
   ITEM_CATEGORY_DISPLAY_OPTIONS,
 } from '../lib/groupViewPreferences'
 import { GRANULARITIES, granularityLabel } from './TimeRangeSelector'
@@ -13,11 +14,13 @@ import { DEFAULT_CATEGORIES } from '../lib/categories'
 import { categoryColor } from '../lib/categoryPalette'
 import { getColorBlindPalette, setColorBlindPalette } from '../lib/colorBlindPalette'
 import { ChevronIcon } from './icons'
+import NetBalanceLine from './NetBalanceLine'
 
 const THEME_MODES = ['light', 'dark', 'system']
 const THEME_MODE_LABELS = { light: 'Light', dark: 'Dark', system: 'System' }
 const PAYMENT_FORM_LAYOUT_LABELS = { dropdowns: 'Dropdowns', avatars: 'Avatars' }
 const THRESHOLDS_POSITION_LABELS = { top: 'Top', bottom: 'Bottom', hidden: 'Hidden' }
+const NET_BALANCE_STYLE_LABELS = { top: 'Above', total: 'Total', note: 'Footnote', off: 'Off' }
 const ITEM_CATEGORY_DISPLAY_LABELS = { label: 'Under each item', grouped: 'Grouped' }
 
 // Dummy figures for the previews below — never real user data, just
@@ -295,6 +298,48 @@ export default function SettingsLayoutSection() {
         the whole line; off leaves the line in the ordinary text color and colors only the amount.
       </p>
 
+      <div className={openPreview === 'netBalance' ? 'is-open' : ''}>
+        <div className="settings-row">
+          <button type="button" className="settings-row-label-btn" onClick={() => toggleLabel('netBalance')}>
+            Net balance
+            <ChevronIcon size={14} className="settings-row-chevron" />
+          </button>
+        </div>
+        <div className="tab-row">
+          {NET_BALANCE_STYLE_OPTIONS.map((o) => (
+            <button
+              key={o}
+              type="button"
+              className={`tab ${groupPrefs.netBalanceStyle === o ? 'active' : ''}`}
+              onClick={() => {
+                updateGroupPref({ netBalanceStyle: o })
+                setOpenPreview('netBalance')
+              }}
+              aria-pressed={groupPrefs.netBalanceStyle === o}
+            >
+              {NET_BALANCE_STYLE_LABELS[o]}
+            </button>
+          ))}
+        </div>
+        <div className="xwrap">
+          <div className="xinner">
+            <div className="settings-preview-box">
+              <p className="settings-preview-eyebrow">Preview</p>
+              <NetBalancePreview
+                layout={groupPrefs.netBalanceStyle}
+                highlight={groupPrefs.highlightFullBalanceLine}
+                format={format}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      <p className="muted">
+        What you're owed minus what you owe in a group, once there are two or more debts to add up.
+        Above puts it first; Total puts it under a thin line after the debts; Footnote is one small
+        line after them.
+      </p>
+
       <div className={openPreview === 'paymentLayout' ? 'is-open' : ''}>
         <div className="settings-row">
           <button type="button" className="settings-row-label-btn" onClick={() => toggleLabel('paymentLayout')}>
@@ -445,6 +490,40 @@ function BalanceLinePreview({ on, format }) {
         <span className={`mono ${on ? '' : 'balance-positive'}`}>{format(26.9)}</span>
       </p>
     </>
+  )
+}
+
+// The same three made-up debts in every layout, so switching between them
+// shows only what the setting changes: one each way, netting to "owed".
+function NetBalancePreview({ layout, highlight, format }) {
+  const lines = [
+    { name: 'Robin', amount: 26.9, iOwe: false },
+    { name: 'Alfred', amount: 8.4, iOwe: false },
+    { name: 'Batman', amount: 1.41, iOwe: true },
+  ]
+  const net = Math.round(lines.reduce((sum, l) => sum + (l.iOwe ? -l.amount : l.amount), 0) * 100) / 100
+  return (
+    <div className="balance-summary">
+      {layout === 'top' && <NetBalanceLine net={net} layout="top" highlight={highlight} />}
+      {lines.map((l) => {
+        const colorClass = l.iOwe ? 'balance-negative' : 'balance-positive'
+        return (
+          <p key={l.name} className={`balance-line ${highlight ? colorClass : ''}`}>
+            {l.iOwe ? (
+              <>
+                You owe <strong>{l.name}</strong>{' '}
+              </>
+            ) : (
+              <>
+                <strong>{l.name}</strong> owes You{' '}
+              </>
+            )}
+            <span className={`mono ${highlight ? '' : colorClass}`}>{format(l.amount)}</span>
+          </p>
+        )
+      })}
+      {(layout === 'total' || layout === 'note') && <NetBalanceLine net={net} layout={layout} highlight={highlight} />}
+    </div>
   )
 }
 

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { avatarClashes, takenAvatarIcons, clashFixSection, clashSignature } from './avatarClashes'
+import { avatarClashes, takenAvatarIcons, clashFix, clashSignature } from './avatarClashes'
 
 const person = (id, name, avatarIcon = null, extra = {}) => ({
   id,
@@ -44,21 +44,22 @@ describe('takenAvatarIcons', () => {
   })
 })
 
-describe('clashFixSection', () => {
+describe('clashFix', () => {
   const clash = (...members) => ({ key: 'k', members })
   it('sends you to your own avatar when you are one of them', () => {
-    expect(clashFixSection(clash(person('me', 'A'), person('x', 'A')), { myParticipantId: 'me', isAdmin: false })).toBe(
-      'general'
-    )
+    expect(clashFix(clash(person('x', 'A'), person('me', 'A')), { myParticipantId: 'me', isAdmin: false })).toEqual({
+      section: 'members',
+      memberId: 'me',
+    })
   })
   it('lets anyone fix a clash involving a guest', () => {
     const c = clash(person('g', 'Anna', null, { isGuest: true }), person('x', 'Andrea'))
-    expect(clashFixSection(c, { myParticipantId: 'me', isAdmin: false })).toBe('guests')
+    expect(clashFix(c, { myParticipantId: 'me', isAdmin: false })).toEqual({ section: 'guests', memberId: 'g' })
   })
   it('leaves two other members to them, or to the admin', () => {
     const c = clash(person('x', 'Anna'), person('y', 'Andrea'))
-    expect(clashFixSection(c, { myParticipantId: 'me', isAdmin: false })).toBe(null)
-    expect(clashFixSection(c, { myParticipantId: 'me', isAdmin: true })).toBe('members')
+    expect(clashFix(c, { myParticipantId: 'me', isAdmin: false })).toBe(null)
+    expect(clashFix(c, { myParticipantId: 'me', isAdmin: true })).toEqual({ section: 'members', memberId: 'x' })
   })
 })
 

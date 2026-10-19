@@ -29,13 +29,16 @@ export function takenAvatarIcons(members, exceptMemberId) {
 }
 
 // Where in Group settings a clash can be sorted out by whoever's looking,
-// or null when they can't: your own avatar is under General; a guest's,
-// under Guests (any member may change a guest); another member's, under
-// Members, for the admin only.
-export function clashFixSection(clash, { myParticipantId, isAdmin }) {
-  if (clash.members.some((m) => m.id === myParticipantId)) return 'general'
-  if (clash.members.some((m) => m.isGuest)) return 'guests'
-  if (isAdmin) return 'members'
+// or null when they can't: { section, memberId } names the settings tab
+// and whose avatar to open there. Your own comes first (Members); then a
+// guest's (Guests: any member may change a guest); another member's only
+// for the admin (Members).
+export function clashFix(clash, { myParticipantId, isAdmin }) {
+  const me = clash.members.find((m) => m.id === myParticipantId)
+  if (me) return { section: 'members', memberId: me.id }
+  const guest = clash.members.find((m) => m.isGuest)
+  if (guest) return { section: 'guests', memberId: guest.id }
+  if (isAdmin) return { section: 'members', memberId: clash.members[0].id }
   return null
 }
 

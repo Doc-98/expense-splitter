@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
-import { useAuth } from '../context/AuthContext'
-import { ArrowRightIcon, ChevronIcon } from './icons'
-import AvatarPicker from './AvatarPicker'
-import AvatarGlyph from './AvatarGlyph'
-import { avatarIconCache } from '../lib/avatarIconCache'
-import { fetchAllGroupMembers } from '../lib/members'
-import { takenAvatarIcons } from '../lib/avatarClashes'
+import { ArrowRightIcon } from './icons'
 import { isNotFoundError } from '../lib/notFound'
 
 // Lifted as-is from what used to be GroupSettings.jsx's own top section —
@@ -22,36 +16,9 @@ import { isNotFoundError } from '../lib/notFound'
 export default function GroupGeneralSection() {
   const { groupId } = useParams()
   const navigate = useNavigate()
-  const { user, displayName } = useAuth()
-  // ?section=general comes from the group page's "look the same" notice
-  // (GroupAvatarClashNotice.jsx): the picker opens straight away.
-  const [searchParams] = useSearchParams()
   const [name, setName] = useState('')
   const [nameDraft, setNameDraft] = useState('')
   const [error, setError] = useState(null)
-  // This group's own override of your avatar (see AvatarPicker.jsx) — null
-  // means "use my account default", set from Settings > Profile instead.
-  // Needs the *row id* (not just the icon) since that's what the update
-  // below targets — group_members.id, resolved from the group+account pair
-  // rather than trusted from anywhere else, same reasoning loadGroup has
-  // for reading the group's name fresh itself.
-  const [memberId, setMemberId] = useState(null)
-  // Seeded from the cache (see avatarIconCache.js) rather than a bare
-  // null, so re-opening this group's Settings paints the real override
-  // immediately instead of flashing the "no icon" tile lit up for the
-  // instant before loadMember() below resolves.
-  const [avatarIcon, setAvatarIcon] = useState(() => avatarIconCache.get(groupId) ?? null)
-  const [avatarError, setAvatarError] = useState(null)
-  // Same collapsed-grid treatment as Settings > Profile's own avatar
-  // picker — see that file's comment for why (an expand-in-place row,
-  // not a bottom sheet, which this app reserves for confirming something
-  // destructive).
-  const [avatarPickerOpen, setAvatarPickerOpen] = useState(() => searchParams.get('section') === 'general')
-  // Icons the others in this group already show — left out of the picker
-  // (see takenAvatarIcons). Empty until loaded, or if that load fails: the
-  // picker then just offers everything, as it did before.
-  const [roster, setRoster] = useState([])
-
   const loadGroup = useCallback(async () => {
     const { data, error: loadError } = await supabase.from('groups').select('name').eq('id', groupId).single()
     if (loadError) {
@@ -72,34 +39,9 @@ export default function GroupGeneralSection() {
     setNameDraft(data?.name || '')
   }, [groupId, navigate])
 
-  const loadMember = useCallback(async () => {
-    const { data, error: loadError } = await supabase
-      .from('group_members')
-      .select('id, avatar_icon')
-      .eq('group_id', groupId)
-      .eq('user_id', user.id)
-      .single()
-    if (loadError) {
-      // Leaves memberId/avatarIcon (and the cache) alone rather than
-      // wiping a previously-good state on a transient network failure —
-      // saveAvatarIcon's own `if (!memberId) return` guard would otherwise
-      // silently make the picker do nothing with no error shown.
-      setAvatarError(loadError.message)
-      return
-    }
-    setMemberId(data?.id || null)
-    const icon = data?.avatar_icon || null
-    setAvatarIcon(icon)
-    avatarIconCache.set(groupId, icon)
-  }, [groupId, user.id])
-
   useEffect(() => {
     loadGroup()
-    loadMember()
-    fetchAllGroupMembers(groupId)
-      .then(setRoster)
-      .catch(() => {})
-  }, [loadGroup, loadMember, groupId])
+  }, [loadGroup])
 
   async function saveName(e) {
     e.preventDefault()
@@ -116,31 +58,6 @@ export default function GroupGeneralSection() {
       // it, so the submit button's disabled-until-changed guard below
       // fades it right back out on its own.
     }
-  }
-
-  async function saveAvatarIcon(iconId) {
-    if (!memberId) return
-    const previous = avatarIcon
-    setAvatarIcon(iconId) // optimistic — a picker tile should react the instant it's tapped
-    avatarIconCache.set(groupId, iconId)
-    setAvatarError(null)
-    const { error: updateError } = await supabase
-      .from('group_members')
-      .update({ avatar_icon: iconId })
-      .eq('id', memberId)
-    if (updateError) {
-      setAvatarIcon(previous)
-      avatarIconCache.set(groupId, previous)
-      setAvatarError(updateError.message)
-    }
-  }
-
-  // A brief pause before collapsing back — long enough to actually see
-  // the tile you just tapped light up, same delay Settings > Profile's
-  // own version of this uses.
-  function pickAvatarIcon(iconId) {
-    saveAvatarIcon(iconId)
-    setTimeout(() => setAvatarPickerOpen(false), 220)
   }
 
   return (
@@ -160,49 +77,6 @@ export default function GroupGeneralSection() {
         </div>
       </form>
       {error && <p className="status-error">{error}</p>}
-
-      <h2 className="settings-section-title">Your avatar in this group</h2>
-      <p className="muted">
-        Overrides your account default (Settings &gt; Profile) just for this group — handy if someone
-        here shares your initial.
-      </p>
-      <div className={avatarPickerOpen ? 'is-open' : ''}>
-        <div className="settings-row">
-          <span>Choose your avatar</span>
-          <button
-            type="button"
-            className="avatar-picker-trigger"
-            onClick={() => setAvatarPickerOpen((o) => !o)}
-            aria-expanded={avatarPickerOpen}
-            aria-controls="group-avatar-picker-panel"
-            aria-label="Choose your avatar"
-          >
-            <span className="avatar-picker-current" aria-hidden="true">
-              <AvatarGlyph iconId={avatarIcon} name={displayName} size={19} />
-            </span>
-            <ChevronIcon size={16} className="avatar-picker-trigger-chevron" />
-          </button>
-        </div>
-        {/* .xwrap/.xinner — the same generic grid-rows collapse pair Scan
-            Settings' provider list, every item row, and Settings >
-            Profile's own avatar picker already use. */}
-        <div className="xwrap" id="group-avatar-picker-panel">
-          <div className="xinner">
-            <div className="avatar-picker-panel-inner">
-              <AvatarPicker
-                value={avatarIcon}
-                onChange={pickAvatarIcon}
-                name={displayName}
-                hiddenIds={takenAvatarIcons(roster, memberId)}
-              />
-              {takenAvatarIcons(roster, memberId).size > 0 && (
-                <p className="muted">Avatars someone else in this group already has aren't shown.</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-      {avatarError && <p className="status-error">{avatarError}</p>}
     </>
   )
 }

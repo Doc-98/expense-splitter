@@ -38,6 +38,11 @@ const DEFAULTS = {
   // oddly as a toggle label; "highlight" reads more naturally either way
   // it's phrased.
   highlightFullBalanceLine: true,
+  // Your net balance in a group (what you're owed minus what you owe),
+  // shown once there are two or more debts to add up: 'top' a line above
+  // them, 'total' under a thin rule below them, 'note' a small grey line
+  // below them, 'off' not at all. See NetBalanceLine.jsx.
+  netBalanceStyle: 'top',
   // RecordPayment.jsx's own "Who paid"/"Paid to" fields — 'dropdowns'
   // (today's plain <select> pickers) or 'avatars' (tap one of each
   // member's own avatar circle, same component BillView's "Split with"
@@ -52,6 +57,8 @@ const DEFAULTS = {
   // colour is never shown without its name.
   itemCategoryDisplay: 'label',
 }
+
+export const NET_BALANCE_STYLE_OPTIONS = ['top', 'total', 'note', 'off']
 
 export const PAYMENT_FORM_LAYOUT_OPTIONS = ['dropdowns', 'avatars']
 
