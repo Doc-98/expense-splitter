@@ -7,3 +7,4 @@ Pill toggles for choosing people or categories (`.buyer-chip`), and their compac
 - Disabled avatars (already picked on the other side of a payment) drop to 0.3 opacity.
 - Lay chips out in `.chip-row` with a 6px (`space-xs`) gap, and avatars in `.avatar-row` with an 8px gap: 36px + 8px is a 44px pitch, so each avatar's invisible 44px tap area meets its neighbour's exactly. Double-tapping an avatar means "only this person".
 - Avatar size follows Settings > Profile: small 36px (default), `.avatar-md` 42px, `.avatar-lg` 48px, with icons at 19 / 22 / 25px.
+- In Group settings, each Members and Guests row starts with that person's 36px avatar in the group (`.member-row-avatar`): a button that opens the icon picker under the row when you may change it (ringed in `accent` while open, `.is-editing`), a plain circle (`.is-static`) when you may not. A group's pickers leave out icons someone else there already shows.
