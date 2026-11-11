@@ -50,7 +50,8 @@
 .size-picker-option.is-selected { border-color: var(--accent); color: var(--ink); background: var(--surface-tint); }
 
 /* The 16-icon grid itself — Settings > Profile (account default) and
-   Group Settings > General (per-group override) both use this, see
+   Group settings' Members and Guests rows (someone's avatar in one group,
+   see MemberAvatar.jsx) both use this, see
    AvatarPicker.jsx. Same 36px as .avatar and the same 8px gap, so each
    option also gets a full 44px tap area (see "Touch targets"). */
 .avatar-picker { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
@@ -63,10 +64,8 @@
 }
 .avatar-picker-option.is-selected { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
-/* Settings > Profile's collapsed "Choose your avatar" row (Group
-   Settings > General's per-group picker still shows the grid outright —
-   only one row's own default, not something every group needs the same
-   affordance for yet). The trigger's own circle is styled exactly like
+/* Settings > Profile's collapsed "Choose your avatar" row. The trigger's
+   own circle is styled exactly like
    .avatar-picker-option.is-selected at the same 34px/19px proportions —
    it's always showing "the current pick," so it always reads as
    selected, never as the neutral unselected tile. Expands the grid in

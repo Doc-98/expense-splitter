@@ -13,6 +13,41 @@
 .balance-summary { display: flex; flex-direction: column; gap: 4px; margin: 0 0 var(--space-md); font-size: var(--text-base); }
 .balance-line { margin: 0; }
 .balance-line strong { font-weight: 600; }
+/* Your net balance under the debts (NetBalanceLine.jsx; Settings > Layout
+   picks the layout). 'total': a thin rule, "Net" on the left in grey, the
+   total on the right, like the bottom of a receipt. 'note': one smaller
+   grey line, only the amount coloured. The amount stays bold either way. */
+.balance-net-total {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm);
+  margin: 4px 0 0; padding-top: 6px; border-top: 1px solid var(--border);
+}
+.balance-net-label { color: var(--ink-soft); font-size: var(--text-sm); }
+.balance-net-note { margin: 2px 0 0; color: var(--ink-soft); font-size: var(--text-sm); }
+.balance-net-total .mono,
+.balance-net-note .mono { font-weight: 600; }
+
+/* "These two look the same on bills" (GroupAvatarClashNotice.jsx): a quiet
+   tinted card, a hint rather than an error, so no warning colour or icon.
+   It shows the two identical circles, overlapping, so the problem is seen
+   and not only described. */
+.avatar-clash-note {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin: 0 0 var(--space-md); padding: var(--space-sm) var(--space-md);
+  background: var(--surface-tint); border: 1px solid var(--border); border-radius: var(--radius);
+  font-size: var(--text-md); line-height: 1.4;
+}
+.avatar-pair { display: inline-flex; flex: none; margin-top: 1px; }
+.avatar-pair .avatar { width: 28px; height: 28px; font-size: var(--text-sm); cursor: default; }
+.avatar-pair .avatar::after { content: none; } /* a picture, not a control: no tap area */
+.avatar-pair .avatar + .avatar { margin-left: -14px; box-shadow: 0 0 0 2px var(--surface-tint); }
+.avatar-clash-body { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.avatar-clash-body strong { font-weight: 600; }
+.avatar-clash-action { white-space: nowrap; }
+.avatar-clash-dismiss {
+  flex: none; border: 0; background: none; color: var(--ink-soft); cursor: pointer;
+  font-size: var(--text-xl); line-height: 1; padding: 2px 6px; border-radius: var(--radius-xs);
+}
+.avatar-clash-dismiss:hover { color: var(--ink); }
 
 /* The three buttons right under the balance summary — Settle up, Record
    payment, History (all three now their own page: SettleUp.jsx,

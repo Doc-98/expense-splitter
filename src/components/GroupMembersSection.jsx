@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
@@ -9,14 +9,64 @@ import { groupRosterCache } from '../lib/groupRosterCache'
 import InviteMenu from './InviteMenu'
 import ConfirmSheet from './ConfirmSheet'
 import { useConfirm } from '../lib/useConfirm'
+import { useClickOutside } from '../lib/useClickOutside'
+import { useMemberAvatars } from '../lib/useMemberAvatars'
+import { MemberAvatarButton, MemberAvatarPanel } from './MemberAvatar'
+
+// The "⋮" per-row menu, same shape as GroupGuestsSection.jsx's GuestMenu:
+// Choose avatar for whoever may change this person's avatar, and Make
+// admin / Remove for the admin.
+function MemberMenu({ member, onChooseAvatar, onMakeAdmin, onRemove }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+  useClickOutside(wrapRef, () => setOpen(false), open)
+
+  function run(action) {
+    setOpen(false)
+    action()
+  }
+
+  return (
+    <div className="row-menu-wrap" ref={wrapRef}>
+      <button
+        type="button"
+        className="row-menu-btn"
+        onClick={() => setOpen((o) => !o)}
+        aria-label={`Actions for ${member.name}`}
+      >
+        ⋮
+      </button>
+      {open && (
+        <div className="row-menu-popover">
+          {onChooseAvatar && (
+            <button type="button" className="dropdown-item" onClick={() => run(onChooseAvatar)}>
+              Choose avatar
+            </button>
+          )}
+          {onMakeAdmin && (
+            <button type="button" className="dropdown-item" onClick={() => run(onMakeAdmin)}>
+              Make admin
+            </button>
+          )}
+          {onRemove && (
+            <button type="button" className="dropdown-item dropdown-item-warn" onClick={() => run(onRemove)}>
+              Remove
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Real accounts only — Guests moved to its own tab (see
 // GroupGuestsSection.jsx), and "Leave this group" moved out entirely, into
 // Danger Zone (every member can leave, not just an admin action, so it
 // reads oddly sitting in a list of things mostly gated on being the
-// admin). What's left here is squarely about *other* people: who's in,
-// who's the admin, and — for the admin only — handing off that role or
-// removing someone.
+// admin). What's left here: who's in, what each person looks like on
+// bills in this group (their avatar, which you can change for yourself
+// and the admin for anyone), who's the admin, and — for the admin only —
+// handing off that role or removing someone.
 export default function GroupMembersSection() {
   const { groupId } = useParams()
   const { user } = useAuth()
@@ -42,6 +92,7 @@ export default function GroupMembersSection() {
   // don't otherwise fetch the roster and do need one).
   const myParticipantId = members.find((m) => m.userId === user.id)?.id
   const isAdmin = myParticipantId && myParticipantId === adminId
+  const avatars = useMemberAvatars({ groupId, members, setMembers, myUserId: user.id, isAdmin, setError })
 
   const load = useCallback(async () => {
     setError(null)
@@ -119,22 +170,34 @@ export default function GroupMembersSection() {
         {activeRealMembers.map((m) => {
           const isSelf = m.userId === user.id
           const isThisMemberAdmin = m.id === adminId
+          const canChangeAvatar = avatars.canChange(m)
+          const canManage = isAdmin && !isThisMemberAdmin
+          const isOpen = avatars.openId === m.id
           return (
-            <li key={m.id} className="member-list-item">
-              <span>
-                {m.name}
-                {isSelf && <span className="muted"> (you)</span>}
-                {isThisMemberAdmin && <span className="muted"> (admin)</span>}
-              </span>
-              {isAdmin && !isThisMemberAdmin && (
-                <span className="member-list-actions">
-                  <button type="button" className="btn-link" onClick={() => makeAdmin(m)}>
-                    Make admin
-                  </button>
-                  <button type="button" className="btn-link dropdown-item-warn" onClick={() => removeMember(m)}>
-                    Remove
-                  </button>
+            <li key={m.id} className={`member-list-item has-avatar ${isOpen ? 'is-open' : ''}`}>
+              <div className="member-row">
+                <MemberAvatarButton
+                  member={m}
+                  canChange={canChangeAvatar}
+                  isOpen={isOpen}
+                  onToggle={() => avatars.toggle(m.id)}
+                />
+                <span className="member-row-name">
+                  {m.name}
+                  {isSelf && <span className="muted"> (you)</span>}
+                  {isThisMemberAdmin && <span className="muted"> (admin)</span>}
                 </span>
+                {(canChangeAvatar || canManage) && (
+                  <MemberMenu
+                    member={m}
+                    onChooseAvatar={canChangeAvatar ? () => avatars.toggle(m.id) : null}
+                    onMakeAdmin={canManage ? () => makeAdmin(m) : null}
+                    onRemove={canManage ? () => removeMember(m) : null}
+                  />
+                )}
+              </div>
+              {canChangeAvatar && (
+                <MemberAvatarPanel member={m} roster={members} onPick={avatars.pick} isOpen={isOpen} isYou={isSelf} />
               )}
             </li>
           )
@@ -142,8 +205,8 @@ export default function GroupMembersSection() {
       </ul>
       {!isAdmin && (
         <p className="muted">
-          Only the group admin can remove other members — see Danger Zone to leave yourself, any
-          time.
+          Only the group admin can remove other members or change their avatars — see Danger Zone to
+          leave yourself, any time.
         </p>
       )}
 

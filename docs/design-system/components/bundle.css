@@ -1,4 +1,4 @@
-/* Spesa component styles — copied from the app's stylesheet, src/styles/** (doc-98/expense-splitter@78f0d28).
+/* Spesa component styles — copied from the app's stylesheet, src/styles/** (doc-98/expense-splitter@fbc7524).
    Token variables (--bg, --accent, --space-md, --radius …) come from tokens.css,
    and so do the fonts: self-hosted files in fonts/, declared by tokens.json
    type.fonts (the app does the same in src/fonts.css — no Google Fonts). */
@@ -43,8 +43,9 @@ input, select, textarea { font-family: inherit; font-size: 16px; }
    to at least 44×44 without changing how it looks. Links and tabs grow
    vertically only (they sit side by side). Tight clusters get real 44px
    boxes instead (avatar rows via their 44px pitch). */
-.icon-btn, .btn-link, .account-chip, .tab, .avatar, .install-banner-dismiss { position: relative; }
-.icon-btn::after, .input-submit-btn::after, .account-chip::after, .avatar::after, .install-banner-dismiss::after {
+.icon-btn, .btn-link, .account-chip, .tab, .avatar, .install-banner-dismiss, .avatar-clash-dismiss { position: relative; }
+.icon-btn::after, .input-submit-btn::after, .account-chip::after, .avatar::after, .install-banner-dismiss::after,
+.avatar-clash-dismiss::after {
   content: ''; position: absolute; left: 50%; top: 50%;
   width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
 }
@@ -104,6 +105,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .balance-line strong { font-weight: 600; }
 /* The amount is the part that matters most: bold in both directions, in both modes */
 .balance-line .mono, .balance-amount { font-weight: 600; }
+/* Net balance (what you're owed minus what you owe), once there are 2+ debts. A per-device setting puts it
+   above them (a .balance-line, "Net balance:" in bold), under them as a total, or as a small footnote */
+.balance-net-total { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); margin: 4px 0 0; padding-top: 6px; border-top: 1px solid var(--border); }
+.balance-net-label { color: var(--ink-soft); font-size: 13px; }
+.balance-net-note { margin: 2px 0 0; color: var(--ink-soft); font-size: 13px; }
+.balance-net-total .mono, .balance-net-note .mono { font-weight: 600; }
 .bill-month-divider { font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--ink); margin: var(--space-lg) 0 var(--space-sm); padding-top: var(--space-lg); border-top: 1px solid var(--border); }
 .bill-day-divider { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--ink-soft); margin: var(--space-sm) 2px 6px; }
 
@@ -122,6 +129,23 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 /* Settings > Profile "Split-with avatar size": small (default, above) · medium · large */
 .avatar.avatar-md { width: 42px; height: 42px; font-size: 18px; }
 .avatar.avatar-lg { width: 48px; height: 48px; font-size: 20px; }
+/* Someone's avatar in a group, at the start of their Members/Guests row: a button when you may change it
+   (ringed while its picker is open below the row), a plain circle when you may not */
+.member-row-avatar.is-static { cursor: default; }
+.member-row-avatar.is-editing { border-color: var(--accent); color: var(--accent-dark); box-shadow: 0 0 0 2px var(--accent-light); }
+
+/* Look-alike notice (two people with the same avatar circle): a quiet tinted card, a hint not an error,
+   showing the two circles overlapping, "Pick avatars" and × to hide it */
+.avatar-clash-note { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 var(--space-md); padding: var(--space-sm) var(--space-md); background: var(--surface-tint); border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; line-height: 1.4; }
+.avatar-pair { display: inline-flex; flex: none; margin-top: 1px; }
+.avatar-pair .avatar { width: 28px; height: 28px; font-size: 13px; cursor: default; }
+.avatar-pair .avatar::after { content: none; }
+.avatar-pair .avatar + .avatar { margin-left: -14px; box-shadow: 0 0 0 2px var(--surface-tint); }
+.avatar-clash-body { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.avatar-clash-body strong { font-weight: 600; }
+.avatar-clash-action { white-space: nowrap; }
+.avatar-clash-dismiss { flex: none; border: 0; background: none; color: var(--ink-soft); cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 6px; border-radius: var(--radius-xs); }
+.avatar-clash-dismiss:hover { color: var(--ink); }
 
 /* Category colours: --category-1…7 come from tokens.css (per theme). The
    colour-blind palette swaps slots 1–6 when data-palette="colorblind" is on

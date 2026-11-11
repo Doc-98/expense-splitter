@@ -9,13 +9,16 @@ import { useClickOutside } from '../lib/useClickOutside'
 import { loadErrorMessage } from '../lib/loadErrorMessage'
 import { useSwipeToDelete } from '../lib/useSwipeToDelete'
 import TypedConfirmSheet from './TypedConfirmSheet'
+import { useMemberAvatars } from '../lib/useMemberAvatars'
+import { MemberAvatarButton, MemberAvatarPanel } from './MemberAvatar'
 
 // The "⋮" per-row menu — same shape as GroupCategoriesSection.jsx's own
-// CategoryMenu (Rename/Get claim link/Remove instead of Rename/Delete).
+// CategoryMenu (Rename/Choose avatar/Get claim link/Remove instead of
+// Rename/Delete).
 // `onOpen` fires the moment the menu opens, before "Get claim link" is
 // ever actually clicked — see the comment on ensureClaimToken in the
 // parent for why that matters, not just for a snappier click.
-function GuestMenu({ guest, claimLinkReady, onOpen, onRename, onGetClaimLink, onRemove }) {
+function GuestMenu({ guest, claimLinkReady, onOpen, onRename, onChooseAvatar, onGetClaimLink, onRemove }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   useClickOutside(wrapRef, () => setOpen(false), open)
@@ -41,6 +44,9 @@ function GuestMenu({ guest, claimLinkReady, onOpen, onRename, onGetClaimLink, on
         <div className="row-menu-popover">
           <button type="button" className="dropdown-item" onClick={() => run(onRename)}>
             Rename
+          </button>
+          <button type="button" className="dropdown-item" onClick={() => run(onChooseAvatar)}>
+            Choose avatar
           </button>
           {/* Disabled rather than hidden while the token's still in
               flight — same reasoning as InviteMenu's "Generating QR
@@ -93,6 +99,8 @@ export default function GroupGuestsSection() {
   // GroupMembersSection — see that file's own comment.
   const myParticipantId = members.find((m) => m.userId === user.id)?.id
   const isAdmin = myParticipantId && myParticipantId === adminId
+  // A guest's avatar, which any member may change (see useMemberAvatars).
+  const avatars = useMemberAvatars({ groupId, members, setMembers, myUserId: user.id, isAdmin, setError })
 
   const load = useCallback(async () => {
     setError(null)
@@ -229,8 +237,9 @@ export default function GroupGuestsSection() {
       <ul className="member-list">
         {activeGuests.map((m) => {
           const swipe = bindSwipe(m.id, () => toggleGuestActive(m, false))
+          const isOpen = avatars.openId === m.id
           return (
-            <li key={m.id} className="guest-row">
+            <li key={m.id} className={`guest-row ${isOpen ? 'is-open' : ''}`}>
               {editingGuestId === m.id ? (
                 <form
                   className="guest-rename-form"
@@ -261,8 +270,16 @@ export default function GroupGuestsSection() {
                     <button type="button" className="item-row-delete-action" {...swipe.deleteButton}>
                       Remove
                     </button>
-                    <div className="guest-row-name" {...swipe.row}>
-                      {m.name} <span className="muted">(guest)</span>
+                    <div className="guest-row-name has-avatar" {...swipe.row}>
+                      <MemberAvatarButton
+                        member={m}
+                        canChange
+                        isOpen={isOpen}
+                        onToggle={() => avatars.toggle(m.id)}
+                      />
+                      <span>
+                        {m.name} <span className="muted">(guest)</span>
+                      </span>
                     </div>
                   </div>
                   <GuestMenu
@@ -273,10 +290,14 @@ export default function GroupGuestsSection() {
                       setEditingGuestId(m.id)
                       setEditingGuestName(m.name)
                     }}
+                    onChooseAvatar={() => avatars.toggle(m.id)}
                     onGetClaimLink={() => getClaimLink(m)}
                     onRemove={() => toggleGuestActive(m, false)}
                   />
                 </div>
+              )}
+              {editingGuestId !== m.id && (
+                <MemberAvatarPanel member={m} roster={members} onPick={avatars.pick} isOpen={isOpen} />
               )}
             </li>
           )

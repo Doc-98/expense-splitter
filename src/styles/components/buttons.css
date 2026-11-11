@@ -92,10 +92,11 @@
    36px + 8px gap, the time-range arrows and the sign-in links below).
    .input-submit-btn is absolutely positioned already, which is all the
    ::after needs; the rest get position: relative for it. */
-.icon-btn, .btn-icon, .btn-link, .row-submit-btn, .install-banner-dismiss,
+.icon-btn, .btn-icon, .btn-link, .row-submit-btn, .install-banner-dismiss, .avatar-clash-dismiss,
 .account-chip, .tab, .avatar, .avatar-picker-option { position: relative; }
 .icon-btn::after, .btn-icon::after, .row-submit-btn::after, .input-submit-btn::after,
-.install-banner-dismiss::after, .account-chip::after, .avatar::after, .avatar-picker-option::after {
+.install-banner-dismiss::after, .avatar-clash-dismiss::after, .account-chip::after, .avatar::after,
+.avatar-picker-option::after {
   content: '';
   position: absolute;
   left: 50%;

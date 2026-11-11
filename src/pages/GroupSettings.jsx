@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import GroupGeneralSection from '../components/GroupGeneralSection'
 import GroupMembersSection from '../components/GroupMembersSection'
@@ -53,7 +53,10 @@ const CONTENT = {
 export default function GroupSettings() {
   const { groupId } = useParams()
   const navigate = useNavigate()
-  const [activeId, setActiveId] = useState('general')
+  // ?section=guests (etc.) opens on that section — the group page's "look
+  // the same" notice links straight to wherever the clash can be fixed.
+  const [searchParams] = useSearchParams()
+  const [activeId, setActiveId] = useState(() => searchParams.get('section') || 'general')
   const [expanded, setExpanded] = useState(false)
   // Defaults to false (show every tab) rather than null/"loading" — a
   // brief flash of Members/Guests being offered then disappearing, on the

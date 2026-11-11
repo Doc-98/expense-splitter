@@ -50,6 +50,10 @@ export async function fetchAllGroupMembers(groupId) {
     // is always just their own row's value, usually null) — null all the
     // way through means "no icon", the plain initial-circle avatar.
     avatarIcon: r.avatar_icon || (r.user_id ? defaultAvatarById.get(r.user_id) : null) || null,
+    // The two halves of that, for Group settings' avatar picker: what's
+    // chosen for this group (null = none), and the account's own default.
+    groupAvatarIcon: r.avatar_icon || null,
+    defaultAvatarIcon: (r.user_id ? defaultAvatarById.get(r.user_id) : null) || null,
   }))
 }
 
@@ -90,6 +94,18 @@ export async function renameGuest(participantId, displayName) {
     .from('group_members')
     .update({ display_name: displayName })
     .eq('id', participantId)
+  if (error) throw error
+}
+
+// Someone's avatar in this group: one of AVATAR_ICONS' ids, or null for
+// none (an account's own default then shows, or a guest's initial). Your
+// own row and any guest's are plain updates (the group_members policy
+// allows both); another member's goes through set_member_avatar(), which
+// only the admin may call.
+export async function setMemberAvatar(participantId, iconId, { asAdmin = false } = {}) {
+  const { error } = asAdmin
+    ? await supabase.rpc('set_member_avatar', { target_member_id: participantId, icon: iconId })
+    : await supabase.from('group_members').update({ avatar_icon: iconId }).eq('id', participantId)
   if (error) throw error
 }
 

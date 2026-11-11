@@ -11,6 +11,7 @@ const BASE_DEFAULTS = {
   stickyFilters: false,
   avatarSize: 'small',
   highlightFullBalanceLine: true,
+  netBalanceStyle: 'top',
   paymentFormLayout: 'dropdowns',
   itemCategoryDisplay: 'label',
 }
