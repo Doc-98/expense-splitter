@@ -25,7 +25,7 @@
 // apart from another, and truncating consistently is what lets two
 // slightly different printings of the same merchant ("AMAZON MKTPLACE
 // PMTS" vs. "AMAZON MKTPLACE PMTS*UK 123456") still cluster together.
-function normalizeDescription(description) {
+export function normalizeDescription(description) {
   return (description || '')
     .toLowerCase()
     .replace(/[^a-z\s]/g, ' ') // drop digits and punctuation — reference numbers, dates, card codes

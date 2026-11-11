@@ -31,6 +31,35 @@ describe('buildClassifyPrompt', () => {
   })
 })
 
+describe('buildClassifyPrompt with bank statement evidence', () => {
+  const entries = [
+    { title: 'Pagamento Pos', details: 'PRESSO Bar Centrale Roma', bankCategory: 'Altre uscite', bankCategoryMappedTo: null },
+    { title: 'Addebito diretto PayPal', details: null, bankCategory: 'Domiciliazioni e Utenze', bankCategoryMappedTo: 'Bills & utilities' },
+    { title: 'Coop Milano', details: null, bankCategory: null, bankCategoryMappedTo: null },
+  ]
+  const prompt = buildClassifyPrompt(['Groceries', 'Eating out'], entries, '')
+
+  it("puts each transaction's details and bank category on its own line", () => {
+    expect(prompt).toContain(`0. "Pagamento Pos" | details: "PRESSO Bar Centrale Roma" | bank's category: "Altre uscite"`)
+    expect(prompt).toContain(
+      `1. "Addebito diretto PayPal" | bank's category: "Domiciliazioni e Utenze" (this household usually files it under "Bills & utilities")`
+    )
+    expect(prompt).toMatch(/2\. "Coop Milano"$/)
+  })
+
+  it("says the bank's category is a hint that can be wrong, and that an unknowable payment gets no guess", () => {
+    expect(prompt).toMatch(/Treat it as a hint, not an answer/)
+    expect(prompt).toMatch(/follow the merchant/)
+    expect(prompt).toMatch(/return null for it rather than guessing from the bank's category/)
+  })
+
+  it('leaves the prompt for plain titles exactly as it was', () => {
+    const plain = buildClassifyPrompt(['Groceries'], ['Coop Milano'], '')
+    expect(plain).not.toMatch(/bank's category/)
+    expect(buildClassifyPrompt(['Groceries'], [{ title: 'Coop Milano', details: null, bankCategory: null }], '')).toBe(plain)
+  })
+})
+
 describe('parseClassifyResponse', () => {
   const categoryNames = ['Groceries', 'Eating out']
   const titles = ['Coop Milano', 'SDD Netflix', 'xkzq2211']

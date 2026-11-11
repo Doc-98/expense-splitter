@@ -61,11 +61,15 @@ export async function parseTabularStatement(rows) {
   const notices = []
   if (aiColumns && isUsableColumnMapping(aiColumns) && !columnsMatch(heuristicColumns, aiColumns)) {
     // The AI column-check only ever proposes date/description/amount/
-    // debit/credit — categoryIdx is carried over from the heuristic's own
-    // mapping regardless, since a category column is this app's own
-    // concept (see bankStatementRows.js's CATEGORY_ALIASES), not
-    // something the AI double-check was ever asked to look for.
-    columns = { ...aiColumns, categoryIdx: heuristicColumns.categoryIdx }
+    // debit/credit — categoryIdx and detailsIdx are carried over from the
+    // heuristic's own mapping regardless, since neither is something the
+    // AI double-check was ever asked to look for (see bankStatementRows.js's
+    // CATEGORY_ALIASES and DETAILS_ALIASES). If the AI picked the
+    // heuristic's details column as the description, the two swap, so the
+    // other text column is still read rather than dropped.
+    const detailsIdx =
+      aiColumns.descIdx === heuristicColumns.detailsIdx ? heuristicColumns.descIdx : heuristicColumns.detailsIdx
+    columns = { ...aiColumns, categoryIdx: heuristicColumns.categoryIdx, detailsIdx }
     if (heuristicUsable) {
       notices.push(
         "AI review found a different column layout than the automatic match — double-check the dates and amounts below before importing."

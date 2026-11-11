@@ -17,10 +17,11 @@ import {
 } from '../lib/bank-statement-parsing'
 import { isColumnDetectionAvailable } from '../lib/bankStatementColumns'
 import { findDuplicateIndexes, findCrossGroupMatches } from '../lib/bankStatementDetection'
-import { classifyTitles, resolveClassifyStrategy } from '../lib/billCategorization'
+import { classifyEntries, classifyEntryKey, resolveClassifyStrategy } from '../lib/billCategorization'
 import { fetchDraft, createDraft, updateDraftReview, deleteDraft } from '../lib/bankImportDrafts'
 import { getBankCategoryMappings, saveBankCategoryMappings } from '../lib/bankCategoryMappings'
-import { initialReviewEntry, resolveCategoryHints } from '../lib/bankStatementReview'
+import { applySuggestions, initialReviewEntry, needsSuggestion, resolveCategoryHints } from '../lib/bankStatementReview'
+import { buildCategoryMemory, classifierEntry } from '../lib/bankStatementEvidence'
 import InlineEditable from '../components/InlineEditable'
 import BackButton from '../components/BackButton'
 import { LoadingState, SkeletonLines } from '../components/Skeleton'
@@ -47,12 +48,12 @@ export default function ImportBankStatement() {
   // one-at-a-time review step this page builds up to means an unfinished
   // import is the normal, expected case for anyone who didn't get through
   // a long statement in one sitting, not an edge case to just paper over.
-  // 'match-categories' is inserted between 'parsing' and 'review' whenever
-  // the statement's own category column has a bank category name this
-  // group hasn't been matched to a real category before (see
-  // proceedAfterParse/resolveCategoryHints) — skipped entirely for a file
-  // with no category column, or once every name it has has been matched
-  // before.
+  // 'match-categories' is inserted between 'parsing' and 'review' when no
+  // AI is set up and the statement's own category column has a bank
+  // category name this group hasn't been matched to a real category before
+  // (see proceedAfterParse/resolveCategoryHints) — skipped entirely for a
+  // file with no category column, once every name it has has been matched
+  // before, or when an AI is set up (it reads the bank's wording itself).
   const [step, setStep] = useState('loading')
   const [error, setError] = useState(null)
   const [isPersonal, setIsPersonal] = useState(null)
@@ -61,7 +62,10 @@ export default function ImportBankStatement() {
 
   const [draftId, setDraftId] = useState(null)
   // Every extracted transaction, CSV/Excel/PDF alike, normalized to
-  // { date, description, amount, direction }. Immutable for the life of a
+  // { date, description, amount, direction }, plus — from a CSV/Excel file
+  // that has them — `details` (the bank's longer text for the same
+  // transaction) and `categoryHint` (the bank's own category for it).
+  // Immutable for the life of a
   // draft/review pass — everything the review step changes lives in
   // `review` below instead, keyed by the same index.
   const [transactions, setTransactions] = useState([])
@@ -224,7 +228,8 @@ Date,Description,Amount,Category`
   // The personal group's own recent bills, in the same
   // { description, amount, date } shape bankStatementDetection.js expects
   // — used to recognize a duplicate that spans further back than just
-  // this one statement. Windowed the same way GroupView/GroupStats
+  // this one statement — plus each one's category, for remembering what a
+  // merchant was filed under before (buildCategoryMemory). Windowed the same way GroupView/GroupStats
   // already are (recent history, not the full account lifetime) — plenty
   // for what the check needs, and keeps this from being a second
   // unbounded fetch on an account with years of history.
@@ -233,7 +238,7 @@ Date,Description,Amount,Category`
     const bills = await fetchAllRows(() =>
       supabase
         .from('bills')
-        .select('title, created_at, items(total_price)', { count: 'exact' })
+        .select('title, created_at, category_id, items(total_price)', { count: 'exact' })
         .eq('group_id', groupId)
         .gte('created_at', windowStart.toISOString())
     )
@@ -241,6 +246,7 @@ Date,Description,Amount,Category`
       description: b.title,
       amount: (b.items || []).reduce((sum, it) => sum + Number(it.total_price), 0),
       date: b.created_at,
+      categoryId: b.category_id,
     }))
   }
 
@@ -306,40 +312,50 @@ Date,Description,Amount,Category`
   // before reviewing even the first card — doesn't throw away AI work
   // already done and cost it again on resume.
   //
+  // What the AI is asked about each transaction is more than its title:
+  // the statement's details text with every number taken out, and the
+  // bank's own category — as evidence, not as the answer (see
+  // classifierEntry and buildClassifyPrompt). Its answer replaces a
+  // category that only came from the bank; one from this merchant's
+  // earlier bills, or picked by hand, is left alone (needsSuggestion /
+  // applySuggestions).
+  //
   // Also called again on resumeDraft() below, in case a pause landed
-  // mid-pass — skips any transaction that already has a category *or* is
-  // already reviewed, so this is always a no-op once a first pass
+  // mid-pass — skips any transaction the AI already answered about *or*
+  // that is already reviewed, so this is always a no-op once a first pass
   // actually finished, and — critically — never overwrites an
   // already-committed bill's category with a late suggestion arriving
   // after the fact; a reviewed entry's category is done changing outside
   // of Back explicitly revisiting it.
   async function runCategorySuggestions(parsedTransactions, currentReview, currentDraftId) {
     if (!classifyStrategy) return
-    const pendingIndexes = parsedTransactions
-      .map((t, i) => i)
-      .filter((i) => parsedTransactions[i].direction === 'debit' && !currentReview[i]?.reviewed && !currentReview[i]?.categoryId)
-    const debitDescriptions = [...new Set(pendingIndexes.map((i) => parsedTransactions[i].description))]
-    if (debitDescriptions.length === 0) return
+    const pending = parsedTransactions.filter((tx, i) => needsSuggestion(tx, currentReview[i]))
+    if (pending.length === 0) return
+
+    // What each bank category name was matched to before, by name, for the
+    // AI to weigh ("this household usually files it under …").
+    const { resolved: hintCategoryMap } = resolveCategoryHints(
+      parsedTransactions,
+      categoryNameToId,
+      getBankCategoryMappings(groupId)
+    )
+    const categoryNameById = new Map(categories.map((c) => [c.id, c.name]))
+    const entryFor = (tx) =>
+      classifierEntry(tx, tx.categoryHint ? categoryNameById.get(hintCategoryMap.get(tx.categoryHint.toLowerCase())) : null)
+    const keyOf = (tx) => classifyEntryKey(entryFor(tx))
 
     try {
       const categoryNames = categories.map((c) => c.name)
       const hint = getReceiptSettings().categorizeHint
-      setCategorizing({ done: 0, total: debitDescriptions.length })
-      const results = await classifyTitles(
-        debitDescriptions,
+      const results = await classifyEntries(
+        pending.map(entryFor),
         categoryNames,
         (done, total) => setCategorizing({ done, total }),
         hint
       )
-      const nameToId = new Map(categories.map((c) => [c.name, c.id]))
+      const categoryIdByName = new Map(categories.map((c) => [c.name, c.id]))
       setReview((prev) => {
-        const next = prev.map((entry, i) => {
-          const tx = parsedTransactions[i]
-          if (tx.direction !== 'debit' || entry.reviewed || entry.categoryId) return entry
-          const suggested = results.get(tx.description)
-          const categoryId = suggested ? nameToId.get(suggested) : null
-          return categoryId ? { ...entry, categoryId } : entry
-        })
+        const next = applySuggestions(prev, parsedTransactions, results, keyOf, categoryIdByName)
         updateDraftReview(currentDraftId, { review: next }).catch(() => {
           // Suggestions still show for the rest of this session even if
           // the draft write failed — a resume just wouldn't have them
@@ -349,9 +365,10 @@ Date,Description,Amount,Category`
       })
     } catch {
       // A failed AI pass just leaves every row's category exactly where
-      // it started — "Uncategorized," pickable by hand — same as having
-      // no AI configured at all. Not worth surfacing as a page-level
-      // error over what's otherwise a successful import.
+      // it started — the bank's own category where there is one, otherwise
+      // "Uncategorized," pickable by hand — same as having no AI
+      // configured at all. Not worth surfacing as a page-level error over
+      // what's otherwise a successful import.
     } finally {
       setCategorizing(null)
     }
@@ -395,7 +412,10 @@ Date,Description,Amount,Category`
     // already recorded in another group — defaults off, so nobody
     // accidentally double-counts just because they didn't notice the
     // flag; still fully reviewable, in case it's a false positive.
-    const initialReview = parsedTransactions.map((t, i) => initialReviewEntry(t, duplicates, crossMatches, i, hintCategoryMap))
+    const memory = buildCategoryMemory(existingHistory)
+    const initialReview = parsedTransactions.map((t, i) =>
+      initialReviewEntry(t, duplicates, crossMatches, i, hintCategoryMap, memory)
+    )
 
     const newDraftId = await createDraft(groupId, user.id, {
       transactions: parsedTransactions,
@@ -420,18 +440,21 @@ Date,Description,Amount,Category`
   // before handing off to processParsedTransactions: decide whether any of
   // this statement's own category hints still need a person's input. Most
   // imports have no category column at all (resolveCategoryHints just
-  // returns nothing unresolved) and skip straight through, same as before
-  // this step existed; a real bank export with its own category column
-  // almost always has *something* unresolved the first time (its wording
-  // essentially never matches this app's category names, often not even
-  // its language) — that's what the "Match bank categories" step is for.
+  // returns nothing unresolved) and skip straight through. A real bank
+  // export with its own category column almost always has *something*
+  // unresolved the first time (its wording essentially never matches this
+  // app's category names, often not even its language). With an AI set up,
+  // nobody is asked: the AI is given the bank's wording as it stands, as
+  // one piece of evidence among others. Without one, the bank's category is
+  // the only suggestion there is — that's what the "Match bank categories"
+  // step is for.
   async function proceedAfterParse(parsedTransactions, notices, existingHistoryPromise) {
     const { resolved, unresolved } = resolveCategoryHints(
       parsedTransactions,
       categoryNameToId,
       getBankCategoryMappings(groupId)
     )
-    if (unresolved.size > 0) {
+    if (unresolved.size > 0 && !classifyStrategy) {
       setPendingImport({ parsedTransactions, notices, existingHistoryPromise })
       setResolvedHints(resolved)
       setUnresolvedHints([...unresolved.entries()].map(([key, v]) => ({ key, ...v })))
@@ -582,6 +605,19 @@ Date,Description,Amount,Category`
       setError(err.message)
       setStep('landing')
     }
+  }
+
+  // Where the category on a card came from, in the person's words — so a
+  // guess reads as a guess. Nothing for one they picked themselves. "The
+  // category in the file" rather than "your bank's": a CSV pasted back from
+  // an AI chat has a category column too, and that one isn't the bank's.
+  function categorySourceNote(entry) {
+    if (entry.categorySource === 'history') return 'Same category as your earlier bills from here.'
+    if (entry.categorySource === 'ai') {
+      return entry.categoryId ? 'Suggested by AI — change it if it’s wrong.' : 'AI couldn’t tell what this one is — pick a category.'
+    }
+    if (entry.categorySource === 'bank') return 'Taken from the category in the file — change it if it’s wrong.'
+    return null
   }
 
   function updateCurrentEntry(patch) {
@@ -836,10 +872,12 @@ Date,Description,Amount,Category`
           {classifyStrategy && (
             <p className="muted">
               {classifyStrategy.label} is also set up in Scan settings, so a CSV or Excel import will use
-              it too — suggesting a category for each transaction, and (unless turned off below)
-              double-checking the automatic column match against a few sample rows. Either of those sends
-              transaction descriptions and amounts (not full statement details) to that provider, same as
-              the category suggestions already offered on a PDF import.
+              it too. To suggest a category it is sent each transaction's description, your bank's own
+              category for it, and the statement's details text with every number taken out — so no card,
+              account or reference numbers, but a name written there (a shop, or the person a transfer
+              went to) is included. Amounts and dates are not sent for this. Unless turned off below, it
+              also double-checks the automatic column match, and for that it is sent a few sample rows
+              exactly as they appear in the file.
             </p>
           )}
           {columnCheckAvailable && (
@@ -850,8 +888,8 @@ Date,Description,Amount,Category`
                 <p className="muted">
                   The automatic column match itself needs no AI and always runs regardless — this only
                   controls the optional second opinion on top of it. Turn it off if you're out of API
-                  quota right now, or would rather this file's data not go to {classifyStrategy.label} at
-                  all — the plain column match alone is often enough for a well-formed export.
+                  quota right now, or would rather no whole rows of this file go to {classifyStrategy.label}
+                  — the plain column match alone is often enough for a well-formed export.
                 </p>
               </div>
             </label>
@@ -918,11 +956,12 @@ Date,Description,Amount,Category`
       {step === 'match-categories' && (
         <>
           <p className="muted">
-            This statement already has its own category for each transaction — worth trusting over a
-            guess, since the bank presumably knows what it's talking about. Its own names almost never
-            match yours though (a different bank, possibly a different language), so match each one below
-            to one of your categories, or leave it uncategorized. This only comes up once per bank
-            category name — it's remembered for next time you import from this bank.
+            This statement has your bank's own category for each transaction. A bank's category is a
+            useful starting point but it's often generic and sometimes wrong, so it's only used to
+            pre-fill each transaction — you still check every one. Its names won't match yours, so match
+            each one below to the category it most often means, or leave it uncategorized. This only
+            comes up once per bank category name — it's remembered for next time you import from this
+            bank.
           </p>
           {unresolvedHints.map(({ key, label, count }) => (
             <div key={key} className="category-mapping-card">
@@ -962,7 +1001,7 @@ Date,Description,Amount,Category`
           <progress className="bank-tx-progress" value={reviewedCount} max={totalReviewable} />
           {categorizing && (
             <p className="muted">
-              Asking AI about {categorizing.done} of {categorizing.total} descriptions…
+              Asking AI about {categorizing.done} of {categorizing.total} transactions…
             </p>
           )}
 
@@ -985,6 +1024,10 @@ Date,Description,Amount,Category`
               inputClassName="item-editable-input bank-tx-card-title-input"
               ariaLabel={`Edit description for ${descriptionForEntry(currentTx, currentEntry)}`}
             />
+            {currentTx.details && <p className="bank-tx-card-details muted">{currentTx.details}</p>}
+            {currentTx.categoryHint && (
+              <p className="bank-tx-card-details muted">Category in the file: {currentTx.categoryHint}</p>
+            )}
             <label className="bank-tx-card-include">
               <input
                 type="checkbox"
@@ -997,7 +1040,8 @@ Date,Description,Amount,Category`
               <select
                 className="bank-tx-card-category"
                 value={currentEntry.categoryId || ''}
-                onChange={(e) => updateCurrentEntry({ categoryId: e.target.value })}
+                aria-label="Category"
+                onChange={(e) => updateCurrentEntry({ categoryId: e.target.value, categorySource: 'manual' })}
               >
                 <option value="">Uncategorized</option>
                 {categories.map((cat) => (
@@ -1006,6 +1050,9 @@ Date,Description,Amount,Category`
                   </option>
                 ))}
               </select>
+            )}
+            {currentEntry.include && categorySourceNote(currentEntry) && (
+              <p className="bank-tx-card-details muted">{categorySourceNote(currentEntry)}</p>
             )}
           </div>
 
