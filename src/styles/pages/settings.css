@@ -255,6 +255,11 @@
 }
 .bank-tx-card-include { display: flex; flex-direction: row; align-items: center; gap: 8px; margin-bottom: 0; }
 .bank-tx-card-category { width: 100%; }
+/* The smaller lines on the card: the statement's own details text and the
+   bank's category under the title, and where the suggested category came
+   from under the picker. The details are a bank's raw text — long, with
+   unbroken codes — so they wrap anywhere rather than push the card wider. */
+.bank-tx-card-details { margin: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
 
 /* The "Match bank categories" step, ahead of the one-at-a-time review
    above — one card per distinct bank category name found in the

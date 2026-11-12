@@ -389,9 +389,10 @@ test (`splitEvenly.js` → `splitEvenly.test.js`, same folder) — this app's
 pure business logic: balance/settlement math (`settlement.js`, the one most
 worth trusting completely — a wrong number there is the worst kind of bug
 this app can ship), bank statement parsing and column detection
-(`bankStatementRows.js`, `bankStatementDetection.js`), the category-mapping
-logic behind the bank-import wizard's "Match bank categories" step
-(`bankStatementReview.js`, `bankCategoryMappings.js`), the AI categorization
+(`bankStatementRows.js`, `bankStatementDetection.js`), where the
+bank-import wizard's category suggestions come from and what leaves the
+device for them (`bankStatementEvidence.js`, `bankStatementReview.js`,
+`bankCategoryMappings.js`), the AI categorization
 prompt/response handling (`billCategorization/classifyPrompt.js`), CSV
 parsing/export (`csv.js`), and the smaller date/number-formatting helpers
 each of those leans on.
@@ -1547,7 +1548,12 @@ bank or credit-card statement into bills.
   column-detection-plus-parsing for both formats: common column aliases
   (Date/Payee/Amount, or separate Debit/Credit), currency symbols, either
   thousands-separator convention ("1,234.56" or "1.234,56"), and
-  parenthesized negatives. `bankStatementCsv.js`/`bankStatementXlsx.js` are
+  parenthesized negatives. A second text column next to the description —
+  an Italian bank's "Dettagli" beside "Operazione", a "Memo" or "Notes"
+  column elsewhere (`DETAILS_ALIASES`) — is read as each transaction's
+  `details`: the bank's longer text, which is often where the real
+  merchant is when the description is only "Pagamento Pos" or a direct
+  debit's boilerplate. `bankStatementCsv.js`/`bankStatementXlsx.js` are
   thin per-format wrappers around it — Excel via a lazily-loaded
   `read-excel-file`, so it doesn't cost every other page's bundle size.
   Excel exists specifically for mobile: redacting a PDF or exporting to CSV
@@ -1589,32 +1595,59 @@ bank or credit-card statement into bills.
   The `Category` column (recognized via `CATEGORY_ALIASES`) is also how a
   guess round-trips straight into `categoryId`, resolved by name against
   the group's real categories (`initialReviewEntry`) — a name that doesn't
-  match falls back to blank, same as any uncategorized transaction. Same
+  match is handled like a bank's own category, below. Same
   redaction warning as the PDF path applies, since a third-party chat app
   is seeing the statement either way.
 
-#### Matching bank categories
+#### Where a category suggestion comes from
 
-A real bank's own category column is trusted, not re-guessed — but its
-names essentially never match this app's own (different wording, often a
-different language), so a one-time **"Match bank categories"** step runs
-right after parsing, whenever the statement has at least one category name
-(`categoryHint` — the same field the AI-chat path above sets) that doesn't
-already match a group category and hasn't been matched before. Skipped for
-a file with no category column, or once every name it has is already
-matched.
+A statement can say several things about what a transaction was, and none
+of them is certain, so each is weighed rather than obeyed. Every spending
+row's category starts from the best of these, in this order, and the
+review entry records which one it was (`categorySource`, see
+`initialReviewEntry` in `bankStatementReview.js`):
 
-`src/lib/bankCategoryMappings.js` remembers each choice per group,
-localStorage-only (a device's own view of how a bank's wording maps to a
-group's categories — not worth a database table or cross-device sync), so a
-given bank's categories only ever need matching once per group, not once
-per statement. A category resolved this way — exact match, a previous
-mapping, or one just chosen — is never second-guessed by the AI suggestion
-pass either (same guard that already protects an already-reviewed entry
-from a stale late suggestion; see `runCategorySuggestions` in
-`ImportBankStatement.jsx`). Choosing "Leave uncategorized" for a bank
-category is remembered too, without blocking the AI pass from still
-guessing at those.
+1. **This merchant's earlier bills** (`history`). When the group already
+   has two or more bills from the same merchant and every one sits under
+   the same category, that category is used and nothing else is asked
+   (`buildCategoryMemory` in `bankStatementEvidence.js`, matching on the
+   same normalized description duplicate detection uses). A description
+   that has been filed under several categories — a payment processor's
+   direct debit, a transfer app — is remembered as nothing.
+2. **The AI** (`ai`), when one is set up in Scan settings. It is asked
+   about more than the title (`classifierEntry` → `classifyEntries` →
+   `buildClassifyPrompt`): the details text with every number taken out
+   (`detailsForClassifier` drops any token with a digit in it, IBANs and
+   masked-card runs, so card, account, mandate and reference numbers never
+   leave the device — a name written in the details does), and the bank's
+   own category for the row, with what that bank category was matched to
+   before if it was. The prompt tells it how far to trust each: follow the
+   merchant when the merchant is clear, lean on the bank's category for a
+   merchant it doesn't recognize, and answer nothing at all for a line
+   that only names a payment service or a person. Its answer replaces a
+   category that only came from the bank, including when the answer is
+   "can't tell" (`applySuggestions`).
+3. **The bank's own category** (`bank`, the file's category column —
+   `categoryHint`). A bank's label is often generic and sometimes wrong (a
+   purchase paid through PayPal under "direct debits and utilities", a
+   café under electronics), so it only pre-fills a row until something
+   better arrives, and stays only when no AI is set up or the AI couldn't
+   be reached.
+
+A category the person picks on the card (`manual`) is never replaced.
+
+The bank's category names essentially never match this app's own
+(different wording, often a different language). With an AI set up that
+doesn't matter — the AI reads the bank's wording as it stands. Without
+one, a one-time **"Match bank categories"** step runs right after parsing,
+whenever a spending row has a category name that doesn't already match a
+group category and hasn't been matched before (categories that only
+appear on money coming in are never asked about, since those rows never
+get a card). `src/lib/bankCategoryMappings.js` remembers each choice per
+group, localStorage-only (a device's own view of how a bank's wording maps
+to a group's categories — not worth a database table or cross-device
+sync), so a given bank's categories only ever need matching once per
+group, not once per statement.
 
 #### Reviewing, pausing, and resuming
 
@@ -1622,9 +1655,10 @@ Every path lands on the same review flow: one transaction at a time, not a
 single long list — a 200-row statement felt overwhelming as a flat list,
 and one-at-a-time is also what makes pausing safe (below). Each card shows
 the date, amount, an editable description (for when the bank's own wording
-isn't what you'd want as a bill title), a category suggestion (the same AI
-pass `/categorize` uses — CSV/Excel get this too, not just PDF, whenever an
-AI service is configured), and a checkbox to include or skip it. Credits
+isn't what you'd want as a bill title), the statement's details text and
+the bank's category when the file has them, a checkbox to include or skip
+it, and a category with a line under it saying where it came from (above)
+so a guess reads as a guess. Credits
 (salary, refunds, incoming transfers) never get a card — they can't be
 imported either way. A progress line ("47 of 180, 46 reviewed") and a
 **← Back** button sit alongside Next/Finish, since going back to fix an

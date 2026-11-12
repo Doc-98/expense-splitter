@@ -74,6 +74,18 @@ describe('detectColumns', () => {
     expect(detectColumns(['Data', 'Descrizione', 'Importo', 'Categoria']).categoryIdx).toBe(3)
   })
 
+  it('finds a second, longer text column next to the description', () => {
+    // An Intesa-style export: a short "Operazione" and the full "Dettagli".
+    const cols = detectColumns(['Data', 'Operazione', 'Dettagli', 'Conto o carta', 'Categoria', 'Valuta', 'Importo'])
+    expect(cols).toMatchObject({ dateIdx: 0, descIdx: 1, detailsIdx: 2, categoryIdx: 4, amountIdx: 6 })
+    expect(detectColumns(['Date', 'Description', 'Notes', 'Amount'])).toMatchObject({ descIdx: 1, detailsIdx: 2 })
+  })
+
+  it('keeps a lone text column as the description, with no details', () => {
+    expect(detectColumns(['Date', 'Details', 'Amount'])).toMatchObject({ descIdx: 1, detailsIdx: -1 })
+    expect(detectColumns(['Data', 'Causale', 'Importo'])).toMatchObject({ descIdx: 1, detailsIdx: -1 })
+  })
+
   it('reports categoryIdx as -1 when no category column exists', () => {
     expect(detectColumns(['Date', 'Description', 'Amount']).categoryIdx).toBe(-1)
   })
@@ -129,8 +141,8 @@ describe('buildTransactionsFromColumns', () => {
       columns
     )
     expect(transactions).toEqual([
-      { date: new Date('2026-03-05').toISOString(), description: 'Coffee', amount: 4.5, direction: 'debit', categoryHint: null },
-      { date: new Date('2026-03-06').toISOString(), description: 'Salary', amount: 2000, direction: 'credit', categoryHint: null },
+      { date: new Date('2026-03-05').toISOString(), description: 'Coffee', details: null, amount: 4.5, direction: 'debit', categoryHint: null },
+      { date: new Date('2026-03-06').toISOString(), description: 'Salary', details: null, amount: 2000, direction: 'credit', categoryHint: null },
     ])
   })
 
@@ -154,6 +166,34 @@ describe('buildTransactionsFromColumns', () => {
     const withCategory = { ...columns, categoryIdx: 3 }
     const { transactions } = buildTransactionsFromColumns([['2026-03-05', 'Coffee', '-4.50', '']], withCategory)
     expect(transactions[0].categoryHint).toBeNull()
+  })
+
+  describe('with a details column', () => {
+    const withDetails = { ...columns, detailsIdx: 3 }
+
+    it('keeps the longer text as details, on one line', () => {
+      const { transactions } = buildTransactionsFromColumns(
+        [['2026-03-05', 'Pagamento Pos', '-4.20', 'PRESSO  Bar Centrale\nRoma']],
+        withDetails
+      )
+      expect(transactions[0]).toMatchObject({ description: 'Pagamento Pos', details: 'PRESSO Bar Centrale Roma' })
+    })
+
+    it('has no details when the cell is blank or only repeats the description', () => {
+      const { transactions } = buildTransactionsFromColumns(
+        [
+          ['2026-03-05', 'Coffee', '-4.50', ''],
+          ['2026-03-06', 'Coffee', '-4.50', 'COFFEE'],
+        ],
+        withDetails
+      )
+      expect(transactions.map((t) => t.details)).toEqual([null, null])
+    })
+
+    it('uses the details as the description when that one is blank', () => {
+      const { transactions } = buildTransactionsFromColumns([['2026-03-05', '', '-4.50', 'Bar Centrale']], withDetails)
+      expect(transactions[0]).toMatchObject({ description: 'Bar Centrale', details: null })
+    })
   })
 
   it('skips a row with no description entirely (not even a warning)', () => {

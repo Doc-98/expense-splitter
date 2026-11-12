@@ -28,36 +28,66 @@ export const CLASSIFY_BATCH_SIZE = 150
 
 // Runs every batch through whichever strategy is configured, tolerant of
 // one batch failing outright (network error, malformed response) without
-// losing every other batch's results — those titles just come back
-// unresolved (null), same as a title the model itself wasn't confident
-// about. `onProgress(done, total)` reports title counts, not batch
-// counts, so it stays meaningful regardless of batch size.
-export async function classifyTitles(titles, categoryNames, onProgress, extraContext) {
+// losing every other batch's results. `onBatch(batch, batchResults)` gets
+// each batch's answers (a category name or null per entry), or null in
+// place of the answers when that batch failed. `onProgress(done, total)`
+// reports entry counts, not batch counts, so it stays meaningful
+// regardless of batch size.
+async function runBatches(entries, categoryNames, onProgress, extraContext, onBatch) {
   const strategy = resolveClassifyStrategy()
   if (!strategy) {
     throw new Error('No AI service configured — set one up in Scan settings first, or skip the AI pass entirely.')
   }
 
-  const results = new Map() // title -> suggested category name | null
   let done = 0
-  onProgress?.(done, titles.length)
+  onProgress?.(done, entries.length)
 
-  for (let start = 0; start < titles.length; start += CLASSIFY_BATCH_SIZE) {
-    const batch = titles.slice(start, start + CLASSIFY_BATCH_SIZE)
+  for (let start = 0; start < entries.length; start += CLASSIFY_BATCH_SIZE) {
+    const batch = entries.slice(start, start + CLASSIFY_BATCH_SIZE)
     let batchResults
     try {
       batchResults = await strategy.classify(batch, categoryNames, extraContext)
     } catch {
-      // This batch's titles stay unresolved rather than aborting the
-      // whole run — a transient failure on one chunk of a thousand-plus
-      // bills shouldn't cost every other chunk's already-successful
-      // suggestions.
-      batchResults = new Array(batch.length).fill(null)
+      batchResults = null
     }
-    batch.forEach((title, i) => results.set(title, batchResults[i] ?? null))
+    onBatch(batch, batchResults)
     done += batch.length
-    onProgress?.(done, titles.length)
+    onProgress?.(done, entries.length)
   }
+}
 
+// Plain titles (CategorizeBills.jsx): title -> suggested category name, or
+// null. A failed batch's titles stay unresolved (null) rather than aborting
+// the whole run, same as a title the model itself wasn't confident about —
+// a transient failure on one chunk of a thousand-plus bills shouldn't cost
+// every other chunk's already-successful suggestions.
+export async function classifyTitles(titles, categoryNames, onProgress, extraContext) {
+  const results = new Map()
+  await runBatches(titles, categoryNames, onProgress, extraContext, (batch, batchResults) => {
+    batch.forEach((title, i) => results.set(title, batchResults?.[i] ?? null))
+  })
+  return results
+}
+
+// A stable key for one bank-statement entry (see classifierEntry() in
+// bankStatementEvidence.js): two transactions with the same title, details
+// and bank category are one question, asked once.
+export function classifyEntryKey(entry) {
+  return JSON.stringify([entry.title, entry.details, entry.bankCategory, entry.bankCategoryMappedTo])
+}
+
+// Bank-statement entries (ImportBankStatement.jsx): classifyEntryKey(entry)
+// -> suggested category name, or null when the model looked and declined
+// to guess. Unlike classifyTitles, an entry whose batch failed is left out
+// of the map altogether: "no answer" and "answered: can't tell" lead to
+// different things there (a bank-derived default is kept in the first
+// case and dropped in the second).
+export async function classifyEntries(entries, categoryNames, onProgress, extraContext) {
+  const unique = [...new Map(entries.map((entry) => [classifyEntryKey(entry), entry])).values()]
+  const results = new Map()
+  await runBatches(unique, categoryNames, onProgress, extraContext, (batch, batchResults) => {
+    if (!batchResults) return
+    batch.forEach((entry, i) => results.set(classifyEntryKey(entry), batchResults[i] ?? null))
+  })
   return results
 }

@@ -16,8 +16,8 @@ export const APP_VERSION = import.meta.env.VITE_APP_VERSION
 // way to summarize "what a human would care about" from a commit message
 // alone) — replace this list with each PR that ships something visible.
 export const WHATS_NEW = [
-  "A group shows your net balance when you have two or more debts to add up; Settings → Layout puts it above them, as a total under them, as a small footnote, or turns it off",
-  "Group settings show everyone's avatar in the group; tap one, or use its ⋮ menu, to change it. Guests can have avatars too, and the admin can change anyone's",
-  'A group points out when two people look the same on bills, with a shortcut to pick different avatars',
-  'Avatar pickers in a group leave out avatars someone else there already has',
+  "Importing a bank statement now reads its details column (\"Dettagli\", \"Memo\", \"Notes\") and shows it on each transaction, along with your bank's own category",
+  "Category suggestions on an import use those details and your bank's category as hints, not as the answer, and each one says where it came from",
+  'A merchant you have filed under the same category before keeps that category on the next import',
+  "With an AI set up, an import no longer asks you to match your bank's category names first",
 ]

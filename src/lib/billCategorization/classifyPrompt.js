@@ -10,10 +10,37 @@ import { parseJsonResponse } from '../parseJsonResponse'
 // ellipsis, extra whitespace) would silently break a match-by-title-text
 // mapping back to the original bills; an index into the same numbered
 // list it was given has nothing to get subtly wrong.
+//
+// A title is either plain text, or — from a bank statement import, see
+// classifierEntry() in bankStatementEvidence.js — { title, details,
+// bankCategory, bankCategoryMappedTo }: the same title plus whatever else
+// the statement says about the transaction. That extra evidence goes on
+// the title's own line, and the prompt gains a paragraph on how far to
+// trust each piece; a list of plain titles produces the same prompt as
+// before.
+function titleLine(entry, index) {
+  if (typeof entry === 'string') return `${index}. ${JSON.stringify(entry)}`
+  let line = `${index}. ${JSON.stringify(entry.title)}`
+  if (entry.details) line += ` | details: ${JSON.stringify(entry.details)}`
+  if (entry.bankCategory) {
+    line += ` | bank's category: ${JSON.stringify(entry.bankCategory)}`
+    if (entry.bankCategoryMappedTo) line += ` (this household usually files it under ${JSON.stringify(entry.bankCategoryMappedTo)})`
+  }
+  return line
+}
+
+const EVIDENCE_NOTE = `
+Some titles below come from a bank statement and carry extra evidence on the same line:
+- "details" is the bank's longer text for the same transaction, with numbers removed. When the title is generic (a card payment, a transfer, a direct debit), the real merchant is often in there, after the bank's boilerplate. Read it before deciding.
+- "bank's category" is the bank's own automatic label, in the bank's own wording, not one of the categories above. Treat it as a hint, not an answer. The bank works from the merchant's registered line of business, so for a merchant name you don't recognize it is the best evidence there is: use it. But it is often generic or simply wrong, and it describes how the money moved as often as what was bought (a purchase paid through PayPal filed under direct debits and utilities, a café filed under electronics). When the merchant in the title or details clearly points somewhere else, follow the merchant.
+- If a line shows only a payment service or a person's name and nothing about what was paid for (a PayPal direct debit with no merchant, a transfer to someone), return null for it rather than guessing from the bank's category. This is the one case where a guess is worse than a blank.
+`
+
 export function buildClassifyPrompt(categoryNames, titles, extraContext) {
   const categoryList = categoryNames.map((name) => `"${name}"`).join(', ')
-  const titleList = titles.map((t, i) => `${i}. ${JSON.stringify(t)}`).join('\n')
+  const titleList = titles.map(titleLine).join('\n')
   const trimmedContext = (extraContext || '').trim()
+  const hasEvidence = titles.some((t) => typeof t !== 'string' && (t.details || t.bankCategory))
 
   return `You are categorizing a list of expense titles for a household expense-tracking app. Most are a short store or merchant name, sometimes with a date, note, or location attached — but a title could also be a bank statement's own raw transaction description (reference numbers, card-terminal codes, a payment processor's own boilerplate like "SDD" or "POS" rather than the actual merchant, look past those to whatever's underneath), or one typed by hand years ago that's an in-joke, a nickname, or a personal reference between the people in the household rather than a literal merchant name. Titles may be in any language — don't assume English just because these instructions are in English.
 
@@ -23,7 +50,7 @@ ${
   trimmedContext
     ? `\nContext from this household, telling you something about their own bills specifically — trust this over a generic assumption whenever the two disagree:\n${trimmedContext}\n`
     : ''
-}
+}${hasEvidence ? EVIDENCE_NOTE : ''}
 For each numbered title below, pick your single best-guess category from the list above based on what kind of merchant or expense it most likely names (e.g. a supermarket chain → a groceries-type category, a restaurant name → an eating-out-type category). Always make a guess when the title gives you *any* signal to go on, even a weak one — a person reviews and can correct every suggestion before anything is saved, so a plausible guess saves them a step while a wrong one costs no more than leaving it blank would have. Only return null when a title is genuinely unreadable as any kind of expense — pure noise, a bare reference number with nothing else, or an in-joke/nickname with no business or expense type recognizable in it at all.
 
 Return ONLY a JSON object, no other text, no markdown fences, in exactly this shape:

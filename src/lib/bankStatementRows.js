@@ -23,6 +23,16 @@ const DESC_ALIASES = [
   'description', 'payee', 'merchant', 'narrative', 'details', 'reference', 'memo', 'name',
   'operazione', 'descrizione', 'causale', 'beneficiario', 'ordinante',
 ]
+// A second, longer text column some banks export next to the short one —
+// Intesa's "Operazione" (short) + "Dettagli" (the full wording, where the
+// real merchant often is when the short one just says "Pagamento Pos").
+// Whichever of these isn't already the description column becomes the
+// transaction's `details`; a file with only one such column keeps using it
+// as the description, same as before.
+const DETAILS_ALIASES = [
+  'dettagli', 'dettaglio', 'details', 'detail', 'descrizione estesa', 'descrizione completa',
+  'additional information', 'notes', 'note', 'memo', 'narrative', 'causale', 'descrizione',
+]
 const AMOUNT_ALIASES = ['amount', 'value', 'importo']
 const DEBIT_ALIASES = ['debit', 'withdrawal', 'money out', 'paid out', 'out', 'dare', 'uscite', 'addebiti', 'addebito']
 const CREDIT_ALIASES = ['credit', 'deposit', 'money in', 'paid in', 'in', 'avere', 'entrate', 'accrediti', 'accredito']
@@ -36,10 +46,10 @@ const CREDIT_ALIASES = ['credit', 'deposit', 'money in', 'paid in', 'in', 'avere
 // have one.
 const CATEGORY_ALIASES = ['category', 'categoria']
 
-function findColumn(lowerHeader, aliases) {
+function findColumn(lowerHeader, aliases, exceptIdx = -1) {
   for (const alias of aliases) {
     const idx = lowerHeader.indexOf(alias)
-    if (idx !== -1) return idx
+    if (idx !== -1 && idx !== exceptIdx) return idx
   }
   return -1
 }
@@ -107,9 +117,11 @@ function parseColumnMagnitude(cell) {
 // re-detecting nothing itself.
 export function detectColumns(header) {
   const lower = header.map((h) => h.toLowerCase())
+  const descIdx = findColumn(lower, DESC_ALIASES)
   return {
     dateIdx: findColumn(lower, DATE_ALIASES),
-    descIdx: findColumn(lower, DESC_ALIASES),
+    descIdx,
+    detailsIdx: descIdx === -1 ? -1 : findColumn(lower, DETAILS_ALIASES, descIdx),
     amountIdx: findColumn(lower, AMOUNT_ALIASES),
     debitIdx: findColumn(lower, DEBIT_ALIASES),
     creditIdx: findColumn(lower, CREDIT_ALIASES),
@@ -152,27 +164,34 @@ export function findHeaderRowIndex(rows) {
 // already-decided column mapping — either detectColumns' own heuristic
 // result, or an AI double-check's corrected one. Returns { transactions,
 // warnings }, never throws. Each transaction is { date (ISO string),
-// description, amount (always positive), direction: 'debit' | 'credit',
-// categoryHint } — the same base shape parseBankStatementPdf's AI pass
+// description, details, amount (always positive), direction: 'debit' |
+// 'credit', categoryHint } — the same base shape parseBankStatementPdf's AI pass
 // produces (see bank-statement-parsing/extractionPrompt.js), so
 // ImportBankStatement.jsx handles every input format identically from
 // here on; categoryHint is the extra piece only a category column (or a
 // future PDF/Excel equivalent) ever sets — the raw label text as written,
 // left for the caller to resolve against the group's real categories
 // (never assumed to already match one), or null when there's no category
-// column at all. `columns.categoryIdx ?? -1` rather than a plain
-// destructure — the AI column-check's own mapping (see
-// bankStatementTabular.js) never proposes one, so that key can be
+// column at all. `details` is the file's longer text for the transaction
+// when it has a second text column (see DETAILS_ALIASES), as written, or
+// null — shown on the review card and used as evidence for a category,
+// never as the bill's title. `columns.categoryIdx ?? -1` (and detailsIdx)
+// rather than a plain destructure — the AI column-check's own mapping (see
+// bankStatementTabular.js) never proposes either, so those keys can be
 // entirely absent, not just -1.
 export function buildTransactionsFromColumns(dataRows, columns) {
   const { dateIdx, descIdx, amountIdx, debitIdx, creditIdx } = columns
   const categoryIdx = columns.categoryIdx ?? -1
+  const detailsIdx = columns.detailsIdx ?? -1
   const warnings = []
   const transactions = []
 
   for (const row of dataRows) {
-    const description = cellToString(row[descIdx])
+    const detailsText = detailsIdx !== -1 ? cellToString(row[detailsIdx]).replace(/\s+/g, ' ') : ''
+    // A row with only the longer text filled in still names a transaction.
+    const description = cellToString(row[descIdx]) || detailsText
     if (!description) continue
+    const details = detailsText && detailsText.toLowerCase() !== description.toLowerCase() ? detailsText : null
 
     const dateCell = row[dateIdx]
     const parsedDate = dateCell instanceof Date ? dateCell : new Date(dateCell)
@@ -204,6 +223,7 @@ export function buildTransactionsFromColumns(dataRows, columns) {
     transactions.push({
       date: parsedDate.toISOString(),
       description,
+      details,
       amount: Math.abs(amount),
       direction: amount < 0 ? 'debit' : 'credit',
       categoryHint,
